@@ -1,0 +1,81 @@
+#trigger only "by hand"
+trigger: none
+pr: none
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+  - checkout: none
+
+# #comment for specific version
+  # - task: DownloadBuildArtifacts@0
+  #   inputs:
+  #     buildType: 'specific'
+  #     project: 'af2804d2-859a-4705-9ef5-cdf46d1d5d4f'
+  #     pipeline: '45'
+  #     buildVersionToDownload: 'latest'
+  #     downloadType: 'single'
+  #     artifactName: 'ReleaseVersionFile'
+  #     downloadPath: '$(System.ArtifactsDirectory)'
+
+  # - task: CopyFiles@2
+  #   inputs:
+  #     SourceFolder: "$(System.ArtifactsDirectory)/ReleaseVersionFile/"
+  #     Contents: "version.txt"
+  #     TargetFolder: "$(Build.SourcesDirectory)/"
+  #     OverWrite: true
+  #   displayName: "Copy Build Artifact - SurveyJSVersion File"
+
+  # - powershell: |
+  #     $versionAuto = Get-Content $(Build.SourcesDirectory)/version.txt
+  #     $versionCustom = $(version)
+  #     $versionDefault = 0.0.1
+  #     $result = If ($versionCustom -ne $versionDefault) {$versionCustom} Else {$versionAuto}
+  #     Write-Host "##vso[task.setvariable variable=SurveyJSVersion;]$result"
+  #   displayName: "setup SurveyJSVersion $(SurveyJSVersion) variable from SurveyJSVersionFile"
+
+  # - powershell: |
+  #     Set-Content version.txt $(SurveyJSVersion)
+  #   displayName: 'create $(SurveyJSVersion) version file as build artifact'
+
+  # - task: CopyFiles@2
+  #   inputs:
+  #       contents: 'version.txt'
+  #       targetFolder: $(Build.ArtifactStagingDirectory)/ReleaseVersionFile
+  #   displayName: 'copy version file to Build.ArtifactStagingDirectory'
+# #########################################################################
+
+#uncomment for specific version
+  # - powershell: |
+  #     $version = "2.5.0"
+  #     New-Item "version.txt"
+  #     Set-Content version.txt $version
+  #     Get-Content version.txt
+  #   displayName: 'create version file as build artifact'
+
+  # - task: CopyFiles@2
+  #   inputs:
+  #       contents: 'version.txt'
+  #       targetFolder: $(Build.ArtifactStagingDirectory)/ReleaseVersionFile
+  #   displayName: 'copy version file to Build.ArtifactStagingDirectory'
+#######################################################################
+
+#comment for specific version
+  - task: DownloadBuildArtifacts@0
+    inputs:
+      buildType: 'specific'
+      project: 'af2804d2-859a-4705-9ef5-cdf46d1d5d4f'
+      pipeline: '45'
+      buildVersionToDownload: 'latest'
+      downloadType: 'single'
+      artifactName: 'ReleaseVersionFile'
+      downloadPath: '$(System.ArtifactsDirectory)'
+#########################################################################
+
+  #publishLocation: 'Container' - store the artifact in Azure Pipelines
+  - task: PublishBuildArtifacts@1
+    inputs:
+      PathtoPublish: '$(Build.ArtifactStagingDirectory)/ReleaseVersionFile/version.txt'
+      ArtifactName: 'ReleaseVersionFile'
+      publishLocation: 'Container'

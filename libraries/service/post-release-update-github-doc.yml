@@ -1,0 +1,167 @@
+# ASP.NET
+# Build and test ASP.NET projects.
+# Add steps that publish symbols, save build artifacts, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/apps/aspnet/build-aspnet-4
+
+trigger: none
+pr: none
+
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+resources:
+  repositories:
+    - repository: Library # The name used to reference this repository in the checkout step
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/survey-library
+    - repository: Creator
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/survey-creator
+    - repository: Analytics
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/survey-analytics
+    - repository: PDF
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/survey-pdf
+
+
+steps:
+- task: NodeTool@0
+  inputs:
+    versionSpec: "14.x"
+  displayName: "Install Node.js"
+
+- checkout: self
+- checkout: Library
+  persistCredentials: true
+  clean: true
+  fetchDepth: 1
+- checkout: Creator
+  persistCredentials: true
+  clean: true
+  fetchDepth: 1
+- checkout: Analytics
+  persistCredentials: true
+  clean: true
+  fetchDepth: 1
+- checkout: PDF
+  persistCredentials: true
+  clean: true
+  fetchDepth: 1
+
+- task: CopyFiles@2
+  inputs:
+    SourceFolder: "$(Build.SourcesDirectory)/service/surveyjs.io/App_Data/DocsLibrary"
+    Contents: |
+      **
+      !classes.json
+      !pmes.json
+#      !surveyjs_definition.json
+    TargetFolder: "$(Build.SourcesDirectory)/survey-library/docs"
+    CleanTargetFolder: true
+    OverWrite: true
+  displayName: "Library - copy docs from service to github locally"
+
+- task: CopyFiles@2
+  inputs:
+    SourceFolder: "$(Build.SourcesDirectory)/service/surveyjs.io/App_Data/DocsEditor"
+    Contents: |
+      **
+      !classes.json
+      !pmes.json
+#      !surveyjs_definition.json
+    TargetFolder: "$(Build.SourcesDirectory)/survey-creator/docs"
+    CleanTargetFolder: true
+    OverWrite: true
+  displayName: "Creator - copy docs from service to github locally"
+
+- task: CopyFiles@2
+  inputs:
+    SourceFolder: "$(Build.SourcesDirectory)/service/surveyjs.io/App_Data/DocsAnalytics"
+    Contents: |
+      **
+      !classes.json
+      !pmes.json
+#      !surveyjs_definition.json
+    TargetFolder: "$(Build.SourcesDirectory)/survey-analytics/docs"
+    OverWrite: true
+    CleanTargetFolder: true
+  displayName: "Analytics - copy docs from service to github locally"
+
+- task: CopyFiles@2
+  inputs:
+    SourceFolder: "$(Build.SourcesDirectory)/service/surveyjs.io/App_Data/DocsPdf"
+    Contents: |
+      **
+      !classes.json
+      !pmes.json
+#      !surveyjs_definition.json
+    TargetFolder: "$(Build.SourcesDirectory)/survey-pdf/docs"
+    CleanTargetFolder: true
+    OverWrite: true
+  displayName: "DocsPdf - copy docs from service to github locally"
+
+
+# read about the problem with git output ($env:GIT_REDIRECT_STDERR = '2>&1') :
+# https://github.com/microsoft/azure-pipelines-yaml/issues/248
+# https://stackoverflow.com/questions/58485585/azure-pipeline-powershell-and-git-on-windows-server-2019-gives-error-in-output
+- powershell: |
+    cd $(Build.SourcesDirectory)/survey-library
+    $env:GIT_REDIRECT_STDERR = '2>&1'
+    git config --global user.email "surveyjs.org@gmail.com"
+    git config --global user.name "surveyjsdeveloper"
+    git pull origin master
+    git fetch origin master --tags --force
+    git checkout master
+    git add docs
+    git commit -m "updated survey-library docs [azurepipelines skip]"
+    git pull origin master
+    git push origin master
+  displayName: "Library - push docs to github"
+  
+- powershell: |
+    cd $(Build.SourcesDirectory)/survey-creator
+    $env:GIT_REDIRECT_STDERR = '2>&1'
+    git config --global user.email "surveyjs.org@gmail.com"
+    git config --global user.name "surveyjsdeveloper"
+    git pull origin master
+    git fetch origin master --tags --force
+    git checkout master
+    git add docs
+    git commit -m "updated survey-creator docs [azurepipelines skip]"
+    git pull origin master
+    git push origin master
+  displayName: "Creator - push docs to github"
+
+- powershell: |
+    cd $(Build.SourcesDirectory)/survey-analytics
+    $env:GIT_REDIRECT_STDERR = '2>&1'
+    git config --global user.email "surveyjs.org@gmail.com"
+    git config --global user.name "surveyjsdeveloper"
+    git pull origin master
+    git fetch origin master --tags --force
+    git checkout master
+    git add docs
+    git commit -m "updated survey-analytics docs [azurepipelines skip]"
+    git pull origin master
+    git push origin master
+  displayName: "Anakytics - push docs to github"
+
+- powershell: |
+    cd $(Build.SourcesDirectory)/survey-pdf
+    $env:GIT_REDIRECT_STDERR = '2>&1'
+    git config --global user.email "surveyjs.org@gmail.com"
+    git config --global user.name "surveyjsdeveloper"
+    git pull origin master
+    git fetch origin master --tags --force
+    git checkout master
+    git add docs
+    git commit -m "updated survey-pdf docs [azurepipelines skip]"
+    git pull origin master
+    git push origin master
+  displayName: "PDF - push docs to github"

@@ -1,0 +1,600 @@
+# SurveyJS release pipeline
+
+
+# 0. Add all needed repos
+resources:
+  repositories:
+    # use `repository` param in the checkout step below
+    - repository: Library
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/survey-library
+
+    - repository: Creator
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/survey-creator
+
+    - repository: CustomWidgets
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/custom-widgets
+
+    - repository: Analytics
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/survey-analytics
+
+    - repository: PDF
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/survey-pdf
+
+    - repository: Service 
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/service
+
+#trigger only "by hand"
+trigger: none
+pr: none
+
+pool:
+  vmImage: 'windows-latest'
+
+jobs:
+- job: Release
+  timeoutInMinutes: 90
+
+  steps:
+  - task: NodeTool@0
+    inputs:
+      versionSpec: '14.x'
+    displayName: 'install Node.js'
+
+  # 1. Checkout all needed repos
+  - checkout: Library
+    persistCredentials: true
+    clean: true
+
+  - checkout: Creator
+    persistCredentials: true
+    clean: true
+
+  - checkout: CustomWidgets
+    persistCredentials: true
+    clean: true
+
+  - checkout: Analytics
+    persistCredentials: true
+    clean: true
+
+  - checkout: PDF
+    persistCredentials: true
+    clean: true
+
+  - checkout: Service
+    persistCredentials: true
+    clean: true
+  ###############################################################################
+
+  # 2. Download artifacts with the products release builds
+  - task: DownloadBuildArtifacts@0
+    inputs:
+      buildType: 'specific'
+      project: 'af2804d2-859a-4705-9ef5-cdf46d1d5d4f'
+      pipeline: '56'
+      specificBuildWithTriggering: true
+      buildVersionToDownload: 'latest'
+      downloadType: 'single'
+      artifactName: 'SurveyJSLibraryBuildCore'
+      downloadPath: '$(System.ArtifactsDirectory)'
+
+  - task: DownloadBuildArtifacts@0
+    inputs:
+      buildType: 'specific'
+      project: 'af2804d2-859a-4705-9ef5-cdf46d1d5d4f'
+      pipeline: '56'
+      specificBuildWithTriggering: true
+      buildVersionToDownload: 'latest'
+      downloadType: 'single'
+      artifactName: 'SurveyJSLibraryBuildReact'
+      downloadPath: '$(System.ArtifactsDirectory)'
+
+  - task: DownloadBuildArtifacts@0
+    inputs:
+      buildType: 'specific'
+      project: 'af2804d2-859a-4705-9ef5-cdf46d1d5d4f'
+      pipeline: '56'
+      specificBuildWithTriggering: true
+      buildVersionToDownload: 'latest'
+      downloadType: 'single'
+      artifactName: 'SurveyJSLibraryBuildAngular'
+      downloadPath: '$(System.ArtifactsDirectory)'
+
+  - task: DownloadBuildArtifacts@0
+    inputs:
+      buildType: 'specific'
+      project: 'af2804d2-859a-4705-9ef5-cdf46d1d5d4f'
+      pipeline: '56'
+      specificBuildWithTriggering: true
+      buildVersionToDownload: 'latest'
+      downloadType: 'single'
+      artifactName: 'SurveyJSLibraryBuildVue3'
+      downloadPath: '$(System.ArtifactsDirectory)'
+
+  - task: DownloadBuildArtifacts@0
+    inputs:
+      buildType: 'specific'
+      project: 'af2804d2-859a-4705-9ef5-cdf46d1d5d4f'
+      pipeline: '56'
+      specificBuildWithTriggering: true
+      buildVersionToDownload: 'latest'
+      downloadType: 'single'
+      artifactName: 'SurveyJSLibraryBuildSurveyUI'
+      downloadPath: '$(System.ArtifactsDirectory)'
+
+  - task: DownloadBuildArtifacts@0
+    inputs:
+      buildType: 'specific'
+      project: 'af2804d2-859a-4705-9ef5-cdf46d1d5d4f'
+      pipeline: '55'
+      specificBuildWithTriggering: true
+      buildVersionToDownload: 'latest'
+      downloadType: 'single'
+      artifactName: 'SurveyJSCreatorV2BuildCore'
+      downloadPath: '$(System.ArtifactsDirectory)'
+
+  - task: DownloadBuildArtifacts@0
+    inputs:
+      buildType: 'specific'
+      project: 'af2804d2-859a-4705-9ef5-cdf46d1d5d4f'
+      pipeline: '55'
+      specificBuildWithTriggering: true
+      buildVersionToDownload: 'latest'
+      downloadType: 'single'
+      artifactName: 'SurveyJSCreatorV2BuildReact'
+      downloadPath: '$(System.ArtifactsDirectory)'
+
+  - task: DownloadBuildArtifacts@0
+    inputs:
+      buildType: 'specific'
+      project: 'af2804d2-859a-4705-9ef5-cdf46d1d5d4f'
+      pipeline: '55'
+      specificBuildWithTriggering: true
+      buildVersionToDownload: 'latest'
+      downloadType: 'single'
+      artifactName: 'SurveyJSCreatorV2BuildVue'
+      downloadPath: '$(System.ArtifactsDirectory)'
+    
+  - task: DownloadBuildArtifacts@0
+    inputs:
+      buildType: 'specific'
+      project: 'af2804d2-859a-4705-9ef5-cdf46d1d5d4f'
+      pipeline: '55'
+      specificBuildWithTriggering: true
+      buildVersionToDownload: 'latest'
+      downloadType: 'single'
+      artifactName: 'SurveyJSCreatorV2BuildAngular'
+      downloadPath: '$(System.ArtifactsDirectory)'
+
+
+  - task: DownloadBuildArtifacts@0
+    inputs:
+      buildType: 'specific'
+      project: 'af2804d2-859a-4705-9ef5-cdf46d1d5d4f'
+      pipeline: '55'
+      specificBuildWithTriggering: true
+      buildVersionToDownload: 'latest'
+      downloadType: 'single'
+      artifactName: 'SurveyJSCreatorV2BuildJS'
+      downloadPath: '$(System.ArtifactsDirectory)'
+
+  - task: DownloadBuildArtifacts@0
+    inputs:
+      buildType: 'specific'
+      project: 'af2804d2-859a-4705-9ef5-cdf46d1d5d4f'
+      pipeline: '42'
+      buildVersionToDownload: 'latest'
+      downloadType: 'single'
+      artifactName: 'SurveyJSWidgetsBuild'
+      downloadPath: '$(System.ArtifactsDirectory)'
+
+  - task: DownloadBuildArtifacts@0
+    inputs:
+      buildType: 'specific'
+      project: 'af2804d2-859a-4705-9ef5-cdf46d1d5d4f'
+      pipeline: '37'
+      buildVersionToDownload: 'latest'
+      downloadType: 'single'
+      artifactName: 'SurveyJSAnalyticsBuild'
+      downloadPath: '$(System.ArtifactsDirectory)'
+
+  - task: DownloadBuildArtifacts@0
+    inputs:
+      buildType: 'specific'
+      project: 'af2804d2-859a-4705-9ef5-cdf46d1d5d4f'
+      pipeline: '38'
+      buildVersionToDownload: 'latest'
+      downloadType: 'single'
+      artifactName: 'SurveyjsPDFbuild'
+      downloadPath: '$(System.ArtifactsDirectory)'
+
+  - task: CopyFiles@2
+    inputs:
+      SourceFolder: '$(System.ArtifactsDirectory)/SurveyJSLibraryBuildCore'
+      Contents: 'version.txt'
+      TargetFolder: '$(Build.SourcesDirectory)'
+      OverWrite: true
+
+  # $(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-angular'
+
+  - task: DeleteFiles@1
+    inputs:
+      SourceFolder: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds'
+      Contents: '**'
+      RemoveDotFiles: true
+
+  - task: CopyFiles@2
+    inputs:
+      SourceFolder: '$(System.ArtifactsDirectory)/SurveyJSLibraryBuildCore/packages'
+      Contents: '**'
+      TargetFolder: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds'
+      OverWrite: true
+
+  - task: CopyFiles@2
+    inputs:
+      SourceFolder: '$(System.ArtifactsDirectory)/SurveyJSLibraryBuildReact/packages'
+      Contents: '**'
+      TargetFolder: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds'
+      OverWrite: true
+
+  - task: CopyFiles@2
+    inputs:
+      SourceFolder: '$(System.ArtifactsDirectory)/SurveyJSLibraryBuildAngular/packages'
+      Contents: '**'
+      TargetFolder: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds'
+      OverWrite: true
+
+  - task: CopyFiles@2
+    inputs:
+      SourceFolder: '$(System.ArtifactsDirectory)/SurveyJSLibraryBuildVue3/packages'
+      Contents: '**'
+      TargetFolder: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds'
+      OverWrite: true
+
+  - task: CopyFiles@2
+    inputs:
+      SourceFolder: '$(System.ArtifactsDirectory)/SurveyJSLibraryBuildSurveyUI/packages'
+      Contents: '**'
+      TargetFolder: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds'
+      OverWrite: true
+
+  - task: CopyFiles@2
+    inputs:
+      SourceFolder: '$(System.ArtifactsDirectory)/SurveyJSCreatorV2BuildCore'
+      Contents: '**'
+      TargetFolder: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-creator-core'
+      OverWrite: true
+
+  - task: CopyFiles@2
+    inputs:
+      SourceFolder: '$(System.ArtifactsDirectory)/SurveyJSCreatorV2BuildReact'
+      Contents: '**'
+      TargetFolder: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-creator-react'
+      OverWrite: true
+
+  - task: CopyFiles@2
+    inputs:
+      SourceFolder: '$(System.ArtifactsDirectory)/SurveyJSCreatorV2BuildAngular'
+      Contents: '**'
+      TargetFolder: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-creator-angular'
+      OverWrite: true
+
+  - task: CopyFiles@2
+    inputs:
+      SourceFolder: '$(System.ArtifactsDirectory)/SurveyJSCreatorV2BuildVue'
+      Contents: '**'
+      TargetFolder: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-creator-vue'
+      OverWrite: true
+
+  - task: CopyFiles@2
+    inputs:
+      SourceFolder: '$(System.ArtifactsDirectory)/SurveyJSCreatorV2BuildJS'
+      Contents: '**'
+      TargetFolder: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-creator-js'
+      OverWrite: true
+      
+  - task: CopyFiles@2
+    inputs:
+      SourceFolder: '$(System.ArtifactsDirectory)/SurveyJSWidgetsBuild/packages/survey-widgets'
+      Contents: '**'
+      TargetFolder: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/surveyjs-widgets'
+      OverWrite: true
+
+  - task: CopyFiles@2
+    inputs:
+      SourceFolder: '$(System.ArtifactsDirectory)/SurveyJSAnalyticsBuild/packages/survey-analytics'
+      Contents: '**'
+      TargetFolder: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-analytics'
+      OverWrite: true
+
+  - task: CopyFiles@2
+    inputs:
+      SourceFolder: '$(System.ArtifactsDirectory)/SurveyjsPDFbuild/packages/survey-pdf'
+      Contents: '**'
+      TargetFolder: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-pdf'
+      OverWrite: true
+  ###############################################################################
+
+  # 3. Npm publish
+  - task: Npm@1
+    inputs:
+      command: "custom"
+      workingDir: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-angular-ui'
+      customCommand: "publish --tag latest"
+      customEndpoint: 'NPM Registry V2'
+      verbose: true
+    displayName: 'npm publish survey-angular-ui'
+
+  - task: Npm@1
+    inputs:
+      command: "custom"
+      workingDir: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-vue3-ui'
+      customCommand: "publish --tag latest"
+      customEndpoint: 'NPM Registry V2'
+      verbose: true
+    displayName: 'npm publish survey-vue3-ui'
+
+  - task: Npm@1
+    inputs:
+      command: "custom"
+      workingDir: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-react-ui'
+      customCommand: "publish --tag latest"
+      customEndpoint: 'NPM Registry V2'
+      verbose: true
+    displayName: 'npm publish survey-react-ui'
+
+  - task: Npm@1
+    inputs:
+      command: "custom"
+      workingDir: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-js-ui'
+      customCommand: "publish --tag latest"
+      customEndpoint: 'NPM Registry V2'
+      verbose: true
+    displayName: 'npm publish survey-js-ui'
+
+  - task: Npm@1
+    inputs:
+      command: "custom"
+      workingDir: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-core'
+      customCommand: "publish --tag latest"
+      customEndpoint: 'NPM Registry V2'
+      verbose: true
+    displayName: 'npm publish survey-core'
+
+  - task: Npm@1
+    inputs:
+      command: "custom"
+      workingDir: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-analytics'
+      customCommand: "publish --tag latest"
+      customEndpoint: 'NPM Registry V2'
+      verbose: true
+    displayName: 'npm publish survey-analytics'
+
+  - task: Npm@1
+    inputs:
+      command: "custom"
+      workingDir: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-pdf'
+      customCommand: "publish --tag latest"
+      customEndpoint: 'NPM Registry V2'
+      verbose: true
+    displayName: 'npm publish survey-pdf'
+
+  - task: Npm@1
+    inputs:
+      command: "custom"
+      workingDir: "$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-creator-core"
+      customCommand: "publish --tag latest"
+      customEndpoint: "NPM Registry V2"
+      verbose: true
+    displayName: 'npm publish survey-creator-core'
+  
+  - task: Npm@1
+    inputs:
+      command: "custom"
+      workingDir: "$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-creator-react"
+      customCommand: "publish --tag latest"
+      customEndpoint: "NPM Registry V2"
+      verbose: true
+    displayName: 'npm publish survey-creator-react'
+
+  - task: Npm@1
+    inputs:
+      command: "custom"
+      workingDir: "$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-creator-angular"
+      customCommand: "publish --tag latest"
+      customEndpoint: "NPM Registry V2"
+      verbose: true
+    displayName: 'npm publish survey-creator-angular'
+
+  - task: Npm@1
+    inputs:
+      command: "custom"
+      workingDir: "$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-creator-vue"
+      customCommand: "publish --tag latest"
+      customEndpoint: "NPM Registry V2"
+      verbose: true
+    displayName: 'npm publish survey-creator-vue'
+  
+  - task: Npm@1
+    inputs:
+      command: "custom"
+      workingDir: "$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-creator-js"
+      customCommand: "publish --tag latest"
+      customEndpoint: "NPM Registry V2"
+      verbose: true
+    displayName: 'npm publish survey-creator-js'
+
+  ###############################################################################
+
+  # 4. push tags to github
+  - powershell: |
+      $env:GIT_REDIRECT_STDERR = '2>&1'
+      git config --global user.email "surveyjs.org@gmail.com"
+      git config --global user.name "surveyjsdeveloper"
+      npm i -g --save-dev standard-version@^8.0.1
+      npm i -g --save-dev commit-and-tag-version@^11.0.0
+    displayName: 'setup config'
+
+  # get current release version and setup SurveyJSVersion variable
+  - powershell: |
+      $version = Get-Content $(Build.SourcesDirectory)/version.txt
+      Write-Host "##vso[task.setvariable variable=SurveyJSVersion;]$version"
+    displayName: 'setup SurveyJSVersion variable from SurveyJSVersionFile'
+
+  - powershell: |
+      cd $(Build.SourcesDirectory)/survey-library/
+      git checkout master
+      git fetch --tags --force
+      cd packages/survey-angular-ui/
+      npm run release -- --release-as $(SurveyJSVersion) --skip.tag
+      cd ../../packages/survey-vue3-ui/
+      npm run release -- --release-as $(SurveyJSVersion) --skip.tag
+      cd ../../packages/survey-react-ui/
+      npm run release -- --release-as $(SurveyJSVersion) --skip.tag
+      cd ../../packages/survey-js-ui/
+      npm run release -- --release-as $(SurveyJSVersion) --skip.tag
+      cd ../../packages/survey-core/
+      npm run release -- --release-as $(SurveyJSVersion)
+      git pull origin master
+      git push --follow-tags origin master --no-verify
+    displayName: 'Library - push tag to Github'
+
+  - powershell: |
+      cd $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core
+      git checkout master
+      git fetch --tags --force
+      npm run release -- --release-as $(SurveyJSVersion) --skip.tag
+      git pull origin master
+      git push --follow-tags origin master --no-verify
+    displayName: 'Creator Core - push tag to Github'
+
+  - powershell: |
+      cd $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-react
+      git checkout master
+      git fetch --tags --force
+      npm run release -- --release-as $(SurveyJSVersion) --skip.tag
+      git pull origin master
+      git push --follow-tags origin master --no-verify
+    displayName: 'Creator React - push tag to Github'
+
+  - powershell: |
+      cd $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-vue
+      git checkout master
+      git fetch --tags --force
+      npm run release -- --release-as $(SurveyJSVersion) --skip.tag
+      git pull origin master
+      git push --follow-tags origin master --no-verify
+    displayName: 'Creator Vue - push tag to Github'
+  
+  - powershell: |
+      cd $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-js
+      git checkout master
+      git fetch --tags --force
+      npm run release -- --release-as $(SurveyJSVersion) --skip.tag
+      git pull origin master
+      git push --follow-tags origin master --no-verify
+    displayName: 'Creator JS - push tag to Github'
+
+  # before moved the task below see the proben with --skip.tag https://github.com/surveyjs/service/issues/730
+  - powershell: |
+      cd $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-angular
+      git checkout master
+      git fetch --tags --force
+      npm run release -- --release-as $(SurveyJSVersion)
+      git pull origin master
+      git push --follow-tags origin master --no-verify
+    displayName: 'Creator Angular - push tag to Github'
+
+  - powershell: |
+      cd $(Build.SourcesDirectory)/custom-widgets/
+      git checkout master
+      git fetch --tags --force
+      npm run release -- --release-as $(SurveyJSVersion)
+      git pull origin master
+      git push --follow-tags origin master --no-verify
+    displayName: 'CustomWidgets - push tag to Github'
+
+  - powershell: |
+      cd $(Build.SourcesDirectory)/survey-analytics/
+      git checkout master
+      git fetch --tags --force
+      npm run release -- --release-as $(SurveyJSVersion)
+      git pull origin master
+      git push --follow-tags origin master --no-verify
+    displayName: 'Analytics - push tag to Github'
+
+  - powershell: |
+      cd $(Build.SourcesDirectory)/survey-pdf/
+      git checkout master
+      git fetch --tags --force
+      npm run release -- --release-as $(SurveyJSVersion)
+      git pull origin master
+      git push --follow-tags origin master --no-verify
+    displayName: 'PDF - push tag to Github'
+  ###############################################################################
+
+  # 4. update site
+  - powershell: |
+      cd $(Build.SourcesDirectory)/service/
+      $version = "$(SurveyJSVersion)"
+      $path = '$(Build.SourcesDirectory)/service/surveyjs.io/Web.config'
+      $xml = New-Object System.Xml.XmlDocument
+      $xml.PreserveWhitespace = $true
+      $xml.Load($path)
+      $key = $xml.SelectSingleNode("//appSettings/add[@key = 'SurveyJSVersion']")
+      $key.SetAttribute('value', $version)
+      $xml.Save((Resolve-Path $path))
+    displayName: 'setup surveyjs.io SurveyJSVersion setting'
+
+  - powershell: |
+      cd $(Build.SourcesDirectory)/service/
+      $env:GIT_REDIRECT_STDERR = '2>&1'
+      git config --global user.email "surveyjs.org@gmail.com"
+      git config --global user.name "surveyjsdeveloper"
+      git checkout master
+      git pull origin master
+      git fetch --tags --force
+      git add surveyjs.io/DevBuilds
+      git add surveyjs.io/Web.config
+      git commit -m "released $(SurveyJSVersion)"
+      git pull origin master
+      git push origin master
+    displayName: 'updated surveyjs.io Web.config and DevBuilds'
+  ###############################################################################
+
+  # 8. POST-RELEASE TASK: trigger ReleaseVersion pipeline via the atrifact
+  - powershell: |
+      cd $(Build.SourcesDirectory)/survey-library/packages/survey-core
+      npm run release
+      $version = (git describe --tags).replace("v", "")
+      New-Item "version.txt"
+      Set-Content version.txt $version 
+      Get-Content version.txt
+    displayName: 'create version file as build artifact'
+
+  - task: CopyFiles@2
+    inputs:
+      sourceFolder: '$(Build.SourcesDirectory)/survey-library/packages/survey-core'
+      contents: 'version.txt'
+      targetFolder: $(Build.ArtifactStagingDirectory)
+    displayName: 'copy version file to Build.ArtifactStagingDirectory'
+
+  #publishLocation: 'Container' - store the artifact in Azure Pipelines
+  - task: PublishBuildArtifacts@1
+    inputs:
+      PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      ArtifactName: 'ReleaseVersionFile'
+      publishLocation: 'Container'
+  ###############################################################################
