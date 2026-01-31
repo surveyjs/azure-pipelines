@@ -14,7 +14,6 @@ resources:
         branches:
           include:
             - master
-
         tags:
           exclude:
             - v*.*.*
