@@ -9,6 +9,15 @@ resources:
       type: github
       endpoint: github.com_surveyjsdeveloper
       name: surveyjs/survey-library
+      trigger:
+        batch: true
+        branches:
+          include:
+            - master
+
+        tags:
+          exclude:
+            - v*.*.*
     - repository: Service # The name used to reference this repository in the checkout step
       type: github
       endpoint: github.com_surveyjsdeveloper
@@ -27,16 +36,9 @@ variables:
   CurrentBranch: $(Build.SourceBranchName)
   ProjectId: "d79f2855-7b94-4261-9daf-4cace0a06c03"
 
-trigger:
-  batch: true
-  branches:
-    include:
-      - master
 
-  tags:
-    exclude:
-      - v*.*.*
 
+trigger: none
 pr: none
 
 pool:
