@@ -3,6 +3,9 @@
 # Add steps that analyze code, save build artifacts, deploy, and more:
 # https://docs.microsoft.com/azure/devops/pipelines/languages/javascript
 
+trigger: none
+pr: none
+
 resources:
   repositories:
     - repository: Library # The name used to reference this repository in the checkout step
@@ -34,11 +37,6 @@ variables:
   npm_config_cache: $(Pipeline.Workspace)/.npm
   CurrentBranch: $(Build.SourceBranchName)
   ProjectId: "d79f2855-7b94-4261-9daf-4cace0a06c03"
-
-
-
-trigger: none
-pr: none
 
 pool:
   vmImage: "Ubuntu-22.04"
