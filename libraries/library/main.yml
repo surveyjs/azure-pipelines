@@ -17,9 +17,6 @@ resources:
         branches:
           include:
             - master
-        tags:
-          exclude:
-            - v*.*.*
     - repository: Service # The name used to reference this repository in the checkout step
       type: github
       endpoint: github.com_surveyjsdeveloper
