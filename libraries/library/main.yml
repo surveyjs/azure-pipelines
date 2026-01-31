@@ -5,6 +5,10 @@
 
 resources:
   repositories:
+    - repository: Library # The name used to reference this repository in the checkout step
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/survey-library
     - repository: Service # The name used to reference this repository in the checkout step
       type: github
       endpoint: github.com_surveyjsdeveloper
@@ -20,24 +24,28 @@ resources:
 
 variables:
   npm_config_cache: $(Pipeline.Workspace)/.npm
+  CurrentBranch: $(Build.SourceBranchName)
+  ProjectId: "d79f2855-7b94-4261-9daf-4cace0a06c03"
 
 trigger:
   batch: true
   branches:
     include:
       - master
+
   tags:
     exclude:
       - v*.*.*
+
+pr: none
 
 pool:
   vmImage: "Ubuntu-22.04"
 
 jobs:
   - job: NPMCache
-
     steps:
-      - checkout: self
+      - checkout: Library
       - checkout: EmptyRepo
         persistCredentials: true
         clean: true
@@ -75,7 +83,7 @@ jobs:
       - NPMCache
 
     steps:
-      - checkout: self
+      - checkout: Library
         persistCredentials: true
       - checkout: Service
         persistCredentials: true
@@ -110,7 +118,7 @@ jobs:
       - task: DownloadBuildArtifacts@0
         inputs:
           buildType: "specific"
-          project: "af2804d2-859a-4705-9ef5-cdf46d1d5d4f"
+          project: "$(ProjectId)"
           pipeline: "47"
           buildVersionToDownload: "latest"
           downloadType: "single"
@@ -191,37 +199,23 @@ jobs:
           CleanTargetFolder: false
         displayName: "copy generated docs to the local surveyjs/service repo"
 
-      # read about the problem with git output ($env:GIT_REDIRECT_STDERR = '2>&1') :
-      # https://github.com/microsoft/azure-pipelines-yaml/issues/248
-      # https://stackoverflow.com/questions/58485585/azure-pipeline-powershell-and-git-on-windows-server-2019-gives-error-in-output
       - powershell: |
+          $branch = "$(CurrentBranch)"
           cd $(Build.SourcesDirectory)/service
           $env:GIT_REDIRECT_STDERR = '2>&1'
           git config --global user.email "surveyjs.org@gmail.com"
           git config --global user.name "surveyjsdeveloper"
-          git pull origin master
-          git merge -X ours origin/master
-          git fetch origin master --tags --force
-          git checkout master
+          
+          git fetch origin $branch
+          git checkout -B $branch origin/$branch
+          git reset --hard origin/$branch
+
           git add surveyjs.io/App_Data/DocsLibrary
-          git commit -m "updated survey-library docs [azurepipelines skip]"
-          git pull origin master
-          git merge -X ours origin/master
-          git push origin master
-        displayName: "git surveyjs/service push updated docs"
-      # - powershell: |
-      #     cd $(Build.SourcesDirectory)/service
-      #     $env:GIT_REDIRECT_STDERR = '2>&1'
-      #     git config --global user.email "surveyjs.org@gmail.com"
-      #     git config --global user.name "surveyjsdeveloper"
-      #     git pull origin V2
-      #     git fetch origin V2 --tags --force
-      #     git checkout V2
-      #     git add surveyjs.io/App_Data/DocsLibrary
-      #     git commit -m "updated survey-library V2 docs [azurepipelines skip]"
-      #     git pull origin V2
-      #     git push origin V2
-      #   displayName: "git surveyjs/service push updated V2 docs"
+          if (git status --porcelain) {
+              git commit -m "updated survey-library docs for $branch [azurepipelines skip]"
+              git push origin $branch
+          }
+        displayName: "git surveyjs/service push updated docs for $(CurrentBranch)"
 
       - script: |
           cd $(Build.SourcesDirectory)/survey-utils
@@ -239,18 +233,21 @@ jobs:
         displayName: "survey-utils translate library"
 
       - powershell: |
+          $branch = "$(CurrentBranch)"
           cd $(Build.SourcesDirectory)/survey-library
           $env:GIT_REDIRECT_STDERR = '2>&1'
           git config --global user.email "surveyjs.org@gmail.com"
           git config --global user.name "surveyjsdeveloper"
-          git pull origin master
-          git fetch origin master --tags --force
-          git checkout master
+
+          git fetch origin $branch
+          git checkout -B $branch origin/$branch
+          
           git add packages/survey-core/src/localization
-          git commit -m "updated survey-library translation [azurepipelines skip]"
-          git pull origin master
-          git push origin master
-        displayName: "Library - push updated translation to github"
+          if (git status --porcelain) {
+              git commit -m "updated survey-library translation for $branch [azurepipelines skip]"
+              git push origin $branch
+          }
+        displayName: "Library - push updated translation to github for $(CurrentBranch)"
 
       - task: CopyFiles@2
         inputs:
@@ -290,7 +287,7 @@ jobs:
       - Core
 
     steps:
-      - checkout: self
+      - checkout: Library
       - checkout: EmptyRepo
         persistCredentials: true
         clean: true
@@ -318,7 +315,7 @@ jobs:
       - task: DownloadBuildArtifacts@0
         inputs:
           buildType: "specific"
-          project: "af2804d2-859a-4705-9ef5-cdf46d1d5d4f"
+          project: "$(ProjectId)"
           pipeline: "47"
           buildVersionToDownload: "latest"
           downloadType: "single"
@@ -444,7 +441,7 @@ jobs:
       - Core
 
     steps:
-      - checkout: self
+      - checkout: Library
       - checkout: EmptyRepo
         persistCredentials: true
         clean: true
@@ -473,7 +470,7 @@ jobs:
       - task: DownloadBuildArtifacts@0
         inputs:
           buildType: "specific"
-          project: "af2804d2-859a-4705-9ef5-cdf46d1d5d4f"
+          project: "$(ProjectId)"
           pipeline: "47"
           buildVersionToDownload: "latest"
           downloadType: "single"
@@ -609,7 +606,7 @@ jobs:
       - Core
 
     steps:
-      - checkout: self
+      - checkout: Library
       - checkout: EmptyRepo
         persistCredentials: true
         clean: true
@@ -638,7 +635,7 @@ jobs:
       - task: DownloadBuildArtifacts@0
         inputs:
           buildType: "specific"
-          project: "af2804d2-859a-4705-9ef5-cdf46d1d5d4f"
+          project: "$(ProjectId)"
           pipeline: "47"
           buildVersionToDownload: "latest"
           downloadType: "single"
@@ -774,7 +771,7 @@ jobs:
       - Core
 
     steps:
-      - checkout: self
+      - checkout: Library
       - checkout: EmptyRepo
         persistCredentials: true
         clean: true
@@ -802,7 +799,7 @@ jobs:
       - task: DownloadBuildArtifacts@0
         inputs:
           buildType: "specific"
-          project: "af2804d2-859a-4705-9ef5-cdf46d1d5d4f"
+          project: "$(ProjectId)"
           pipeline: "47"
           buildVersionToDownload: "latest"
           downloadType: "single"
