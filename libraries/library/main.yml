@@ -10,7 +10,28 @@
 trigger: none
 pr: none
 
-
+resources:
+  repositories:
+    - repository: Library # The name used to reference this repository in the checkout step
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/survey-library
+      trigger:
+        branches:
+          include:
+            - master
+    - repository: Service # The name used to reference this repository in the checkout step
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/service
+    - repository: EmptyRepo
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/azure-pipelines-repo-dont-remove-please
+    - repository: Utils
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/survey-utils
 
 variables:
   npm_config_cache: $(Pipeline.Workspace)/.npm
