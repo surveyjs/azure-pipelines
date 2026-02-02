@@ -16,7 +16,7 @@ resources:
       type: github
       endpoint: github.com_surveyjsdeveloper
       name: surveyjs/survey-library
-      ref: refs/heads/V3
+      ref: V3
       trigger:
         batch: true
         branches:
