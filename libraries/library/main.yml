@@ -7,11 +7,11 @@
 #   branches:
 #     include:
 #       - hack-for-prevent-trigger-from-self-repo-because-trigger-none-kills-repository-trigger # not existing branch for prevent trigger
-trigger:
-  branches:
-    exclude:
-      - '*'
-pr: none
+# trigger:
+#   branches:
+#     exclude:
+#       - '*'
+# pr: none
 
 resources:
   repositories:
