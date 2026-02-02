@@ -3,7 +3,10 @@
 # Add steps that analyze code, save build artifacts, deploy, and more:
 # https://docs.microsoft.com/azure/devops/pipelines/languages/javascript
 
-# trigger: none
+trigger:
+  branches:
+    include:
+      - hack-for-prevent-trigger-from-self-repo-because-trigger-none-kills-repository-trigger # not existing branch for prevent trigger
 pr: none
 
 resources:
@@ -17,6 +20,9 @@ resources:
         branches:
           include:
             - master
+        tags:
+          exclude:
+            - v*.*.*
     - repository: Service # The name used to reference this repository in the checkout step
       type: github
       endpoint: github.com_surveyjsdeveloper
