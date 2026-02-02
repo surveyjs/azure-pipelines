@@ -18,7 +18,6 @@ resources:
       name: surveyjs/survey-library
       trigger:
         batch: true
-        ref: refs/heads/master
         branches:
           include:
             - master
