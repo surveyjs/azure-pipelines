@@ -3,24 +3,8 @@
 # Add steps that analyze code, save build artifacts, deploy, and more:
 # https://docs.microsoft.com/azure/devops/pipelines/languages/javascript
 
-# trigger:
-#   branches:
-#     include:
-#       - hack-for-prevent-trigger-from-self-repo-because-trigger-none-kills-repository-trigger # not existing branch for prevent trigger
-# trigger: none
-pr: none
-
 resources:
   repositories:
-    - repository: Library # The name used to reference this repository in the checkout step
-      type: github
-      endpoint: github.com_surveyjsdeveloper
-      name: surveyjs/survey-library
-      trigger:
-        branches:
-          include:
-            - master
-            - V3
     - repository: Service # The name used to reference this repository in the checkout step
       type: github
       endpoint: github.com_surveyjsdeveloper
@@ -37,7 +21,17 @@ resources:
 variables:
   npm_config_cache: $(Pipeline.Workspace)/.npm
   CurrentBranch: $(Build.SourceBranchName)
-  ProjectId: "d79f2855-7b94-4261-9daf-4cace0a06c03"
+  ProjectId: "__PROJECT_ID__"
+
+trigger:
+  batch: true
+  branches:
+    include:
+      - __BRANCH__
+  tags:
+    exclude:
+      - v*.*.*
+pr: none
 
 pool:
   vmImage: "Ubuntu-22.04"
@@ -45,7 +39,7 @@ pool:
 jobs:
   - job: NPMCache
     steps:
-      - checkout: Library
+      - checkout: self
       - checkout: EmptyRepo
         persistCredentials: true
         clean: true
@@ -83,7 +77,7 @@ jobs:
       - NPMCache
 
     steps:
-      - checkout: Library
+      - checkout: self
         persistCredentials: true
       - checkout: Service
         persistCredentials: true
@@ -287,7 +281,7 @@ jobs:
       - Core
 
     steps:
-      - checkout: Library
+      - checkout: self
       - checkout: EmptyRepo
         persistCredentials: true
         clean: true
@@ -441,7 +435,7 @@ jobs:
       - Core
 
     steps:
-      - checkout: Library
+      - checkout: self
       - checkout: EmptyRepo
         persistCredentials: true
         clean: true
@@ -606,7 +600,7 @@ jobs:
       - Core
 
     steps:
-      - checkout: Library
+      - checkout: self
       - checkout: EmptyRepo
         persistCredentials: true
         clean: true
@@ -771,7 +765,7 @@ jobs:
       - Core
 
     steps:
-      - checkout: Library
+      - checkout: self
       - checkout: EmptyRepo
         persistCredentials: true
         clean: true
@@ -871,11 +865,6 @@ jobs:
           npm run build
         displayName: "Build UI"
 
-      # - script: |
-      #     cd $(Build.SourcesDirectory)/survey-library/packages/survey-js-ui
-      #     npm run test
-      #   displayName: "run markup tests"
-
       - script: |
           cd $(Build.SourcesDirectory)/survey-library/packages/survey-js-ui
           npm run e2e:ci
@@ -919,4 +908,3 @@ jobs:
           PathtoPublish: "$(Build.ArtifactStagingDirectory)/SurveyJSLibraryBuild/"
           ArtifactName: "SurveyJSLibraryBuildSurveyUI"
           publishLocation: "Container"
-
