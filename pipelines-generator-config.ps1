@@ -14,6 +14,11 @@ $projects = @(
         TargetRepo = "../survey-library"
     },
     @{
+        Name       = "Creator"
+        SourceDir  = "libraries/creator"
+        TargetRepo = "../survey-creator"
+    },
+    @{
         Name       = "Analytics"
         SourceDir  = "libraries/analytics"
         TargetRepo = "../survey-analytics"

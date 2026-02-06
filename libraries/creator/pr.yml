@@ -9,15 +9,22 @@ resources:
       type: github
       endpoint: github.com_surveyjsdeveloper
       name: surveyjs/azure-pipelines-repo-dont-remove-please
+  pipelines:
+    - pipeline: LibraryMain
+      source: Library Main
+      trigger: false
 
-trigger:
-  batch: true
+variables:
+  npm_config_cache: $(Pipeline.Workspace)/.npm
+  CurrentBranch: $(Build.SourceBranchName)
+  ProjectId: "__PROJECT_ID__"
+
+trigger: none
+
+pr:
   branches:
-    exclude:
-      - master
-  tags:
-    exclude:
-      - v*.*.*
+    include:
+      - __BRANCH__
 
 pool:
   vmImage: "Ubuntu-22.04"
@@ -29,6 +36,8 @@ jobs:
       - checkout: EmptyRepo
         persistCredentials: true
         clean: true
+      - download: LibraryMain
+        artifact: SurveyJSLibraryBuildCore
 
       - task: NodeTool@0
         inputs:
@@ -50,43 +59,9 @@ jobs:
           cacheHitVar: NPM_CACHE_RESTORED
         displayName: Cache NPM Core
 
-      - task: DownloadBuildArtifacts@0
-        inputs:
-          buildType: "specific"
-          project: "af2804d2-859a-4705-9ef5-cdf46d1d5d4f"
-          pipeline: "56"
-          specificBuildWithTriggering: true
-          buildVersionToDownload: "latest"
-          downloadType: "single"
-          artifactName: "SurveyJSLibraryBuildCore"
-          downloadPath: "$(System.ArtifactsDirectory)"
-
-      # - task: DownloadBuildArtifacts@1
-      #   inputs:
-      #     buildType: 'specific'
-      #     project: 'af2804d2-859a-4705-9ef5-cdf46d1d5d4f'
-      #     pipeline: '56'
-      #     specificBuildWithTriggering: true
-      #     buildVersionToDownload: 'latest'
-      #     downloadType: 'single'
-      #     artifactName: 'SurveyJSLibraryBuildCore'
-      #     downloadPath: '$(System.ArtifactsDirectory)'
-      #   displayName: "DownloadBuildArtifacts@1"
-
-      # - task: DownloadPipelineArtifact@2
-      #   inputs:
-      #     buildType: 'specific'
-      #     project: 'af2804d2-859a-4705-9ef5-cdf46d1d5d4f'
-      #     definition: '56'
-      #     buildVersionToDownload: 'latest'
-      #     allowPartiallySucceededBuilds: true
-      #     artifactName: 'SurveyJSLibraryBuildCore'
-      #     targetPath: '$(System.ArtifactsDirectory'
-      #   displayName: "DownloadPipelineArtifact@2"
-
       - task: CopyFiles@2
         inputs:
-          SourceFolder: "$(System.ArtifactsDirectory)/SurveyJSLibraryBuildCore/packages/survey-core"
+          SourceFolder: "$(Pipeline.Workspace)/LibraryMain/SurveyJSLibraryBuildCore/packages/survey-core"
           Contents: "**"
           TargetFolder: "$(Build.SourcesDirectory)/survey-library/packages/survey-core/build"
           OverWrite: true
@@ -160,6 +135,10 @@ jobs:
       - checkout: EmptyRepo
         persistCredentials: true
         clean: true
+      - download: LibraryMain
+        artifact: SurveyJSLibraryBuildReact
+      - download: LibraryMain
+        artifact: SurveyJSLibraryBuildCore
 
       - task: NodeTool@0
         inputs:
@@ -182,28 +161,6 @@ jobs:
 
       - task: DownloadBuildArtifacts@0
         inputs:
-          buildType: "specific"
-          project: "af2804d2-859a-4705-9ef5-cdf46d1d5d4f"
-          pipeline: "56"
-          specificBuildWithTriggering: true
-          buildVersionToDownload: "latest"
-          downloadType: "single"
-          artifactName: "SurveyJSLibraryBuildReact"
-          downloadPath: "$(System.ArtifactsDirectory)"
-
-      - task: DownloadBuildArtifacts@0
-        inputs:
-          buildType: "specific"
-          project: "af2804d2-859a-4705-9ef5-cdf46d1d5d4f"
-          pipeline: "56"
-          specificBuildWithTriggering: true
-          buildVersionToDownload: "latest"
-          downloadType: "single"
-          artifactName: "SurveyJSLibraryBuildCore"
-          downloadPath: "$(System.ArtifactsDirectory)"
-
-      - task: DownloadBuildArtifacts@0
-        inputs:
           buildType: "current"
           downloadType: "single"
           artifactName: "SurveyJSCreatorV2BuildCore-$(Build.BuildId)"
@@ -211,14 +168,14 @@ jobs:
 
       - task: CopyFiles@2
         inputs:
-          SourceFolder: "$(System.ArtifactsDirectory)/SurveyJSLibraryBuildCore/packages/survey-core"
+          SourceFolder: "$(Pipeline.Workspace)/LibraryMain/SurveyJSLibraryBuildCore/packages/survey-core"
           Contents: "**"
           TargetFolder: "$(Build.SourcesDirectory)/survey-library/packages/survey-core/build"
           OverWrite: true
 
       - task: CopyFiles@2
         inputs:
-          SourceFolder: "$(System.ArtifactsDirectory)/SurveyJSLibraryBuildReact/packages/survey-react-ui"
+          SourceFolder: "$(Pipeline.Workspace)/LibraryMain/SurveyJSLibraryBuildReact/packages/survey-react-ui"
           Contents: "**"
           TargetFolder: "$(Build.SourcesDirectory)/survey-library/packages/survey-react-ui/build"
           OverWrite: true
@@ -283,7 +240,7 @@ jobs:
 
       - task: CopyFiles@2
         inputs:
-          SourceFolder: $(System.ArtifactsDirectory)/SurveyJSLibraryBuildCore/packages/survey-core
+          SourceFolder: "$(Pipeline.Workspace)/LibraryMain/SurveyJSLibraryBuildCore/packages/survey-core"
           Contents: "**"
           TargetFolder: "$(Build.SourcesDirectory)/survey-creator/packages/survey-creator-react/node_modules/survey-core"
           OverWrite: true
@@ -292,7 +249,7 @@ jobs:
 
       - task: CopyFiles@2
         inputs:
-          SourceFolder: $(System.ArtifactsDirectory)/SurveyJSLibraryBuildReact/packages/survey-react-ui
+          SourceFolder: "$(Pipeline.Workspace)/LibraryMain/SurveyJSLibraryBuildReact/packages/survey-react-ui"
           Contents: "**"
           TargetFolder: "$(Build.SourcesDirectory)/survey-creator/packages/survey-creator-react/node_modules/survey-react-ui"
           OverWrite: true
@@ -349,33 +306,15 @@ jobs:
       - checkout: EmptyRepo
         persistCredentials: true
         clean: true
+      - download: LibraryMain
+        artifact: SurveyJSLibraryBuildAngular
+      - download: LibraryMain
+        artifact: SurveyJSLibraryBuildCore
 
       - task: NodeTool@0
         inputs:
           versionSpec: "16.x"
         displayName: "Install Node.js"
-
-      - task: DownloadBuildArtifacts@0
-        inputs:
-          buildType: "specific"
-          project: "af2804d2-859a-4705-9ef5-cdf46d1d5d4f"
-          pipeline: "56"
-          specificBuildWithTriggering: true
-          buildVersionToDownload: "latest"
-          downloadType: "single"
-          artifactName: "SurveyJSLibraryBuildAngular"
-          downloadPath: "$(System.ArtifactsDirectory)"
-
-      - task: DownloadBuildArtifacts@0
-        inputs:
-          buildType: "specific"
-          project: "af2804d2-859a-4705-9ef5-cdf46d1d5d4f"
-          pipeline: "56"
-          specificBuildWithTriggering: true
-          buildVersionToDownload: "latest"
-          downloadType: "single"
-          artifactName: "SurveyJSLibraryBuildCore"
-          downloadPath: "$(System.ArtifactsDirectory)"
 
       - task: DownloadBuildArtifacts@0
         inputs:
@@ -386,14 +325,14 @@ jobs:
 
       - task: CopyFiles@2
         inputs:
-          SourceFolder: "$(System.ArtifactsDirectory)/SurveyJSLibraryBuildCore/packages/survey-core"
+          SourceFolder: "$(Pipeline.Workspace)/LibraryMain/SurveyJSLibraryBuildCore/packages/survey-core"
           Contents: "**"
           TargetFolder: "$(Build.SourcesDirectory)/survey-library/packages/survey-core/build"
           OverWrite: true
 
       - task: CopyFiles@2
         inputs:
-          SourceFolder: "$(System.ArtifactsDirectory)/SurveyJSLibraryBuildAngular/packages/survey-angular-ui"
+          SourceFolder: "$(Pipeline.Workspace)/LibraryMain/SurveyJSLibraryBuildAngular/packages/survey-angular-ui"
           Contents: "**"
           TargetFolder: "$(Build.SourcesDirectory)/survey-library/packages/survey-angular-ui/build"
           OverWrite: true
@@ -445,7 +384,7 @@ jobs:
 
       - task: CopyFiles@2
         inputs:
-          SourceFolder: "$(System.ArtifactsDirectory)/SurveyJSLibraryBuildAngular/packages/survey-angular-ui"
+          SourceFolder: "$(Pipeline.Workspace)/LibraryMain/SurveyJSLibraryBuildAngular/packages/survey-angular-ui"
           Contents: "**"
           TargetFolder: "$(Build.SourcesDirectory)/survey-creator/packages/survey-creator-angular/node_modules/survey-angular-ui"
           OverWrite: true
@@ -493,33 +432,15 @@ jobs:
       - checkout: EmptyRepo
         persistCredentials: true
         clean: true
+      - download: LibraryMain
+        artifact: SurveyJSLibraryBuildVue3
+      - download: LibraryMain
+        artifact: SurveyJSLibraryBuildCore
 
       - task: NodeTool@0
         inputs:
           versionSpec: "16.x"
         displayName: "Install Node.js"
-
-      - task: DownloadBuildArtifacts@0
-        inputs:
-          buildType: "specific"
-          project: "af2804d2-859a-4705-9ef5-cdf46d1d5d4f"
-          pipeline: "56"
-          specificBuildWithTriggering: true
-          buildVersionToDownload: "latest"
-          downloadType: "single"
-          artifactName: "SurveyJSLibraryBuildVue3"
-          downloadPath: "$(System.ArtifactsDirectory)"
-
-      - task: DownloadBuildArtifacts@0
-        inputs:
-          buildType: "specific"
-          project: "af2804d2-859a-4705-9ef5-cdf46d1d5d4f"
-          pipeline: "56"
-          specificBuildWithTriggering: true
-          buildVersionToDownload: "latest"
-          downloadType: "single"
-          artifactName: "SurveyJSLibraryBuildCore"
-          downloadPath: "$(System.ArtifactsDirectory)"
 
       - task: DownloadBuildArtifacts@0
         inputs:
@@ -530,14 +451,14 @@ jobs:
 
       - task: CopyFiles@2
         inputs:
-          SourceFolder: "$(System.ArtifactsDirectory)/SurveyJSLibraryBuildCore/packages/survey-core"
+          SourceFolder: "$(Pipeline.Workspace)/LibraryMain/SurveyJSLibraryBuildCore/packages/survey-core"
           Contents: "**"
           TargetFolder: "$(Build.SourcesDirectory)/survey-library/packages/survey-core/build"
           OverWrite: true
 
       - task: CopyFiles@2
         inputs:
-          SourceFolder: "$(System.ArtifactsDirectory)/SurveyJSLibraryBuildVue3/packages/survey-vue3-ui"
+          SourceFolder: "$(Pipeline.Workspace)/LibraryMain/SurveyJSLibraryBuildVue3/packages/survey-vue3-ui"
           Contents: "**"
           TargetFolder: "$(Build.SourcesDirectory)/survey-library/packages/survey-vue3-ui/build"
           OverWrite: true
@@ -589,7 +510,7 @@ jobs:
 
       - task: CopyFiles@2
         inputs:
-          SourceFolder: "$(System.ArtifactsDirectory)/SurveyJSLibraryBuildVue3/packages/survey-vue3-ui"
+          SourceFolder: "$(Pipeline.Workspace)/LibraryMain/SurveyJSLibraryBuildVue3/packages/survey-vue3-ui"
           Contents: "**"
           TargetFolder: "$(Build.SourcesDirectory)/survey-creator/packages/survey-creator-vue/node_modules/survey-vue3-ui"
           OverWrite: true
@@ -632,6 +553,10 @@ jobs:
       - checkout: EmptyRepo
         persistCredentials: true
         clean: true
+      - download: LibraryMain
+        artifact: SurveyJSLibraryBuildSurveyUI
+      - download: LibraryMain
+        artifact: SurveyJSLibraryBuildCore
 
       - task: NodeTool@0
         inputs:
@@ -654,28 +579,6 @@ jobs:
 
       - task: DownloadBuildArtifacts@0
         inputs:
-          buildType: "specific"
-          project: "af2804d2-859a-4705-9ef5-cdf46d1d5d4f"
-          pipeline: "56"
-          specificBuildWithTriggering: true
-          buildVersionToDownload: "latest"
-          downloadType: "single"
-          artifactName: "SurveyJSLibraryBuildSurveyUI"
-          downloadPath: "$(System.ArtifactsDirectory)"
-
-      - task: DownloadBuildArtifacts@0
-        inputs:
-          buildType: "specific"
-          project: "af2804d2-859a-4705-9ef5-cdf46d1d5d4f"
-          pipeline: "56"
-          specificBuildWithTriggering: true
-          buildVersionToDownload: "latest"
-          downloadType: "single"
-          artifactName: "SurveyJSLibraryBuildCore"
-          downloadPath: "$(System.ArtifactsDirectory)"
-
-      - task: DownloadBuildArtifacts@0
-        inputs:
           buildType: "current"
           downloadType: "single"
           artifactName: "SurveyJSCreatorV2BuildCore-$(Build.BuildId)"
@@ -683,14 +586,14 @@ jobs:
 
       - task: CopyFiles@2
         inputs:
-          SourceFolder: "$(System.ArtifactsDirectory)/SurveyJSLibraryBuildCore/packages/survey-core"
+          SourceFolder: "$(Pipeline.Workspace)/LibraryMain/SurveyJSLibraryBuildCore/packages/survey-core"
           Contents: "**"
           TargetFolder: "$(Build.SourcesDirectory)/survey-library/packages/survey-core/build"
           OverWrite: true
 
       - task: CopyFiles@2
         inputs:
-          SourceFolder: "$(System.ArtifactsDirectory)/SurveyJSLibraryBuildSurveyUI/packages/survey-js-ui"
+          SourceFolder: "$(Pipeline.Workspace)/LibraryMain/SurveyJSLibraryBuildSurveyUI/packages/survey-js-ui"
           Contents: "**"
           TargetFolder: "$(Build.SourcesDirectory)/survey-library/packages/survey-js-ui/build"
           OverWrite: true
@@ -757,7 +660,7 @@ jobs:
 
       - task: CopyFiles@2
         inputs:
-          SourceFolder: $(System.ArtifactsDirectory)/SurveyJSLibraryBuildCore/packages/survey-core
+          SourceFolder: "$(Pipeline.Workspace)/LibraryMain/SurveyJSLibraryBuildCore/packages/survey-core"
           Contents: "**"
           TargetFolder: "$(Build.SourcesDirectory)/survey-creator/packages/survey-creator-js/node_modules/survey-core"
           OverWrite: true
@@ -766,7 +669,7 @@ jobs:
 
       - task: CopyFiles@2
         inputs:
-          SourceFolder: $(System.ArtifactsDirectory)/SurveyJSLibraryBuildSurveyUI/packages/survey-js-ui
+          SourceFolder: "$(Pipeline.Workspace)/LibraryMain/SurveyJSLibraryBuildSurveyUI/packages/survey-js-ui"
           Contents: "**"
           TargetFolder: "$(Build.SourcesDirectory)/survey-creator/packages/survey-creator-js/node_modules/survey-js-ui"
           OverWrite: true

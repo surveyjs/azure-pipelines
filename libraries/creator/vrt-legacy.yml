@@ -9,15 +9,26 @@ resources:
       type: github
       endpoint: github.com_surveyjsdeveloper
       name: surveyjs/azure-pipelines-repo-dont-remove-please
+  pipelines:
+    - pipeline: LibraryMain
+      source: Library Main
+      trigger: true
+
+variables:
+  npm_config_cache: $(Pipeline.Workspace)/.npm
+  CurrentBranch: $(Build.SourceBranchName)
+  ProjectId: "__PROJECT_ID__"
 
 trigger:
   batch: true
   branches:
     include:
-      - master
+      - __BRANCH__
   tags:
     exclude:
       - v*.*.*
+
+pr: none
 
 pool:
   vmImage: "windows-latest"
@@ -29,6 +40,8 @@ jobs:
       - checkout: EmptyRepo
         persistCredentials: true
         clean: true
+      - download: LibraryMain
+        artifact: SurveyJSLibraryBuildCore
 
       - task: NodeTool@0
         inputs:
@@ -50,20 +63,9 @@ jobs:
           cacheHitVar: NPM_CACHE_RESTORED
         displayName: Cache NPM Core
 
-      - task: DownloadBuildArtifacts@0
-        inputs:
-          buildType: "specific"
-          project: "af2804d2-859a-4705-9ef5-cdf46d1d5d4f"
-          pipeline: "56"
-          specificBuildWithTriggering: true
-          buildVersionToDownload: "latest"
-          downloadType: "single"
-          artifactName: "SurveyJSLibraryBuildCore"
-          downloadPath: "$(System.ArtifactsDirectory)"
-
       - task: CopyFiles@2
         inputs:
-          SourceFolder: "$(System.ArtifactsDirectory)/SurveyJSLibraryBuildCore/packages/survey-core"
+          SourceFolder: "$(Pipeline.Workspace)/LibraryMain/SurveyJSLibraryBuildCore/packages/survey-core"
           Contents: "**"
           TargetFolder: "$(Build.SourcesDirectory)/survey-library/packages/survey-core/build"
           OverWrite: true
@@ -196,14 +198,14 @@ jobs:
 
       - task: CopyFiles@2
         inputs:
-          SourceFolder: "$(System.ArtifactsDirectory)/SurveyJSLibraryBuildCore/packages/survey-core"
+          SourceFolder: "$(Pipeline.Workspace)/LibraryMain/SurveyJSLibraryBuildCore/packages/survey-core"
           Contents: "**"
           TargetFolder: "$(Build.SourcesDirectory)/survey-library/packages/survey-core/build"
           OverWrite: true
 
       - task: CopyFiles@2
         inputs:
-          SourceFolder: "$(System.ArtifactsDirectory)/SurveyJSLibraryBuildReact/packages/survey-react-ui"
+          SourceFolder: "$(Pipeline.Workspace)/LibraryMain/SurveyJSLibraryBuildReact/packages/survey-react-ui"
           Contents: "**"
           TargetFolder: "$(Build.SourcesDirectory)/survey-library/packages/survey-react-ui/build"
           OverWrite: true
@@ -248,7 +250,7 @@ jobs:
       # update 'file' npm dependencies in case of cache
       - task: CopyFiles@2
         inputs:
-          SourceFolder: $(System.ArtifactsDirectory)/SurveyJSLibraryBuildCore/packages/survey-core
+          SourceFolder: $(Pipeline.Workspace)/LibraryMain/SurveyJSLibraryBuildCore/packages/survey-core
           Contents: "**"
           TargetFolder: "$(Build.SourcesDirectory)/survey-creator/packages/survey-creator-react/node_modules/survey-core"
           OverWrite: true
@@ -257,7 +259,7 @@ jobs:
 
       - task: CopyFiles@2
         inputs:
-          SourceFolder: $(System.ArtifactsDirectory)/SurveyJSLibraryBuildReact/packages/survey-react-ui
+          SourceFolder: $(Pipeline.Workspace)/LibraryMain/SurveyJSLibraryBuildReact/packages/survey-react-ui
           Contents: "**"
           TargetFolder: "$(Build.SourcesDirectory)/survey-creator/packages/survey-creator-react/node_modules/survey-react-ui"
           OverWrite: true
