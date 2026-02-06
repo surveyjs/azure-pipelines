@@ -3,14 +3,20 @@
 # Add steps that analyze code, save build artifacts, deploy, and more:
 # https://docs.microsoft.com/azure/devops/pipelines/languages/javascript
 
+variables:
+  npm_config_cache: $(Pipeline.Workspace)/.npm
+  CurrentBranch: $(Build.SourceBranchName)
+  ProjectId: "__PROJECT_ID__"
+
 trigger:
   batch: true
   branches:
     include:
-      - master
+      - __BRANCH__
   tags:
     exclude:
       - v*.*.*
+pr: none
 
 pool:
   vmImage: "windows-latest"
