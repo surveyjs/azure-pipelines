@@ -1,10 +1,21 @@
 # SurveyJS Widgets integration builds
 
+resources:
+  pipelines:
+    - pipeline: LibraryMain
+      source: Library Main
+      trigger: true
+
+variables:
+  npm_config_cache: $(Pipeline.Workspace)/.npm
+  CurrentBranch: $(Build.SourceBranchName)
+  ProjectId: "__PROJECT_ID__"
+
 trigger:
   batch: true
   branches:
     include:
-      - V1
+      - __BRANCH__
   tags:
     exclude:
       - v*.*.*
@@ -39,20 +50,12 @@ steps:
       verbose: false
     condition: ne(variables.NPM_CACHE_RESTORED, 'true')
 
-  - task: DownloadBuildArtifacts@0
-    inputs:
-      buildType: 'specific'
-      project: '44ed9012-3b38-49f8-a488-0e764469a04f'
-      pipeline: '96'
-      specificBuildWithTriggering: true
-      buildVersionToDownload: 'latest'
-      downloadType: 'single'
-      artifactName: 'SurveyJSLibraryBuildCoreAngularJquery'
-      downloadPath: '$(System.ArtifactsDirectory)'
+  - download: LibraryMain
+    artifact: SurveyJSLibraryBuildCoreAngularJquery
 
   - task: CopyFiles@2
     inputs:
-      SourceFolder: "$(System.ArtifactsDirectory)/SurveyJSLibraryBuildCoreAngularJquery/packages/survey-core"
+      SourceFolder: "$(Pipeline.Workspace)/LibraryMain/SurveyJSLibraryBuildCoreAngularJquery/packages/survey-core"
       Contents: "**"
       TargetFolder: "$(Build.Repository.LocalPath)/node_modules/survey-core"
       OverWrite: true
@@ -60,7 +63,7 @@ steps:
 # npm run release with version
   - task: CopyFiles@2
     inputs:
-      SourceFolder: '$(System.ArtifactsDirectory)/SurveyJSLibraryBuildCoreAngularJquery/'
+      SourceFolder: '$(Pipeline.Workspace)/LibraryMain/SurveyJSLibraryBuildCoreAngularJquery/'
       Contents: 'version.txt'
       TargetFolder: '$(Build.SourcesDirectory)/'
       OverWrite: true

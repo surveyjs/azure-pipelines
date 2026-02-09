@@ -24,6 +24,16 @@ $projects = @(
         TargetRepo = "../survey-analytics"
     },
     @{
+        Name       = "PDF"
+        SourceDir  = "libraries/pdf"
+        TargetRepo = "../survey-pdf"
+    },
+    @{
+        Name       = "Custom Widgets"
+        SourceDir  = "libraries/custom-widgets"
+        TargetRepo = "../custom-widgets"
+    },
+    @{
         Name       = "Service"
         SourceDir  = "libraries/service"
         TargetRepo = "../service"

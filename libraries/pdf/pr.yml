@@ -9,15 +9,22 @@ resources:
       type: github
       endpoint: github.com_surveyjsdeveloper
       name: surveyjs/azure-pipelines-repo-dont-remove-please
+  pipelines:
+    - pipeline: LibraryMain
+      source: Library Main
+      trigger: false
 
-trigger:
-  batch: true
+variables:
+  npm_config_cache: $(Pipeline.Workspace)/.npm
+  CurrentBranch: $(Build.SourceBranchName)
+  ProjectId: "__PROJECT_ID__"
+
+trigger: none
+
+pr:
   branches:
-    exclude:
-      - master
-  tags:
-    exclude:
-      - v*.*.*
+    include:
+      - __BRANCH__
 
 pool:
   vmImage: "Ubuntu-22.04"
@@ -28,6 +35,9 @@ steps:
     persistCredentials: true
     clean: true
     fetchDepth: 1
+
+  - download: LibraryMain
+    artifact: SurveyJSLibraryBuildCore
 
   - task: NodeTool@0
     inputs:
@@ -67,20 +77,9 @@ steps:
       npm run lint
     displayName: "run lint command"
 
-  - task: DownloadBuildArtifacts@0
-    inputs:
-      buildType: "specific"
-      project: "af2804d2-859a-4705-9ef5-cdf46d1d5d4f"
-      pipeline: "56"
-      specificBuildWithTriggering: true
-      buildVersionToDownload: "latest"
-      downloadType: "single"
-      artifactName: "SurveyJSLibraryBuildCore"
-      downloadPath: "$(System.ArtifactsDirectory)"
-
   - task: CopyFiles@2
     inputs:
-      SourceFolder: "$(System.ArtifactsDirectory)/SurveyJSLibraryBuildCore/packages/survey-core"
+      SourceFolder: "$(Pipeline.Workspace)/LibraryMain/SurveyJSLibraryBuildCore/packages/survey-core"
       Contents: "**"
       TargetFolder: "$(Build.SourcesDirectory)/survey-pdf/node_modules/survey-core"
       OverWrite: true

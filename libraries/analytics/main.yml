@@ -13,12 +13,21 @@ resources:
       type: github
       endpoint: github.com_surveyjsdeveloper
       name: surveyjs/survey-utils
+  pipelines:
+    - pipeline: LibraryMain
+      source: Library Main
+      trigger: true
+
+variables:
+  npm_config_cache: $(Pipeline.Workspace)/.npm
+  CurrentBranch: $(Build.SourceBranchName)
+  ProjectId: "__PROJECT_ID__"
 
 trigger:
   batch: true
   branches:
     include:
-      - master
+      - __BRANCH__
   tags:
     exclude:
       - v*.*.*
@@ -37,6 +46,8 @@ steps:
     persistCredentials: true
     clean: true
     fetchDepth: 1
+  - download: LibraryMain
+    artifact: SurveyJSLibraryBuildCore
 
   - task: NodeTool@0
     inputs:
@@ -83,17 +94,6 @@ steps:
       npm run pwinst
     displayName: "Install chrome playwright"
 
-  - task: DownloadBuildArtifacts@0
-    inputs:
-      buildType: "specific"
-      project: "af2804d2-859a-4705-9ef5-cdf46d1d5d4f"
-      pipeline: "56"
-      specificBuildWithTriggering: true
-      buildVersionToDownload: "latest"
-      downloadType: "single"
-      artifactName: "SurveyJSLibraryBuildCore"
-      downloadPath: "$(System.ArtifactsDirectory)"
-
   - script: |
       cd $(Build.SourcesDirectory)/survey-analytics/node_modules
       rm -rf survey-core
@@ -101,7 +101,7 @@ steps:
 
   - task: CopyFiles@2
     inputs:
-      SourceFolder: "$(System.ArtifactsDirectory)/SurveyJSLibraryBuildCore/packages/survey-core"
+      SourceFolder: "$(Pipeline.Workspace)/LibraryMain/SurveyJSLibraryBuildCore/packages/survey-core"
       Contents: "**"
       TargetFolder: "$(Build.SourcesDirectory)/survey-analytics/node_modules/survey-core"
       OverWrite: true
@@ -109,7 +109,7 @@ steps:
   # npm run release with version
   - task: CopyFiles@2
     inputs:
-      SourceFolder: "$(System.ArtifactsDirectory)/SurveyJSLibraryBuildCore/"
+      SourceFolder: "$(Pipeline.Workspace)/LibraryMain/SurveyJSLibraryBuildCore/"
       Contents: "version.txt"
       TargetFolder: "$(Build.SourcesDirectory)/"
       OverWrite: true
