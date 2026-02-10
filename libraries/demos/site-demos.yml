@@ -1,13 +1,21 @@
-# Node.js
-# Build a general Node.js project with npm.
-# Add steps that analyze code, save build artifacts, deploy, and more:
-# https://docs.microsoft.com/azure/devops/pipelines/languages/javascript
+resources:
+  pipelines:
+    - pipeline: UpdateSurveyjstestSite
+      source: Update Surveyjstest Site
+      trigger: true
+
+variables:
+  npm_config_cache: $(Pipeline.Workspace)/.npm
+  CurrentBranch: $(Build.SourceBranchName)
+  ProjectId: '__PROJECT_ID__'
 
 trigger:
   batch: true
   branches:
     include:
-    - master
+      - __BRANCH__
+
+pr: none
 
 pool:
   vmImage: "windows-latest"
@@ -37,11 +45,10 @@ jobs:
       npm run examples:ci -- --shard=$(SHARD_INDEX)/$(SHARD_TOTAL)
     displayName: 'run Playwright tests'
 
-
   - task: PublishTestResults@2
     inputs:
       testResultsFormat: 'JUnit'
-      testResultsFiles: '$(Build.SourcesDirectory)/test-results/results-shard-$(SHARD_INDEX).xml' 
+      testResultsFiles: '$(Build.SourcesDirectory)/test-results/results-shard-$(SHARD_INDEX).xml'
       testRunTitle: 'Playwright E2E Shard $(SHARD_INDEX)'
     condition: succeededOrFailed()
     displayName: 'Publish Playwright Test Results'

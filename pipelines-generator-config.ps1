@@ -34,8 +34,8 @@ $projects = @(
         TargetRepo = "../custom-widgets"
     },
     @{
-        Name       = "Service"
-        SourceDir  = "libraries/service"
+        Name       = "Demos"
+        SourceDir  = "libraries/demos"
         TargetRepo = "../service"
     }
 )
