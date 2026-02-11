@@ -34,8 +34,23 @@ $projects = @(
         TargetRepo = "../custom-widgets"
     },
     @{
-        Name       = "Demos"
-        SourceDir  = "libraries/demos"
+        Name       = "Angular CLI"
+        SourceDir  = "libraries/angular-cli"
+        TargetRepo = "../surveyjs_angular_cli"
+    },
+    @{
+        Name       = "React Quickstart"
+        SourceDir  = "libraries/react-quickstart"
+        TargetRepo = "../surveyjs_react_quickstart"
+    },
+    @{
+        Name       = "Vue3 Quickstart"
+        SourceDir  = "libraries/vue3-quickstart"
+        TargetRepo = "../surveyjs_vue3_quickstart"
+    },
+    @{
+        Name       = "Service"
+        SourceDir  = "libraries/service"
         TargetRepo = "../service"
     }
 )
