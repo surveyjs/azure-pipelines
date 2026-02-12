@@ -1,3 +1,11 @@
+schedules:
+- cron: "0 3 * * *"          # Main schedule: 03:00 UTC
+  displayName: "Daily 3 AM UTC Build"
+  branches:
+    include:
+    - master
+  always: true
+
 resources:
   pipelines:
     - pipeline: LibraryMain

@@ -1,7 +1,7 @@
 resources:
   pipelines:
     - pipeline: UpdateSurveyjstestSite
-      source: Update Surveyjstest Site
+      source: Update Site Demos (surveyjstest.azurewebsites.net)
       trigger: true
 
 variables:

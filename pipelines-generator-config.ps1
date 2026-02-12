@@ -52,6 +52,11 @@ $projects = @(
         Name       = "Service"
         SourceDir  = "libraries/service"
         TargetRepo = "../service"
+    },
+    @{
+        Name       = "Site Demos"
+        SourceDir  = "libraries/site-demos"
+        TargetRepo = "../surveyjsio-site-tests"
     }
 )
 
