@@ -1,4 +1,6 @@
-#trigger only "by hand"
+variables:
+  CustomVersion: "2.9.0"
+
 trigger: none
 pr: none
 
@@ -8,9 +10,8 @@ pool:
 steps:
   - checkout: none
 
-#uncomment for specific version
   - powershell: |
-      $version = "2.9.0"
+      $version = "$(CustomVersion)"
       New-Item "version.txt"
       Set-Content version.txt $version
       Get-Content version.txt
@@ -21,21 +22,7 @@ steps:
         contents: 'version.txt'
         targetFolder: $(Build.ArtifactStagingDirectory)/ReleaseVersionFile
     displayName: 'copy version file to Build.ArtifactStagingDirectory'
-#######################################################################
 
-#comment for specific version
-  # - task: DownloadBuildArtifacts@0
-  #   inputs:
-  #     buildType: 'specific'
-  #     project: '__PROJECT_ID__'
-  #     pipeline: '45'
-  #     buildVersionToDownload: 'latest'
-  #     downloadType: 'single'
-  #     artifactName: 'ReleaseVersionFile'
-  #     downloadPath: '$(System.ArtifactsDirectory)'
-#########################################################################
-
-  #publishLocation: 'Container' - store the artifact in Azure Pipelines
   - task: PublishBuildArtifacts@1
     inputs:
       PathtoPublish: '$(Build.ArtifactStagingDirectory)/ReleaseVersionFile/version.txt'

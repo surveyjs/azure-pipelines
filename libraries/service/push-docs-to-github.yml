@@ -6,6 +6,10 @@
 trigger: none
 pr: none
 
+variables:
+  npm_config_cache: $(Pipeline.Workspace)/.npm
+  CurrentBranch: $(Build.SourceBranchName)
+  ProjectId: '__PROJECT_ID__'
 
 pool:
   vmImage: 'ubuntu-latest'
@@ -115,13 +119,13 @@ steps:
     $env:GIT_REDIRECT_STDERR = '2>&1'
     git config --global user.email "surveyjs.org@gmail.com"
     git config --global user.name "surveyjsdeveloper"
-    git pull origin master
-    git fetch origin master --tags --force
-    git checkout master
+    git pull origin $(CurrentBranch)
+    git fetch origin $(CurrentBranch) --tags --force
+    git checkout $(CurrentBranch)
     git add docs
     git commit -m "updated survey-library docs [azurepipelines skip]"
-    git pull origin master
-    git push origin master
+    git pull origin $(CurrentBranch)
+    git push origin $(CurrentBranch)
   displayName: "Library - push docs to github"
   
 - powershell: |
@@ -129,13 +133,13 @@ steps:
     $env:GIT_REDIRECT_STDERR = '2>&1'
     git config --global user.email "surveyjs.org@gmail.com"
     git config --global user.name "surveyjsdeveloper"
-    git pull origin master
-    git fetch origin master --tags --force
-    git checkout master
+    git pull origin $(CurrentBranch)
+    git fetch origin $(CurrentBranch) --tags --force
+    git checkout $(CurrentBranch)
     git add docs
     git commit -m "updated survey-creator docs [azurepipelines skip]"
-    git pull origin master
-    git push origin master
+    git pull origin $(CurrentBranch)
+    git push origin $(CurrentBranch)
   displayName: "Creator - push docs to github"
 
 - powershell: |
@@ -143,13 +147,13 @@ steps:
     $env:GIT_REDIRECT_STDERR = '2>&1'
     git config --global user.email "surveyjs.org@gmail.com"
     git config --global user.name "surveyjsdeveloper"
-    git pull origin master
-    git fetch origin master --tags --force
-    git checkout master
+    git pull origin $(CurrentBranch)
+    git fetch origin $(CurrentBranch) --tags --force
+    git checkout $(CurrentBranch)
     git add docs
     git commit -m "updated survey-analytics docs [azurepipelines skip]"
-    git pull origin master
-    git push origin master
+    git pull origin $(CurrentBranch)
+    git push origin $(CurrentBranch)
   displayName: "Anakytics - push docs to github"
 
 - powershell: |
@@ -157,11 +161,11 @@ steps:
     $env:GIT_REDIRECT_STDERR = '2>&1'
     git config --global user.email "surveyjs.org@gmail.com"
     git config --global user.name "surveyjsdeveloper"
-    git pull origin master
-    git fetch origin master --tags --force
-    git checkout master
+    git pull origin $(CurrentBranch)
+    git fetch origin $(CurrentBranch) --tags --force
+    git checkout $(CurrentBranch)
     git add docs
     git commit -m "updated survey-pdf docs [azurepipelines skip]"
-    git pull origin master
-    git push origin master
+    git pull origin $(CurrentBranch)
+    git push origin $(CurrentBranch)
   displayName: "PDF - push docs to github"
