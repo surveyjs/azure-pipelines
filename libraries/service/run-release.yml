@@ -243,7 +243,7 @@ jobs:
     inputs:
       command: "custom"
       workingDir: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-angular-ui'
-      customCommand: "publish --tag latest"
+      customCommand: "publish --tag __NPM_PUBLISH_TAG__"
       customEndpoint: 'NPM Registry V2'
       verbose: true
     displayName: 'npm publish survey-angular-ui'
@@ -252,7 +252,7 @@ jobs:
     inputs:
       command: "custom"
       workingDir: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-vue3-ui'
-      customCommand: "publish --tag latest"
+      customCommand: "publish --tag __NPM_PUBLISH_TAG__"
       customEndpoint: 'NPM Registry V2'
       verbose: true
     displayName: 'npm publish survey-vue3-ui'
@@ -261,7 +261,7 @@ jobs:
     inputs:
       command: "custom"
       workingDir: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-react-ui'
-      customCommand: "publish --tag latest"
+      customCommand: "publish --tag __NPM_PUBLISH_TAG__"
       customEndpoint: 'NPM Registry V2'
       verbose: true
     displayName: 'npm publish survey-react-ui'
@@ -270,7 +270,7 @@ jobs:
     inputs:
       command: "custom"
       workingDir: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-js-ui'
-      customCommand: "publish --tag latest"
+      customCommand: "publish --tag __NPM_PUBLISH_TAG__"
       customEndpoint: 'NPM Registry V2'
       verbose: true
     displayName: 'npm publish survey-js-ui'
@@ -279,7 +279,7 @@ jobs:
     inputs:
       command: "custom"
       workingDir: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-core'
-      customCommand: "publish --tag latest"
+      customCommand: "publish --tag __NPM_PUBLISH_TAG__"
       customEndpoint: 'NPM Registry V2'
       verbose: true
     displayName: 'npm publish survey-core'
@@ -288,7 +288,7 @@ jobs:
     inputs:
       command: "custom"
       workingDir: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-analytics'
-      customCommand: "publish --tag latest"
+      customCommand: "publish --tag __NPM_PUBLISH_TAG__"
       customEndpoint: 'NPM Registry V2'
       verbose: true
     displayName: 'npm publish survey-analytics'
@@ -297,7 +297,7 @@ jobs:
     inputs:
       command: "custom"
       workingDir: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-pdf'
-      customCommand: "publish --tag latest"
+      customCommand: "publish --tag __NPM_PUBLISH_TAG__"
       customEndpoint: 'NPM Registry V2'
       verbose: true
     displayName: 'npm publish survey-pdf'
@@ -306,7 +306,7 @@ jobs:
     inputs:
       command: "custom"
       workingDir: "$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-creator-core"
-      customCommand: "publish --tag latest"
+      customCommand: "publish --tag __NPM_PUBLISH_TAG__"
       customEndpoint: "NPM Registry V2"
       verbose: true
     displayName: 'npm publish survey-creator-core'
@@ -315,7 +315,7 @@ jobs:
     inputs:
       command: "custom"
       workingDir: "$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-creator-react"
-      customCommand: "publish --tag latest"
+      customCommand: "publish --tag __NPM_PUBLISH_TAG__"
       customEndpoint: "NPM Registry V2"
       verbose: true
     displayName: 'npm publish survey-creator-react'
@@ -324,7 +324,7 @@ jobs:
     inputs:
       command: "custom"
       workingDir: "$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-creator-angular"
-      customCommand: "publish --tag latest"
+      customCommand: "publish --tag __NPM_PUBLISH_TAG__"
       customEndpoint: "NPM Registry V2"
       verbose: true
     displayName: 'npm publish survey-creator-angular'
@@ -333,7 +333,7 @@ jobs:
     inputs:
       command: "custom"
       workingDir: "$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-creator-vue"
-      customCommand: "publish --tag latest"
+      customCommand: "publish --tag __NPM_PUBLISH_TAG__"
       customEndpoint: "NPM Registry V2"
       verbose: true
     displayName: 'npm publish survey-creator-vue'
@@ -342,7 +342,7 @@ jobs:
     inputs:
       command: "custom"
       workingDir: "$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/survey-creator-js"
-      customCommand: "publish --tag latest"
+      customCommand: "publish --tag __NPM_PUBLISH_TAG__"
       customEndpoint: "NPM Registry V2"
       verbose: true
     displayName: 'npm publish survey-creator-js'

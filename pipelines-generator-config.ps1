@@ -1,8 +1,8 @@
 # --- НАСТРОЙКИ ВЕРСИЙ (ФИЛЬТРЫ) ---
-# Теперь мы описываем каждую ветку и её ID проекта как отдельный объект
+# Теперь мы описываем каждую ветку, её ID проекта и тег публикации NPM
 $versions = @(
-    @{ BranchName = "master"; ProjectId = "d79f2855-7b94-4261-9daf-4cace0a06c03" },
-    @{ BranchName = "V3";     ProjectId = "2cf848f9-83d5-4ec4-b2e3-ef3321ccc99f" }
+    @{ BranchName = "master"; ProjectId = "d79f2855-7b94-4261-9daf-4cace0a06c03"; NpmPublishTag = "latest" },
+    @{ BranchName = "V3";     ProjectId = "2cf848f9-83d5-4ec4-b2e3-ef3321ccc99f"; NpmPublishTag = "next" }
 )
 # ---------------------------
 
@@ -66,10 +66,12 @@ Write-Host ">>> Starting mass generation for $($versions.Count) versions <<<`n" 
 foreach ($ver in $versions) {
     $currentBranch = $ver.BranchName
     $currentProject = $ver.ProjectId
+    $currentNpmTag = $ver.NpmPublishTag
 
     Write-Host "======================================================" -ForegroundColor Magenta
     Write-Host " TARGET BRANCH: $currentBranch" -ForegroundColor Magenta
     Write-Host " AZURE PROJECT: $currentProject" -ForegroundColor Magenta
+    Write-Host " NPM TAG:       $currentNpmTag" -ForegroundColor Magenta
     Write-Host "======================================================" -ForegroundColor Magenta
 
     # Вложенный цикл по проектам (Library, Analytics и т.д.)
@@ -83,7 +85,7 @@ foreach ($ver in $versions) {
             continue 
         }
 
-        # Пути к исходным шаблонам и целевой папке (теперь папка зависит от текущей итерации версии)
+        # Пути к исходным шаблонам и целевой папке
         $sourcePath = Join-Path $PSScriptRoot $project.SourceDir
         $targetPath = Join-Path $repoPath "azure-pipelines/$currentBranch"
 
@@ -106,6 +108,7 @@ foreach ($ver in $versions) {
             # Замена токенов текущими значениями из цикла версий
             $content = $content -replace "__BRANCH__", $currentBranch
             $content = $content -replace "__PROJECT_ID__", $currentProject
+            $content = $content -replace "__NPM_PUBLISH_TAG__", $currentNpmTag
 
             $finalPath = Join-Path $targetPath $file.Name
             
