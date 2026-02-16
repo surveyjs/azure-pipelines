@@ -16,6 +16,10 @@ pool:
 
 resources:
   repositories:
+    - repository: SiteData
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/surveyjs-site-data
     - repository: Library # The name used to reference this repository in the checkout step
       type: github
       endpoint: github.com_surveyjsdeveloper
@@ -40,7 +44,10 @@ steps:
     versionSpec: "14.x"
   displayName: "Install Node.js"
 
-- checkout: self
+- checkout: SiteData
+  persistCredentials: true
+  clean: true
+  fetchDepth: 1
 - checkout: Library
   persistCredentials: true
   clean: true
@@ -60,7 +67,7 @@ steps:
 
 - task: CopyFiles@2
   inputs:
-    SourceFolder: "$(Build.SourcesDirectory)/service/surveyjs.io/App_Data/DocsLibrary"
+    SourceFolder: "$(Build.SourcesDirectory)/surveyjs-site-data/DocsLibrary"
     Contents: |
       **
       !classes.json
@@ -73,7 +80,7 @@ steps:
 
 - task: CopyFiles@2
   inputs:
-    SourceFolder: "$(Build.SourcesDirectory)/service/surveyjs.io/App_Data/DocsEditor"
+    SourceFolder: "$(Build.SourcesDirectory)/surveyjs-site-data/DocsEditor"
     Contents: |
       **
       !classes.json
@@ -86,7 +93,7 @@ steps:
 
 - task: CopyFiles@2
   inputs:
-    SourceFolder: "$(Build.SourcesDirectory)/service/surveyjs.io/App_Data/DocsAnalytics"
+    SourceFolder: "$(Build.SourcesDirectory)/surveyjs-site-data/DocsAnalytics"
     Contents: |
       **
       !classes.json
@@ -99,7 +106,7 @@ steps:
 
 - task: CopyFiles@2
   inputs:
-    SourceFolder: "$(Build.SourcesDirectory)/service/surveyjs.io/App_Data/DocsPdf"
+    SourceFolder: "$(Build.SourcesDirectory)/surveyjs-site-data/DocsPdf"
     Contents: |
       **
       !classes.json
