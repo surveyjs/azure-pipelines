@@ -1,9 +1,18 @@
+param (
+    [string]$TargetBranch = "all" 
+)
+
 # --- НАСТРОЙКИ ВЕРСИЙ (ФИЛЬТРЫ) ---
 # Теперь мы описываем каждую ветку, её ID проекта и тег публикации NPM
 $versions = @(
     @{ BranchName = "master"; BranchNewName = "main"; ProjectId = "d79f2855-7b94-4261-9daf-4cace0a06c03"; NpmPublishTag = "latest" },
     @{ BranchName = "V3";     BranchNewName = "V3";   ProjectId = "2cf848f9-83d5-4ec4-b2e3-ef3321ccc99f"; NpmPublishTag = "next" }
 )
+
+# Фильтруем версии, если запущено для конкретной ветки
+if ($TargetBranch -ne "all") {
+    $versions = $versions | Where-Object { $_.BranchName -eq $TargetBranch }
+}
 # ---------------------------
 
 # Конфигурация проектов
@@ -60,7 +69,7 @@ $projects = @(
     }
 )
 
-Write-Host ">>> Starting mass generation for $($versions.Count) versions <<<`n" -ForegroundColor Yellow
+Write-Host ">>> Starting generation for branch: $TargetBranch <<<`n" -ForegroundColor Yellow
 
 # ГЛАВНЫЙ ЦИКЛ ПО ВЕРСИЯМ (V3, master и т.д.)
 foreach ($ver in $versions) {
@@ -125,6 +134,9 @@ foreach ($ver in $versions) {
     }
 }
 
-Write-Host "`nMass generation process finished. Check your Git diffs." -ForegroundColor Yellow
-Write-Host "Press any key to exit..."
-$null = [Console]::ReadKey()
+# Показываем финальное сообщение только если скрипт запущен вручную (для всех веток)
+if ($TargetBranch -eq "all") {
+    Write-Host "`nMass generation process finished. Check your Git diffs." -ForegroundColor Yellow
+    Write-Host "Press any key to exit..."
+    $null = [Console]::ReadKey()
+}
