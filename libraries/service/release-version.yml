@@ -4,11 +4,13 @@ pr: none
 pool:
   vmImage: 'ubuntu-latest'
 
+# #comment for custom version
 resources:
   pipelines:
     - pipeline: RunRelease
       source: Run Release
       trigger: true
+# #EO comment for custom version
 
 steps:
   - checkout: none
