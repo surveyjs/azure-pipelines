@@ -520,7 +520,7 @@ jobs:
       
       $status = git status --porcelain
       if ($status) {
-          git commit -m "released $(SurveyJSVersion) [azurepipelines skip]"
+          git commit -m "released $(SurveyJSVersion)"
           git pull origin $branch
           git push origin $branch
       }
