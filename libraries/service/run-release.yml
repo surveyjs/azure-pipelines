@@ -347,7 +347,7 @@ jobs:
       verbose: true
     displayName: 'npm publish survey-creator-js'
 
-  ###############################################################################
+###############################################################################
 
   # 4. push tags to github
   - powershell: |
@@ -365,8 +365,12 @@ jobs:
     displayName: 'setup SurveyJSVersion variable from SurveyJSVersionFile'
 
   - powershell: |
+      $branch = "$(CurrentBranch)"
       cd $(Build.SourcesDirectory)/survey-library/
-      git checkout $(CurrentBranch)
+      $env:GIT_REDIRECT_STDERR = '2>&1'
+      git fetch origin $branch
+      git checkout -B $branch origin/$branch
+      git reset --hard origin/$branch
       git fetch --tags --force
       cd packages/survey-angular-ui/
       npm run release -- --release-as $(SurveyJSVersion) --skip.tag
@@ -378,81 +382,113 @@ jobs:
       npm run release -- --release-as $(SurveyJSVersion) --skip.tag
       cd ../../packages/survey-core/
       npm run release -- --release-as $(SurveyJSVersion)
-      git pull origin $(CurrentBranch)
-      git push --follow-tags origin $(CurrentBranch) --no-verify
+      git pull origin $branch
+      git push --follow-tags origin $branch --no-verify
     displayName: 'Library - push tag to Github'
 
   - powershell: |
+      $branch = "$(CurrentBranch)"
       cd $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core
-      git checkout $(CurrentBranch)
+      $env:GIT_REDIRECT_STDERR = '2>&1'
+      git fetch origin $branch
+      git checkout -B $branch origin/$branch
+      git reset --hard origin/$branch
       git fetch --tags --force
       npm run release -- --release-as $(SurveyJSVersion) --skip.tag
-      git pull origin $(CurrentBranch)
-      git push --follow-tags origin $(CurrentBranch) --no-verify
+      git pull origin $branch
+      git push --follow-tags origin $branch --no-verify
     displayName: 'Creator Core - push tag to Github'
 
   - powershell: |
+      $branch = "$(CurrentBranch)"
       cd $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-react
-      git checkout $(CurrentBranch)
+      $env:GIT_REDIRECT_STDERR = '2>&1'
+      git fetch origin $branch
+      git checkout -B $branch origin/$branch
+      git reset --hard origin/$branch
       git fetch --tags --force
       npm run release -- --release-as $(SurveyJSVersion) --skip.tag
-      git pull origin $(CurrentBranch)
-      git push --follow-tags origin $(CurrentBranch) --no-verify
+      git pull origin $branch
+      git push --follow-tags origin $branch --no-verify
     displayName: 'Creator React - push tag to Github'
 
   - powershell: |
+      $branch = "$(CurrentBranch)"
       cd $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-vue
-      git checkout $(CurrentBranch)
+      $env:GIT_REDIRECT_STDERR = '2>&1'
+      git fetch origin $branch
+      git checkout -B $branch origin/$branch
+      git reset --hard origin/$branch
       git fetch --tags --force
       npm run release -- --release-as $(SurveyJSVersion) --skip.tag
-      git pull origin $(CurrentBranch)
-      git push --follow-tags origin $(CurrentBranch) --no-verify
+      git pull origin $branch
+      git push --follow-tags origin $branch --no-verify
     displayName: 'Creator Vue - push tag to Github'
   
   - powershell: |
+      $branch = "$(CurrentBranch)"
       cd $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-js
-      git checkout $(CurrentBranch)
+      $env:GIT_REDIRECT_STDERR = '2>&1'
+      git fetch origin $branch
+      git checkout -B $branch origin/$branch
+      git reset --hard origin/$branch
       git fetch --tags --force
       npm run release -- --release-as $(SurveyJSVersion) --skip.tag
-      git pull origin $(CurrentBranch)
-      git push --follow-tags origin $(CurrentBranch) --no-verify
+      git pull origin $branch
+      git push --follow-tags origin $branch --no-verify
     displayName: 'Creator JS - push tag to Github'
 
   # before moved the task below see the proben with --skip.tag https://github.com/surveyjs/service/issues/730
   - powershell: |
+      $branch = "$(CurrentBranch)"
       cd $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-angular
-      git checkout $(CurrentBranch)
+      $env:GIT_REDIRECT_STDERR = '2>&1'
+      git fetch origin $branch
+      git checkout -B $branch origin/$branch
+      git reset --hard origin/$branch
       git fetch --tags --force
       npm run release -- --release-as $(SurveyJSVersion)
-      git pull origin $(CurrentBranch)
-      git push --follow-tags origin $(CurrentBranch) --no-verify
+      git pull origin $branch
+      git push --follow-tags origin $branch --no-verify
     displayName: 'Creator Angular - push tag to Github'
 
   - powershell: |
+      $branch = "$(CurrentBranch)"
       cd $(Build.SourcesDirectory)/custom-widgets/
-      git checkout $(CurrentBranch)
+      $env:GIT_REDIRECT_STDERR = '2>&1'
+      git fetch origin $branch
+      git checkout -B $branch origin/$branch
+      git reset --hard origin/$branch
       git fetch --tags --force
       npm run release -- --release-as $(SurveyJSVersion)
-      git pull origin $(CurrentBranch)
-      git push --follow-tags origin $(CurrentBranch) --no-verify
+      git pull origin $branch
+      git push --follow-tags origin $branch --no-verify
     displayName: 'CustomWidgets - push tag to Github'
 
   - powershell: |
+      $branch = "$(CurrentBranch)"
       cd $(Build.SourcesDirectory)/survey-analytics/
-      git checkout $(CurrentBranch)
+      $env:GIT_REDIRECT_STDERR = '2>&1'
+      git fetch origin $branch
+      git checkout -B $branch origin/$branch
+      git reset --hard origin/$branch
       git fetch --tags --force
       npm run release -- --release-as $(SurveyJSVersion)
-      git pull origin $(CurrentBranch)
-      git push --follow-tags origin $(CurrentBranch) --no-verify
+      git pull origin $branch
+      git push --follow-tags origin $branch --no-verify
     displayName: 'Analytics - push tag to Github'
 
   - powershell: |
+      $branch = "$(CurrentBranch)"
       cd $(Build.SourcesDirectory)/survey-pdf/
-      git checkout $(CurrentBranch)
+      $env:GIT_REDIRECT_STDERR = '2>&1'
+      git fetch origin $branch
+      git checkout -B $branch origin/$branch
+      git reset --hard origin/$branch
       git fetch --tags --force
       npm run release -- --release-as $(SurveyJSVersion)
-      git pull origin $(CurrentBranch)
-      git push --follow-tags origin $(CurrentBranch) --no-verify
+      git pull origin $branch
+      git push --follow-tags origin $branch --no-verify
     displayName: 'PDF - push tag to Github'
   ###############################################################################
 
@@ -470,18 +506,24 @@ jobs:
     displayName: 'setup surveyjs.io SurveyJSVersion setting'
 
   - powershell: |
+      $branch = "$(CurrentBranch)"
       cd $(Build.SourcesDirectory)/service/
       $env:GIT_REDIRECT_STDERR = '2>&1'
       git config --global user.email "surveyjs.org@gmail.com"
       git config --global user.name "surveyjsdeveloper"
-      git checkout $(CurrentBranch)
-      git pull origin $(CurrentBranch)
-      git fetch --tags --force
+
+      git fetch origin $branch
+      git checkout -B $branch origin/$branch
+
       git add surveyjs.io/DevBuilds
       git add surveyjs.io/Web.config
-      git commit -m "released $(SurveyJSVersion)"
-      git pull origin $(CurrentBranch)
-      git push origin $(CurrentBranch)
+      
+      $status = git status --porcelain
+      if ($status) {
+          git commit -m "released $(SurveyJSVersion) [azurepipelines skip]"
+          git pull origin $branch
+          git push origin $branch
+      }
     displayName: 'updated surveyjs.io Web.config and DevBuilds'
   ###############################################################################
 
