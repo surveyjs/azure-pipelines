@@ -530,7 +530,7 @@ jobs:
   # 8. POST-RELEASE TASK: trigger ReleaseVersion pipeline via the atrifact
   - powershell: |
       cd $(Build.SourcesDirectory)/survey-library/packages/survey-core
-      npm run release
+      npm run release __PRERELEASE_PARAM__
       $version = (git describe --tags).replace("v", "")
       New-Item "version.txt"
       Set-Content version.txt $version 

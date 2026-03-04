@@ -5,8 +5,8 @@ param (
 # --- НАСТРОЙКИ ВЕРСИЙ (ФИЛЬТРЫ) ---
 # Теперь мы описываем каждую ветку, её ID проекта и тег публикации NPM
 $versions = @(
-    @{ BranchName = "master"; BranchNewName = "main"; ProjectId = "d79f2855-7b94-4261-9daf-4cace0a06c03"; NpmPublishTag = "latest" },
-    @{ BranchName = "V3";     BranchNewName = "V3";   ProjectId = "2cf848f9-83d5-4ec4-b2e3-ef3321ccc99f"; NpmPublishTag = "next" }
+    @{ BranchName = "master"; BranchNewName = "V2"; ProjectId = "d79f2855-7b94-4261-9daf-4cace0a06c03"; NpmPublishTag = "latest"; PrereleaseParam = "" },
+    @{ BranchName = "V3";     BranchNewName = "V3";   ProjectId = "2cf848f9-83d5-4ec4-b2e3-ef3321ccc99f"; NpmPublishTag = "next";  PrereleaseParam = "-- --prerelease beta" }
 )
 
 # Фильтруем версии, если запущено для конкретной ветки
@@ -77,6 +77,7 @@ foreach ($ver in $versions) {
     $newBranchName = $ver.BranchNewName
     $currentProject = $ver.ProjectId
     $currentNpmTag = $ver.NpmPublishTag
+    $currentPrereleaseParam = $ver.PrereleaseParam
 
     Write-Host "======================================================" -ForegroundColor Magenta
     Write-Host " TARGET BRANCH (Folder): $currentBranch" -ForegroundColor Magenta
@@ -121,6 +122,7 @@ foreach ($ver in $versions) {
             $content = $content -replace "__NEW_BRANCH__", $newBranchName
             $content = $content -replace "__PROJECT_ID__", $currentProject
             $content = $content -replace "__NPM_PUBLISH_TAG__", $currentNpmTag
+            $content = $content -replace "__PRERELEASE_PARAM__", $currentPrereleaseParam
 
             $finalPath = Join-Path $targetPath $file.Name
             
