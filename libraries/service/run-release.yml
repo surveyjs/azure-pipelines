@@ -512,23 +512,16 @@ jobs:
       git config --global user.email "surveyjs.org@gmail.com"
       git config --global user.name "surveyjsdeveloper"
 
-      git add .
-      git stash
-
       git fetch origin $branch
       git checkout -B $branch origin/$branch
-      git reset --hard origin/$branch
-
-      git checkout stash -- .
-      git stash drop
 
       git add surveyjs.io/DevBuilds
       git add surveyjs.io/Web.config
       
       $status = git status --porcelain
       if ($status) {
-          git commit -m "released $(SurveyJSVersion) [azurepipelines skip]"
-          git pull origin $branch -X ours --no-rebase
+          git commit -m "released $(SurveyJSVersion)"
+          git pull origin $branch -X ours
           git push origin $branch
       }
     displayName: 'updated surveyjs.io Web.config and DevBuilds'
