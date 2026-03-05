@@ -528,7 +528,6 @@ jobs:
       $status = git status --porcelain
       if ($status) {
           git commit -m "released $(SurveyJSVersion) [azurepipelines skip]"
-          # Используем стратегию -X ours, чтобы при любых конфликтах автоматом побеждала версия из билда
           git pull origin $branch -X ours --no-rebase
           git push origin $branch
       }
