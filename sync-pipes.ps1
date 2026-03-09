@@ -20,7 +20,7 @@ $projects = @(
     @{ Name = "Site Demos";       Path = "../surveyjsio-site-tests" }
 )
 
-$commitMessage = "changed azure pipes [azurepipelines skip]"
+$commitMessage = "generated azure pipes [azurepipelines skip]"
 
 foreach ($project in $projects) {
     $repoPath = Join-Path $PSScriptRoot $project.Path
