@@ -36,6 +36,10 @@ resources:
       type: github
       endpoint: github.com_surveyjsdeveloper
       name: surveyjs/survey-pdf
+  pipelines:
+    - pipeline: RunRelease
+      source: Run Release
+      trigger: true
 
 
 steps:
@@ -161,7 +165,7 @@ steps:
     git commit -m "updated survey-analytics docs [azurepipelines skip]"
     git pull origin $(CurrentBranch)
     git push origin $(CurrentBranch)
-  displayName: "Anakytics - push docs to github"
+  displayName: "Analytics - push docs to github"
 
 - powershell: |
     cd $(Build.SourcesDirectory)/survey-pdf
