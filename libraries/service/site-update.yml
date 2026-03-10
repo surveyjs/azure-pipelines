@@ -30,7 +30,7 @@ variables:
   ProjectId: '__PROJECT_ID__'
   solution: '**/*.sln'
   buildPlatform: 'Any CPU'
-  buildConfiguration: 'Release'
+  buildConfiguration: 'Dev'
   testConfiguration: 'Release'
 
 trigger: none
