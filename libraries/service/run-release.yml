@@ -70,7 +70,7 @@ jobs:
   steps:
   - task: NodeTool@0
     inputs:
-      versionSpec: '14.x'
+      versionSpec: '24.x'
     displayName: 'install Node.js'
 
   # 1. Checkout all needed repos
