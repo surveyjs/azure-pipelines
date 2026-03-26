@@ -494,7 +494,9 @@ jobs:
 
   # 4. update site
   - powershell: |
+      $branch = "$(CurrentBranch)"
       cd $(Build.SourcesDirectory)/service/
+      git checkout $branch
       $version = "$(SurveyJSVersion)"
       $path = '$(Build.SourcesDirectory)/service/surveyjs.io/Web.config'
       $xml = New-Object System.Xml.XmlDocument
@@ -508,6 +510,7 @@ jobs:
   - powershell: |
       $branch = "$(CurrentBranch)"
       cd $(Build.SourcesDirectory)/service/
+      git checkout $branch
       $env:GIT_REDIRECT_STDERR = '2>&1'
       git config --global user.email "surveyjs.org@gmail.com"
       git config --global user.name "surveyjsdeveloper"
@@ -558,3 +561,14 @@ jobs:
       ArtifactName: 'ReleaseVersionFile'
       publishLocation: 'Container'
   ###############################################################################
+
+  - task: AzureFileCopy@6
+    displayName: 'DevBuilds Upload to Azure Blobs'
+    inputs:
+      SourcePath: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/'
+      azureSubscription: 'SurveyJS Azure __NEW_BRANCH__'
+      Destination: 'AzureBlob'
+      storage: 'surveyjsdocsstorage'
+      ContainerName: 'dev-builds-${{lower(__NEW_BRANCH__)}}'
+      BlobPrefix: '/'
+      CleanTargetBeforeCopy: true
