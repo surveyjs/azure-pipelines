@@ -120,6 +120,7 @@ foreach ($ver in $versions) {
             # Замена токенов текущими значениями из цикла версий
             $content = $content -replace "__BRANCH__", $currentBranch
             $content = $content -replace "__NEW_BRANCH__", $newBranchName
+            $content = $content -replace "__NEW_BRANCH_TO_LOWER__", $newBranchName.ToLower()
             $content = $content -replace "__PROJECT_ID__", $currentProject
             $content = $content -replace "__NPM_PUBLISH_TAG__", $currentNpmTag
             $content = $content -replace "__PRERELEASE_PARAM__", $currentPrereleaseParam

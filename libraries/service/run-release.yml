@@ -566,9 +566,9 @@ jobs:
     displayName: 'DevBuilds Upload to Azure Blobs'
     inputs:
       SourcePath: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/'
-      azureSubscription: 'SurveyJS Azure __NEW_BRANCH__'
+      azureSubscription: 'SurveyJS Azure __NEW_BRANCH_TO_LOWER__'
       Destination: 'AzureBlob'
       storage: 'surveyjsdocsstorage'
-      ContainerName: 'dev-builds-${{lower(__NEW_BRANCH__)}}'
+      ContainerName: 'dev-builds-__NEW_BRANCH_TO_LOWER__'
       BlobPrefix: '/'
       CleanTargetBeforeCopy: true
