@@ -216,7 +216,7 @@ steps:
 - task: AzureFileCopy@6
   displayName: 'DevBuilds Upload to Azure Blobs'
   inputs:
-    SourcePath: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/'
+    SourcePath: '$(Build.Repository.LocalPath)/surveyjs.io/DevBuilds/'
     azureSubscription: 'SurveyJS Azure __NEW_BRANCH__'
     Destination: 'AzureBlob'
     storage: 'surveyjsdocsstorage'
