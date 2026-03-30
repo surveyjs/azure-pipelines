@@ -220,3 +220,14 @@ steps:
     appType: 'webApp'
     WebAppName: 'surveyjstest'
     packageForLinux: '$(Build.ArtifactStagingDirectory)/surveyjs.io.zip'
+
+- task: AzureFileCopy@6
+  displayName: 'DevBuilds Upload to Azure Blobs'
+  inputs:
+    SourcePath: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/'
+    azureSubscription: 'SurveyJS Azure __NEW_BRANCH_TO_LOWER__'
+    Destination: 'AzureBlob'
+    storage: 'surveyjsdocsstorage'
+    ContainerName: 'builds-__NEW_BRANCH_TO_LOWER__-next'
+    BlobPrefix: '/'
+    CleanTargetBeforeCopy: true

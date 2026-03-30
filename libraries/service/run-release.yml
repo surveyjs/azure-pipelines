@@ -569,6 +569,6 @@ jobs:
       azureSubscription: 'SurveyJS Azure __NEW_BRANCH_TO_LOWER__'
       Destination: 'AzureBlob'
       storage: 'surveyjsdocsstorage'
-      ContainerName: 'dev-builds-__NEW_BRANCH_TO_LOWER__'
+      ContainerName: 'builds-__NEW_BRANCH_TO_LOWER__'
       BlobPrefix: '/'
       CleanTargetBeforeCopy: true
