@@ -496,7 +496,8 @@ jobs:
   - powershell: |
       $branch = "$(CurrentBranch)"
       cd $(Build.SourcesDirectory)/service/
-      git checkout $branch
+      git fetch origin $branch
+      git checkout -B $branch origin/$branch
       $version = "$(SurveyJSVersion)"
       $path = '$(Build.SourcesDirectory)/service/surveyjs.io/Web.config'
       $xml = New-Object System.Xml.XmlDocument
@@ -510,7 +511,6 @@ jobs:
   - powershell: |
       $branch = "$(CurrentBranch)"
       cd $(Build.SourcesDirectory)/service/
-      git checkout $branch
       $env:GIT_REDIRECT_STDERR = '2>&1'
       git config --global user.email "surveyjs.org@gmail.com"
       git config --global user.name "surveyjsdeveloper"
