@@ -224,6 +224,12 @@ steps:
     BlobPrefix: '/'
     CleanTargetBeforeCopy: true
 
+- task: DeleteFiles@1
+  inputs:
+    SourceFolder: '$(Build.Repository.LocalPath)/surveyjs.io/DevBuilds'
+    Contents: '**'
+    RemoveDotFiles: true
+
 - task: AzureRmWebAppDeployment@4
   inputs:
     ConnectionType: 'AzureRM'

@@ -492,21 +492,23 @@ jobs:
     displayName: 'PDF - push tag to Github'
   ###############################################################################
 
+  - task: AzureFileCopy@6
+    displayName: 'DevBuilds Upload to Azure Blobs'
+    inputs:
+      SourcePath: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/'
+      azureSubscription: 'SurveyJS Azure __NEW_BRANCH__'
+      Destination: 'AzureBlob'
+      storage: 'surveyjsdocsstorage'
+      ContainerName: 'builds-__NEW_BRANCH_TO_LOWER__'
+      BlobPrefix: '/'
+      CleanTargetBeforeCopy: true
+
   # 4. update site
-  - powershell: |
-      $branch = "$(CurrentBranch)"
-      cd $(Build.SourcesDirectory)/service/
-      git fetch origin $branch
-      git checkout -B $branch origin/$branch
-      $version = "$(SurveyJSVersion)"
-      $path = '$(Build.SourcesDirectory)/service/surveyjs.io/Web.config'
-      $xml = New-Object System.Xml.XmlDocument
-      $xml.PreserveWhitespace = $true
-      $xml.Load($path)
-      $key = $xml.SelectSingleNode("//appSettings/add[@key = 'SurveyJSVersion']")
-      $key.SetAttribute('value', $version)
-      $xml.Save((Resolve-Path $path))
-    displayName: 'setup surveyjs.io SurveyJSVersion setting'
+  - task: DeleteFiles@1
+    inputs:
+      SourceFolder: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds'
+      Contents: '**'
+      RemoveDotFiles: true
 
   - powershell: |
       $branch = "$(CurrentBranch)"
@@ -515,26 +517,25 @@ jobs:
       git config --global user.email "surveyjs.org@gmail.com"
       git config --global user.name "surveyjsdeveloper"
 
-      git add .
-      git stash
-
       git fetch origin $branch
       git checkout -B $branch origin/$branch
       git reset --hard origin/$branch
 
-      git checkout stash -- surveyjs.io/DevBuilds
-      git checkout stash -- surveyjs.io/Web.config
-      git stash drop
+      $path = "$(Build.SourcesDirectory)/service/surveyjs.io/Web.config"
+      $xml = New-Object System.Xml.XmlDocument
+      $xml.PreserveWhitespace = $true
+      $xml.Load($path)
+      $key = $xml.SelectSingleNode("//appSettings/add[@key = 'SurveyJSVersion']")
+      $key.SetAttribute('value', "$(SurveyJSVersion)")
+      $xml.Save((Resolve-Path $path))
 
-      git add surveyjs.io/DevBuilds
       git add surveyjs.io/Web.config
-      
       if (git status --porcelain) {
           git commit -m "released $(SurveyJSVersion) [azurepipelines skip]"
           git pull origin $branch -X ours --no-rebase
           git push origin $branch
       }
-    displayName: 'updated surveyjs.io Web.config and DevBuilds'
+    displayName: 'Update Web.config and push'
   ###############################################################################
 
   # 8. POST-RELEASE TASK: trigger ReleaseVersion pipeline via the atrifact
@@ -561,14 +562,3 @@ jobs:
       ArtifactName: 'ReleaseVersionFile'
       publishLocation: 'Container'
   ###############################################################################
-
-  - task: AzureFileCopy@6
-    displayName: 'DevBuilds Upload to Azure Blobs'
-    inputs:
-      SourcePath: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/'
-      azureSubscription: 'SurveyJS Azure __NEW_BRANCH__'
-      Destination: 'AzureBlob'
-      storage: 'surveyjsdocsstorage'
-      ContainerName: 'builds-__NEW_BRANCH_TO_LOWER__'
-      BlobPrefix: '/'
-      CleanTargetBeforeCopy: true
