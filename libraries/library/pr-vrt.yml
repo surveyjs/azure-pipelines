@@ -16,7 +16,7 @@ pr:
       - __BRANCH__
 
 pool:
-  vmImage: "windows-latest"
+  vmImage: "Ubuntu-24.04"
 
 jobs:
   - job: Core
