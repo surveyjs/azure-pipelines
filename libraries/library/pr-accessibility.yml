@@ -16,7 +16,7 @@ pr:
       - __BRANCH__
 
 pool:
-  vmImage: "windows-latest"
+  name: main-selfhosted
 
 jobs:
   - job: Core
