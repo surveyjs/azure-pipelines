@@ -131,9 +131,9 @@ jobs:
           OverWrite: true
         displayName: "Copy Build Artifact - SurveyJSVersion File"
 
-      - powershell: |
-          $version = Get-Content $(Build.SourcesDirectory)/version.txt
-          Write-Host "##vso[task.setvariable variable=SurveyJSVersion;]$version"
+      - script: |
+          version=$(cat "$(Build.SourcesDirectory)/version.txt")
+          echo "##vso[task.setvariable variable=SurveyJSVersion;]$version"
         displayName: "setup SurveyJSVersion variable from SurveyJSVersionFile"
       ##########################################################################
       - task: Npm@1
@@ -162,6 +162,7 @@ jobs:
 
       - script: |
           cd $(Build.SourcesDirectory)/survey-library/packages/survey-core
+          git tag -l | xargs -r git tag -d
           npm run release -- --release-as $(SurveyJSVersion)
         displayName: "npm run release"
 
@@ -362,9 +363,9 @@ jobs:
           OverWrite: true
         displayName: "Copy Build Artifact - SurveyJSVersion File"
 
-      - powershell: |
-          $version = Get-Content $(Build.SourcesDirectory)/version.txt
-          Write-Host "##vso[task.setvariable variable=SurveyJSVersion;]$version"
+      - script: |
+          version=$(cat "$(Build.SourcesDirectory)/version.txt")
+          echo "##vso[task.setvariable variable=SurveyJSVersion;]$version"
         displayName: "setup SurveyJSVersion variable from SurveyJSVersionFile"
       ##########################################################################
 
@@ -411,6 +412,7 @@ jobs:
 
       - script: |
           cd $(Build.SourcesDirectory)/survey-library/packages/survey-react-ui
+          git tag -l | xargs -r git tag -d
           npm run release -- --release-as $(SurveyJSVersion)
         displayName: "npm run release"
 
@@ -509,9 +511,9 @@ jobs:
           OverWrite: true
         displayName: "Copy Build Artifact - SurveyJSVersion File"
 
-      - powershell: |
-          $version = Get-Content $(Build.SourcesDirectory)/version.txt
-          Write-Host "##vso[task.setvariable variable=SurveyJSVersion;]$version"
+      - script: |
+          version=$(cat "$(Build.SourcesDirectory)/version.txt")
+          echo "##vso[task.setvariable variable=SurveyJSVersion;]$version"
         displayName: "setup SurveyJSVersion variable from SurveyJSVersionFile"
       ##########################################################################
 
@@ -558,6 +560,7 @@ jobs:
 
       - script: |
           cd $(Build.SourcesDirectory)/survey-library/packages/survey-angular-ui
+          git tag -l | xargs -r git tag -d
           npm run release -- --release-as $(SurveyJSVersion)
         displayName: "npm run release"
 
@@ -666,9 +669,9 @@ jobs:
           OverWrite: true
         displayName: "Copy Build Artifact - SurveyJSVersion File"
 
-      - powershell: |
-          $version = Get-Content $(Build.SourcesDirectory)/version.txt
-          Write-Host "##vso[task.setvariable variable=SurveyJSVersion;]$version"
+      - script: |
+          version=$(cat "$(Build.SourcesDirectory)/version.txt")
+          echo "##vso[task.setvariable variable=SurveyJSVersion;]$version"
         displayName: "setup SurveyJSVersion variable from SurveyJSVersionFile"
       ##########################################################################
 
@@ -715,6 +718,7 @@ jobs:
 
       - script: |
           cd $(Build.SourcesDirectory)/survey-library/packages/survey-vue3-ui
+          git tag -l | xargs -r git tag -d
           npm run release -- --release-as $(SurveyJSVersion)
         displayName: "npm run release"
 
@@ -822,9 +826,9 @@ jobs:
           OverWrite: true
         displayName: "Copy Build Artifact - SurveyJSVersion File"
 
-      - powershell: |
-          $version = Get-Content $(Build.SourcesDirectory)/version.txt
-          Write-Host "##vso[task.setvariable variable=SurveyJSVersion;]$version"
+      - script: |
+          version=$(cat "$(Build.SourcesDirectory)/version.txt")
+          echo "##vso[task.setvariable variable=SurveyJSVersion;]$version"
         displayName: "setup SurveyJSVersion variable from SurveyJSVersionFile"
       ##########################################################################
 
@@ -871,6 +875,7 @@ jobs:
 
       - script: |
           cd $(Build.SourcesDirectory)/survey-library/packages/survey-js-ui
+          git tag -l | xargs -r git tag -d
           npm run release -- --release-as $(SurveyJSVersion)
         displayName: "npm run release"
 
