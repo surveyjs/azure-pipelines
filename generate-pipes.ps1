@@ -112,8 +112,8 @@ foreach ($ver in $versions) {
             New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
         }
 
-        # Обрабатываем файлы
-        $files = Get-ChildItem -Path $sourcePath -Filter "*.yml"
+        # Обрабатываем файлы (рекурсивно, включая подпапки)
+        $files = Get-ChildItem -Path $sourcePath -Filter "*.yml" -Recurse
         foreach ($file in $files) {
             $content = Get-Content $file.FullName -Raw
             
@@ -125,7 +125,15 @@ foreach ($ver in $versions) {
             $content = $content -replace "__NPM_PUBLISH_TAG__", $currentNpmTag
             $content = $content -replace "__PRERELEASE_PARAM__", $currentPrereleaseParam
 
-            $finalPath = Join-Path $targetPath $file.Name
+            # Сохраняем относительный путь подпапок
+            $relativePath = $file.FullName.Substring($sourcePath.Length).TrimStart('\', '/')
+            $finalPath = Join-Path $targetPath $relativePath
+            
+            # Создаём подпапку в целевом каталоге, если её нет
+            $finalDir = Split-Path $finalPath -Parent
+            if (!(Test-Path $finalDir)) {
+                New-Item -ItemType Directory -Path $finalDir -Force | Out-Null
+            }
             
             # Сохранение в UTF-8 без BOM
             $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
