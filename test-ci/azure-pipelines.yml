@@ -1,3 +1,11 @@
+resources:
+  repositories:
+    # use `repository` param in the checkout step below
+    - repository: TestCI
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/test-ci
+
 jobs:
   - job:
     steps:
