@@ -1,14 +1,3 @@
-resources:
-  repositories:
-    - repository: TestCI
-      type: github
-      endpoint: github.com_surveyjsdeveloper
-      name: surveyjs/test-ci
-      trigger:
-        branches:
-          include:
-            - main
-
 jobs:
   - job:
     steps:
