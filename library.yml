@@ -31,11 +31,7 @@ resources:
 
 
 trigger: none
-
-pr:
-  branches:
-    include:
-      - master
+pr: none
 
 pool:
   name: main-selfhosted
