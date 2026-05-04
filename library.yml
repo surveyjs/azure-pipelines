@@ -29,13 +29,6 @@ resources:
       name: surveyjs/survey-pdf
       ref: $(System.PullRequest.TargetBranch)
 
-
-trigger: none
-pr: none
-
-pool:
-  name: main-selfhosted
-
 stages:
   - stage: Lint
     dependsOn: []
