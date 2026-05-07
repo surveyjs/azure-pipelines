@@ -7,7 +7,7 @@ steps:
       set -e
       export PLAYWRIGHT_SKIP_BROWSER_GC=1
       CACHE_DIR="/tmp"
-      FLAGS="--prefer-offline --no-audit --no-fund --no-update-notifier --no-package-lock"
+      FLAGS="--no-audit --no-fund --no-update-notifier --no-package-lock"
       PIDS=()
       DIRS=()
 
