@@ -1,0 +1,130 @@
+# Node.js
+# Build a general Node.js project with npm.
+# Add steps that analyze code, save build artifacts, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/javascript
+
+variables:
+  - template: templates/utils/variables.yml
+
+resources:
+  repositories:
+    - repository: Library
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/survey-library
+      ref: $(System.PullRequest.TargetBranch)
+    - repository: Creator
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/survey-creator
+      ref: $(System.PullRequest.TargetBranch)
+    - repository: Analytics
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/survey-analytics
+      ref: $(System.PullRequest.TargetBranch)
+    - repository: PDF
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/survey-pdf
+      ref: $(System.PullRequest.TargetBranch)
+
+stages:
+  - stage: Lint
+    dependsOn: []
+    jobs:
+      - job:
+        steps:
+          - checkout: self
+          - script: npm install --prefer-offline --no-audit --no-fund --no-update-notifier --no-package-lock --verbose
+            workingDirectory: $(Build.SourcesDirectory)
+            displayName: "npm install"
+          - script: npm run lint
+
+  - stage: Options
+    dependsOn: []
+    jobs:
+      - job: PRTitle
+        displayName: "Parse PR title"
+        steps:
+          - template: templates/utils/pr_title_parser.yml
+
+
+
+  - stage: Library
+    dependsOn:
+      - Options
+    variables:
+      PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
+    jobs:
+      - job: Download
+        continueOnError: true
+        variables:
+          LIBRARY_PIPELINE: $[ iif(eq(variables.PR, ''), variables.PipelineLibrary, variables.PipelineLibraryPR) ]
+        steps:
+          - checkout: none
+
+          - template: templates/utils/artifact.yml
+            parameters:
+              pr: $(PR)
+              pipeline: $(LIBRARY_PIPELINE)
+              artifacts:
+                - $(ArtifactNameLibraryCore)
+
+          - bash: |
+              if [ -z "$(PR)" ]; then
+                cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)/packages/survey-core/. $(Build.SourcesDirectory)/survey-core/
+              else
+                cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)/. $(Build.SourcesDirectory)/survey-core/
+              fi
+            displayName: "Copy"
+
+          - task: PublishBuildArtifacts@1
+            inputs:
+              PathtoPublish: '$(Build.SourcesDirectory)/survey-core'
+              ArtifactName: $(ArtifactNameLibraryCore)
+              publishLocation: 'Container'
+              StoreAsTar: true
+
+      - job: BuildCore
+        displayName: "Build Core"
+        dependsOn: Download
+        condition: in(dependencies.Download.result, 'Failed', 'SucceededWithIssues')
+        steps:
+          - checkout: Library
+
+          - script: git fetch origin pull/$(PR)/head && git checkout FETCH_HEAD
+            workingDirectory: $(Build.SourcesDirectory)
+            displayName: "Checkout PR $(PR)"
+            condition: ne(variables.PR, '')
+
+          - template: templates/utils/npm.yml
+            parameters:
+              directories:
+                - $(Build.SourcesDirectory)
+                - $(Build.SourcesDirectory)/packages/survey-core
+
+          - script: npm run build:all
+            workingDirectory: $(Build.SourcesDirectory)/packages/survey-core
+            displayName: "Build"
+
+          - task: PublishBuildArtifacts@1
+            inputs:
+              PathtoPublish: '$(Build.SourcesDirectory)/packages/survey-core/build/'
+              ArtifactName: $(ArtifactNameLibraryCore)
+              publishLocation: 'Container'
+              StoreAsTar: true
+
+
+  - stage: Analytics
+    displayName: "Analytics"
+    dependsOn:
+      - Library
+    jobs:
+      - job:
+        displayName: "Build"
+        steps:
+          - template: templates/analytics/build.yml
+            parameters:
+              store: true
+      - template: templates/analytics/test.yml
