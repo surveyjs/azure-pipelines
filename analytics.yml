@@ -36,10 +36,14 @@ stages:
       - job:
         steps:
           - checkout: self
-          - script: npm install --prefer-offline --no-audit --no-fund --no-update-notifier --no-package-lock --verbose
-            workingDirectory: $(Build.SourcesDirectory)
-            displayName: "npm install"
+          
+          - template: templates/utils/npm.yml
+            parameters:
+              directories:
+                - $(Build.SourcesDirectory)
+
           - script: npm run lint
+            workingDirectory: $(Build.SourcesDirectory)
 
   - stage: Options
     dependsOn: []
