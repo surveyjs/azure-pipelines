@@ -92,6 +92,18 @@ jobs:
         workingDirectory: $(Build.SourcesDirectory)/packages/survey-react-ui
         displayName: "Update SCR"
 
+      - powershell: |
+          $env:GIT_REDIRECT_STDERR = '2>&1'
+          git config --global user.email "surveyjs.org@gmail.com"
+          git config --global user.name "surveyjsdeveloper"
+          git add $(Build.SourcesDirectory)/screenshots
+          if (git status --porcelain) {
+              git commit -m "updated screenshots [skip ci]"
+              git push origin "HEAD:$(System.PullRequest.SourceBranch)"
+          }
+        displayName: "commit updated screenshots"
+        condition: and(succeeded(), ne(variables['System.PullRequest.SourceBranch'], ''))
+
       # - task: PublishBuildArtifacts@1
       #   displayName: "Publish SCR artifacts"
       #   inputs:
