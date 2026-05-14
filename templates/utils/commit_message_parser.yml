@@ -3,7 +3,10 @@ steps:
     fetchDepth: 1
   - bash: |
       COMMIT_SHA="$(System.PullRequest.SourceCommitId)"
-      COMMIT_MESSAGE=$(git log -1 --format=%B "${COMMIT_SHA}") || {
+      git fetch --no-tags --depth=1 origin "${COMMIT_SHA}" 2>/dev/null || true
+      COMMIT_MESSAGE=$(git log -1 --format=%B "${COMMIT_SHA}" 2>/dev/null \
+        || git log -1 --format=%B HEAD^2 2>/dev/null \
+        || git log -1 --format=%B HEAD) || {
         echo "##vso[task.logissue type=warning]Failed to read commit message"
         exit 0
       }
