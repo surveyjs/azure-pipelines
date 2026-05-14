@@ -4,14 +4,16 @@ steps:
       COMMIT_MESSAGE="$(Build.SourceVersionMessage)"
       echo "Commit Message: $COMMIT_MESSAGE"
 
-      # Extract all [name: value] pairs from commit message and export as pipeline variables
+      # Extract all [name] and [name: value] pairs from commit message and export as pipeline variables.
+      # Bare [name] tags default to "true".
       while IFS== read -r NAME VALUE; do
         NAME="${NAME^^}"
         if [[ "$NAME" =~ ^[A-Z_]+$ ]]; then
+          [[ -z "$VALUE" ]] && VALUE="true"
           echo "Extracted: ${NAME}=${VALUE}"
           echo "##vso[task.setvariable variable=${NAME};isOutput=true]${VALUE}"
         else
           echo "Skipping invalid variable name: ${NAME}"
         fi
-      done < <(echo "$COMMIT_MESSAGE" | grep -oE '\[[^]]+:[^]]+\]' | sed -E 's/\[\s*([^:]+?)\s*:\s*(.*?)\s*\]/\1=\2/')
+      done < <(echo "$COMMIT_MESSAGE" | grep -oE '\[[A-Za-z_]+(\s*:[^]]+)?\]' | sed -E 's/\[\s*([A-Za-z_]+)\s*(:\s*(.*?))?\s*\]/\1=\3/')
     name: data
