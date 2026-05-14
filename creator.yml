@@ -306,7 +306,9 @@ stages:
   - stage: CreatorCore
     displayName: "Creator Core"
     dependsOn:
+      - Options
       - Library
+    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
       - job:
         displayName: "Build"
