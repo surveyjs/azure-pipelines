@@ -98,8 +98,9 @@ jobs:
           git config --global user.name "surveyjsdeveloper"
           git add $(Build.SourcesDirectory)/screenshots
           if (git status --porcelain) {
-              git commit -m "updated screenshots [azurepipelines skip]"
-              git push origin "HEAD:$(System.PullRequest.SourceBranch)"
+              git commit -m "updated screenshots [azurepipelines skip]" --no-verify
+              git pull --rebase origin "$(System.PullRequest.SourceBranch)"
+              git push --no-verify origin "HEAD:$(System.PullRequest.SourceBranch)"
           }
         displayName: "commit updated screenshots"
         condition: and(succeeded(), ne(variables['System.PullRequest.SourceBranch'], ''))
