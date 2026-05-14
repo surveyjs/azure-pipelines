@@ -1,9 +1,10 @@
 steps:
-  - checkout: none
+  - checkout: self
+    fetchDepth: 1
   - bash: |
       COMMIT_SHA="$(System.PullRequest.SourceCommitId)"
-      COMMIT_MESSAGE=$(curl -sf "https://api.github.com/repos/$(Build.Repository.Name)/commits/${COMMIT_SHA}" | jq -r '.commit.message // empty') || {
-        echo "##vso[task.logissue type=warning]Failed to fetch commit message"
+      COMMIT_MESSAGE=$(git log -1 --format=%B "${COMMIT_SHA}") || {
+        echo "##vso[task.logissue type=warning]Failed to read commit message"
         exit 0
       }
       echo "Commit Message: $COMMIT_MESSAGE"
