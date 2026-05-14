@@ -44,7 +44,6 @@ jobs:
 
   - job:
     displayName: "Markup & SCR"
-    condition: eq(variables['SCR_UPDATE'], '')
     steps:
       - template: build.yml
         parameters:

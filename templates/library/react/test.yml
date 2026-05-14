@@ -6,6 +6,7 @@ parameters:
 jobs:
   - job:
     displayName: "Markup"
+    condition: eq(variables['SCR_UPDATE'], '')
     steps:
       - template: build.yml
         parameters:
@@ -17,6 +18,7 @@ jobs:
 
   - job:
     displayName: "A11Y & E2E"
+    condition: eq(variables['SCR_UPDATE'], '')
     steps:
       - template: build.yml
         parameters:
