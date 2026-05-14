@@ -49,8 +49,40 @@ jobs:
           testRunTitle: "React E2E Tests"
         condition: succeededOrFailed()
 
-  - job: ReactTestSCR
-    displayName: "SCR"
+  - job:
+    displayName: "SCR Test"
+    condition: eq(variables['SCR_UPDATE'], '')
+    steps:
+      - template: build.yml
+        parameters:
+          checkout: ${{ parameters.checkout }}
+
+      - script: npm run scr:ci
+        workingDirectory: $(Build.SourcesDirectory)/packages/survey-react-ui
+        displayName: "Test SCR"
+
+      - task: PublishBuildArtifacts@1
+        displayName: "Publish SCR artifacts"
+        inputs:
+          PathtoPublish: "$(Build.SourcesDirectory)/packages/survey-react-ui/test-results"
+          ArtifactName: "Library_React_SCR"
+          publishLocation: "Container"
+        condition: always()
+
+      - task: PublishTestResults@2
+        displayName: "Publish SCR results"
+        inputs:
+          searchFolder: "$(Build.SourcesDirectory)/packages/survey-react-ui/test-results"
+          testResultsFormat: "JUnit"
+          testResultsFiles: "e2e-junit-results.xml"
+          mergeTestResults: true
+          failTaskOnFailedTests: true
+          testRunTitle: "React SCR Tests"
+        condition: succeededOrFailed()
+
+  - job:
+    displayName: "SCR Update"
+    condition: ne(variables['SCR_UPDATE'], '')
     steps:
       - template: build.yml
         parameters:

@@ -40,6 +40,7 @@ jobs:
 
   - job:
     displayName: "SCR"
+    condition: eq(variables['SCR_UPDATE'], '')
     steps:
       - template: build.yml
         parameters:

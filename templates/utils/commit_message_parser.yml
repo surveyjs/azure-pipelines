@@ -1,0 +1,17 @@
+steps:
+  - checkout: none
+  - bash: |
+      COMMIT_MESSAGE="$(Build.SourceVersionMessage)"
+      echo "Commit Message: $COMMIT_MESSAGE"
+
+      # Extract all [name: value] pairs from commit message and export as pipeline variables
+      while IFS== read -r NAME VALUE; do
+        NAME="${NAME^^}"
+        if [[ "$NAME" =~ ^[A-Z_]+$ ]]; then
+          echo "Extracted: ${NAME}=${VALUE}"
+          echo "##vso[task.setvariable variable=${NAME};isOutput=true]${VALUE}"
+        else
+          echo "Skipping invalid variable name: ${NAME}"
+        fi
+      done < <(echo "$COMMIT_MESSAGE" | grep -oE '\[[^]]+:[^]]+\]' | sed -E 's/\[\s*([^:]+?)\s*:\s*(.*?)\s*\]/\1=\2/')
+    name: data

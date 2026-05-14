@@ -53,6 +53,10 @@ stages:
         displayName: "Parse PR title"
         steps:
           - template: templates/utils/pr_title_parser.yml
+      - job: Commit
+        displayName: "Parse commit message"
+        steps:
+          - template: templates/utils/commit_message_parser.yml
  
  
   ###############
@@ -232,24 +236,32 @@ stages:
   - stage: LibraryReactTest
     displayName: "Library React Test"
     dependsOn: []
+    variables:
+      SCR_UPDATE: $[ stageDependencies.Options.Commit.outputs['data.SCR_UPDATE'] ]
     jobs:
       - template: templates/library/react/test.yml
 
   - stage: LibraryAngularTest
     displayName: "Library Angular Test"
     dependsOn: []
+    variables:
+      SCR_UPDATE: $[ stageDependencies.Options.Commit.outputs['data.SCR_UPDATE'] ]
     jobs:
       - template: templates/library/angular/test.yml
 
   - stage: LibraryVueTest
     displayName: "Library Vue Test"
     dependsOn: []
+    variables:
+      SCR_UPDATE: $[ stageDependencies.Options.Commit.outputs['data.SCR_UPDATE'] ]
     jobs:
       - template: templates/library/vue/test.yml
 
   - stage: LibraryJSTest
     displayName: "Library JS (Preact ShadowDOM BoxSizing) Test"
     dependsOn: []
+    variables:
+      SCR_UPDATE: $[ stageDependencies.Options.Commit.outputs['data.SCR_UPDATE'] ]
     jobs:
       - template: templates/library/js/test.yml
 
