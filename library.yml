@@ -235,7 +235,8 @@ stages:
 
   - stage: LibraryReactTest
     displayName: "Library React Test"
-    dependsOn: []
+    dependsOn:
+      - Options
     variables:
       SCR_UPDATE: $[ stageDependencies.Options.Commit.outputs['data.SCR_UPDATE'] ]
     jobs:
@@ -243,7 +244,8 @@ stages:
 
   - stage: LibraryAngularTest
     displayName: "Library Angular Test"
-    dependsOn: []
+    dependsOn:
+      - Options
     variables:
       SCR_UPDATE: $[ stageDependencies.Options.Commit.outputs['data.SCR_UPDATE'] ]
     jobs:
@@ -251,7 +253,8 @@ stages:
 
   - stage: LibraryVueTest
     displayName: "Library Vue Test"
-    dependsOn: []
+    dependsOn:
+      - Options
     variables:
       SCR_UPDATE: $[ stageDependencies.Options.Commit.outputs['data.SCR_UPDATE'] ]
     jobs:
@@ -259,7 +262,8 @@ stages:
 
   - stage: LibraryJSTest
     displayName: "Library JS (Preact ShadowDOM BoxSizing) Test"
-    dependsOn: []
+    dependsOn:
+      - Options
     variables:
       SCR_UPDATE: $[ stageDependencies.Options.Commit.outputs['data.SCR_UPDATE'] ]
     jobs:
