@@ -88,25 +88,25 @@ jobs:
         parameters:
           checkout: ${{ parameters.checkout }}
 
-      - script: npm run scr:ci
+      - script: npm run scr:update
         workingDirectory: $(Build.SourcesDirectory)/packages/survey-react-ui
-        displayName: "Test SCR"
+        displayName: "Update SCR"
 
-      - task: PublishBuildArtifacts@1
-        displayName: "Publish SCR artifacts"
-        inputs:
-          PathtoPublish: "$(Build.SourcesDirectory)/packages/survey-react-ui/test-results"
-          ArtifactName: "Library_React_SCR"
-          publishLocation: "Container"
-        condition: always()
+      # - task: PublishBuildArtifacts@1
+      #   displayName: "Publish SCR artifacts"
+      #   inputs:
+      #     PathtoPublish: "$(Build.SourcesDirectory)/packages/survey-react-ui/test-results"
+      #     ArtifactName: "Library_React_SCR"
+      #     publishLocation: "Container"
+      #   condition: always()
 
-      - task: PublishTestResults@2
-        displayName: "Publish SCR results"
-        inputs:
-          searchFolder: "$(Build.SourcesDirectory)/packages/survey-react-ui/test-results"
-          testResultsFormat: "JUnit"
-          testResultsFiles: "e2e-junit-results.xml"
-          mergeTestResults: true
-          failTaskOnFailedTests: true
-          testRunTitle: "React SCR Tests"
-        condition: succeededOrFailed()
+      # - task: PublishTestResults@2
+      #   displayName: "Publish SCR results"
+      #   inputs:
+      #     searchFolder: "$(Build.SourcesDirectory)/packages/survey-react-ui/test-results"
+      #     testResultsFormat: "JUnit"
+      #     testResultsFiles: "e2e-junit-results.xml"
+      #     mergeTestResults: true
+      #     failTaskOnFailedTests: true
+      #     testRunTitle: "React SCR Tests"
+      #   condition: succeededOrFailed()
