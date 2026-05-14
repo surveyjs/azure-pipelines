@@ -50,11 +50,11 @@ stages:
     dependsOn: []
     jobs:
       - job: PRTitle
-        displayName: "Parse PR title"
+        displayName: "PR title"
         steps:
           - template: templates/utils/pr_title_parser.yml
       - job: Commit
-        displayName: "Parse commit message"
+        displayName: "Commit message"
         steps:
           - template: templates/utils/commit_message_parser.yml
  
