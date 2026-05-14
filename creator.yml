@@ -48,6 +48,10 @@ stages:
         displayName: "Parse PR title"
         steps:
           - template: templates/utils/pr_title_parser.yml
+      - job: Commit
+        displayName: "Commit message"
+        steps:
+          - template: templates/utils/commit_message_parser.yml
 
 
 
@@ -311,7 +315,10 @@ stages:
   - stage: CreatorReactBuild
     displayName: "Creator React"
     dependsOn:
+      - Options
       - Library
+    variables:
+      SCR_UPDATE: $[ stageDependencies.Options.Commit.outputs['data.SCR_UPDATE'] ]
     jobs:
       - job:
         displayName: "Build"
@@ -324,7 +331,10 @@ stages:
   - stage: CreatorAngularBuild
     displayName: "Creator Angular"
     dependsOn:
+      - Options
       - Library
+    variables:
+      SCR_UPDATE: $[ stageDependencies.Options.Commit.outputs['data.SCR_UPDATE'] ]
     jobs:
       - job:
         displayName: "Build"
@@ -337,7 +347,10 @@ stages:
   - stage: CreatorVueBuild
     displayName: "Creator Vue"
     dependsOn:
+      - Options
       - Library
+    variables:
+      SCR_UPDATE: $[ stageDependencies.Options.Commit.outputs['data.SCR_UPDATE'] ]
     jobs:
       - job:
         displayName: "Build"
@@ -350,7 +363,10 @@ stages:
   - stage: CreatorJSBuild
     displayName: "Creator JS (Preact ShadowDOM BoxSizing)"
     dependsOn:
+      - Options
       - Library
+    variables:
+      SCR_UPDATE: $[ stageDependencies.Options.Commit.outputs['data.SCR_UPDATE'] ]
     jobs:
       - job:
         displayName: "Build"

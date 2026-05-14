@@ -54,7 +54,8 @@ jobs:
         displayName: "Publish results"
 
   - job:
-    displayName: "SCR"
+    displayName: "SCR Test"
+    condition: eq(variables['SCR_UPDATE'], '')
     steps:
       - template: build.yml
         parameters:
@@ -82,6 +83,31 @@ jobs:
           testRunTitle: "Creator React SCR Tests"
         condition: succeededOrFailed()
         displayName: "Publish results"
+
+  - job:
+    displayName: "SCR Update"
+    condition: ne(variables['SCR_UPDATE'], '')
+    steps:
+      - template: build.yml
+        parameters:
+          checkout: ${{ parameters.checkout }}
+
+      - script: npx playwright test --project scr --update-snapshots
+        workingDirectory: $(Build.SourcesDirectory)/packages/survey-creator-react
+        displayName: "Update SCR"
+
+      - powershell: |
+          $env:GIT_REDIRECT_STDERR = '2>&1'
+          git config --global user.email "surveyjs.org@gmail.com"
+          git config --global user.name "surveyjsdeveloper"
+          git add $(Build.SourcesDirectory)/screenshotTests
+          if (git status --porcelain) {
+              git commit -m "updated screenshots [azurepipelines skip]" --no-verify
+              git pull --rebase origin "$(System.PullRequest.SourceBranch)"
+              git push --no-verify origin "HEAD:$(System.PullRequest.SourceBranch)"
+          }
+        displayName: "commit updated screenshots"
+        condition: and(succeeded(), ne(variables['System.PullRequest.SourceBranch'], ''))
 
   - job:
     displayName: "SCR Legacy"

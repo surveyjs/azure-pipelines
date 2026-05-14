@@ -104,22 +104,3 @@ jobs:
           }
         displayName: "commit updated screenshots"
         condition: and(succeeded(), ne(variables['System.PullRequest.SourceBranch'], ''))
-
-      # - task: PublishBuildArtifacts@1
-      #   displayName: "Publish SCR artifacts"
-      #   inputs:
-      #     PathtoPublish: "$(Build.SourcesDirectory)/packages/survey-react-ui/test-results"
-      #     ArtifactName: "Library_React_SCR"
-      #     publishLocation: "Container"
-      #   condition: always()
-
-      # - task: PublishTestResults@2
-      #   displayName: "Publish SCR results"
-      #   inputs:
-      #     searchFolder: "$(Build.SourcesDirectory)/packages/survey-react-ui/test-results"
-      #     testResultsFormat: "JUnit"
-      #     testResultsFiles: "e2e-junit-results.xml"
-      #     mergeTestResults: true
-      #     failTaskOnFailedTests: true
-      #     testRunTitle: "React SCR Tests"
-      #   condition: succeededOrFailed()
