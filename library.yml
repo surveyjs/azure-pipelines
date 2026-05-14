@@ -84,7 +84,9 @@ stages:
 
   - stage: LibraryAngularBuild
     displayName: "Library Angular Build"
-    dependsOn: []
+    dependsOn: 
+      - Options
+    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
       - job:
         steps:
@@ -94,7 +96,9 @@ stages:
 
   - stage: LibraryVueBuild
     displayName: "Library Vue Build"
-    dependsOn: []
+    dependsOn: 
+      - Options
+    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
       - job:
         steps:
@@ -104,7 +108,9 @@ stages:
 
   - stage: LibraryJSBuild
     displayName: "Library JS (Preact ShadowDOM BoxSizing) Build"
-    dependsOn: []
+    dependsOn: 
+      - Options
+    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
       - job:
         steps:
