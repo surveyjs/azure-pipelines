@@ -2,10 +2,16 @@ steps:
   - checkout: self
     fetchDepth: 1
   - bash: |
-      COMMIT_MESSAGE=$(git log -1 --format=%B HEAD^2 2>/dev/null || git log -1 --format=%B HEAD) || {
-        echo "##vso[task.logissue type=warning]Failed to read commit message"
-        exit 1
-      }
+      set -e
+      SOURCE_SHA="$(System.PullRequest.SourceCommitId)"
+      if [[ -n "$SOURCE_SHA" ]]; then
+        # PR build: fetch the actual source commit and read its message,
+        # otherwise HEAD points to a temporary "Merge X into Y" merge commit.
+        git fetch --depth=1 origin "$SOURCE_SHA"
+        COMMIT_MESSAGE=$(git log -1 --format=%B "$SOURCE_SHA")
+      else
+        COMMIT_MESSAGE=$(git log -1 --format=%B HEAD)
+      fi
       echo "Commit Message: $COMMIT_MESSAGE"
 
       # Extract all [name] and [name: value] pairs from commit message and export as pipeline variables.
