@@ -50,9 +50,13 @@ stages:
     dependsOn: []
     jobs:
       - job: PRTitle
-        displayName: "Parse PR title"
+        displayName: "PR title"
         steps:
           - template: templates/utils/pr_title_parser.yml
+      - job: Commit
+        displayName: "Commit message"
+        steps:
+          - template: templates/utils/commit_message_parser.yml
  
  
   ###############
@@ -80,7 +84,9 @@ stages:
 
   - stage: LibraryAngularBuild
     displayName: "Library Angular Build"
-    dependsOn: []
+    dependsOn: 
+      - Options
+    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
       - job:
         steps:
@@ -90,7 +96,9 @@ stages:
 
   - stage: LibraryVueBuild
     displayName: "Library Vue Build"
-    dependsOn: []
+    dependsOn: 
+      - Options
+    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
       - job:
         steps:
@@ -100,7 +108,9 @@ stages:
 
   - stage: LibraryJSBuild
     displayName: "Library JS (Preact ShadowDOM BoxSizing) Build"
-    dependsOn: []
+    dependsOn: 
+      - Options
+    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
       - job:
         steps:
@@ -225,31 +235,42 @@ stages:
   ##############
   - stage: LibraryCoreTest
     displayName: "Library Core Test"
-    dependsOn: []
+    dependsOn: 
+      - Options
+    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
       - template: templates/library/core/test.yml
 
   - stage: LibraryReactTest
     displayName: "Library React Test"
-    dependsOn: []
+    dependsOn:
+      - Options
+    variables:
+      SCR_UPDATE: $[ stageDependencies.Options.Commit.outputs['data.SCR_UPDATE'] ]
     jobs:
       - template: templates/library/react/test.yml
 
   - stage: LibraryAngularTest
     displayName: "Library Angular Test"
-    dependsOn: []
+    dependsOn:
+      - Options
+    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
       - template: templates/library/angular/test.yml
 
   - stage: LibraryVueTest
     displayName: "Library Vue Test"
-    dependsOn: []
+    dependsOn:
+      - Options
+    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
       - template: templates/library/vue/test.yml
 
   - stage: LibraryJSTest
     displayName: "Library JS (Preact ShadowDOM BoxSizing) Test"
-    dependsOn: []
+    dependsOn:
+      - Options
+    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
       - template: templates/library/js/test.yml
 
@@ -260,6 +281,7 @@ stages:
       - LibraryCoreBuild
     variables:
       PR: $[ stageDependencies.Options.PRTitle.outputs['data.CREATOR'] ]
+    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
       - template: templates/creator/core/test.yml
         parameters:
@@ -273,6 +295,7 @@ stages:
       - LibraryReactBuild
     variables:
       PR: $[ stageDependencies.Options.PRTitle.outputs['data.CREATOR'] ]
+    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
       - template: templates/creator/react/test.yml
         parameters:
@@ -280,12 +303,13 @@ stages:
 
   - stage: CreatorAngularTest
     displayName: "Creator Angular Test"
-    variables:
-      PR: $[ stageDependencies.Options.PRTitle.outputs['data.CREATOR'] ]
     dependsOn:
       - Options
       - LibraryCoreBuild
       - LibraryAngularBuild
+    variables:
+      PR: $[ stageDependencies.Options.PRTitle.outputs['data.CREATOR'] ]
+    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
       - template: templates/creator/angular/test.yml
         parameters:
@@ -293,12 +317,13 @@ stages:
 
   - stage: CreatorVueTest
     displayName: "Creator Vue Test"
-    variables:
-      PR: $[ stageDependencies.Options.PRTitle.outputs['data.CREATOR'] ]
     dependsOn:
       - Options
       - LibraryCoreBuild
       - LibraryVueBuild
+    variables:
+      PR: $[ stageDependencies.Options.PRTitle.outputs['data.CREATOR'] ]
+    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
       - template: templates/creator/vue/test.yml
         parameters:
@@ -306,12 +331,13 @@ stages:
 
   - stage: CreatorJSTest
     displayName: "Creator JS (Preact ShadowDOM BoxSizing) Test"
-    variables:
-      PR: $[ stageDependencies.Options.PRTitle.outputs['data.CREATOR'] ]
     dependsOn:
       - Options
       - LibraryCoreBuild
       - LibraryJSBuild
+    variables:
+      PR: $[ stageDependencies.Options.PRTitle.outputs['data.CREATOR'] ]
+    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
       - template: templates/creator/js/test.yml
         parameters:
@@ -319,11 +345,12 @@ stages:
 
   - stage: AnalyticsTest
     displayName: "Analytics Test"
-    variables:
-      PR: $[ stageDependencies.Options.PRTitle.outputs['data.ANALYTICS'] ]
     dependsOn:
       - Options
       - LibraryCoreBuild
+    variables:
+      PR: $[ stageDependencies.Options.PRTitle.outputs['data.ANALYTICS'] ]
+    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
       - template: templates/analytics/test.yml
         parameters:
@@ -331,11 +358,12 @@ stages:
 
   - stage: PDFTest
     displayName: "PDF Test"
-    variables:
-      PR: $[ stageDependencies.Options.PRTitle.outputs['data.PDF'] ]
     dependsOn:
       - Options
       - LibraryCoreBuild
+    variables:
+      PR: $[ stageDependencies.Options.PRTitle.outputs['data.PDF'] ]
+    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
       - template: templates/pdf/test.yml
         parameters:

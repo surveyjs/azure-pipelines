@@ -8,6 +8,7 @@ parameters:
 
 steps:
   - checkout: ${{ parameters.checkout }}
+    persistCredentials: true
     displayName: "Checkout '${{ parameters.checkout }}'"
 
   - script: git fetch origin pull/$(PR)/head && git checkout FETCH_HEAD
