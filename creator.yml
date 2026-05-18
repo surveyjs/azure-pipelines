@@ -65,79 +65,79 @@ stages:
     variables:
       PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
     jobs:
-      - job: Download
-        continueOnError: true
-        variables:
-          LIBRARY_PIPELINE: $[ iif(eq(variables.PR, ''), variables.PipelineLibrary, variables.PipelineLibraryPR) ]
-        steps:
-          - checkout: none
+      # - job: Download
+      #   continueOnError: true
+      #   variables:
+      #     LIBRARY_PIPELINE: $[ iif(eq(variables.PR, ''), variables.PipelineLibrary, variables.PipelineLibraryPR) ]
+      #   steps:
+      #     - checkout: none
 
-          - template: templates/utils/artifact.yml
-            parameters:
-              pr: $(PR)
-              pipeline: $(LIBRARY_PIPELINE)
-              artifacts:
-                - $(ArtifactNameLibraryCore)
-                - $(ArtifactNameLibraryReact)
-                - $(ArtifactNameLibraryAngular)
-                - $(ArtifactNameLibraryVue)
-                - $(ArtifactNameLibraryJS)
+      #     - template: templates/utils/artifact.yml
+      #       parameters:
+      #         pr: $(PR)
+      #         pipeline: $(LIBRARY_PIPELINE)
+      #         artifacts:
+      #           - $(ArtifactNameLibraryCore)
+      #           - $(ArtifactNameLibraryReact)
+      #           - $(ArtifactNameLibraryAngular)
+      #           - $(ArtifactNameLibraryVue)
+      #           - $(ArtifactNameLibraryJS)
 
-          - bash: |
-              if [ -z "$(PR)" ]; then
-                cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)/packages/survey-core/. $(Build.SourcesDirectory)/survey-core/
-                cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryReact)/packages/survey-react-ui/. $(Build.SourcesDirectory)/survey-react-ui/
-                cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryAngular)/packages/survey-angular-ui/. $(Build.SourcesDirectory)/survey-angular-ui/
-                cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryVue)/packages/survey-vue3-ui/. $(Build.SourcesDirectory)/survey-vue3-ui/
-                cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryJS)/packages/survey-js-ui/. $(Build.SourcesDirectory)/survey-js-ui/
-              else
-                cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)/. $(Build.SourcesDirectory)/survey-core/
-                cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryReact)/. $(Build.SourcesDirectory)/survey-react-ui/
-                cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryAngular)/. $(Build.SourcesDirectory)/survey-angular-ui/
-                cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryVue)/. $(Build.SourcesDirectory)/survey-vue3-ui/
-                cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryJS)/. $(Build.SourcesDirectory)/survey-js-ui/
-              fi
-            displayName: "Copy"
+      #     - bash: |
+      #         if [ -z "$(PR)" ]; then
+      #           cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)/packages/survey-core/. $(Build.SourcesDirectory)/survey-core/
+      #           cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryReact)/packages/survey-react-ui/. $(Build.SourcesDirectory)/survey-react-ui/
+      #           cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryAngular)/packages/survey-angular-ui/. $(Build.SourcesDirectory)/survey-angular-ui/
+      #           cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryVue)/packages/survey-vue3-ui/. $(Build.SourcesDirectory)/survey-vue3-ui/
+      #           cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryJS)/packages/survey-js-ui/. $(Build.SourcesDirectory)/survey-js-ui/
+      #         else
+      #           cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)/. $(Build.SourcesDirectory)/survey-core/
+      #           cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryReact)/. $(Build.SourcesDirectory)/survey-react-ui/
+      #           cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryAngular)/. $(Build.SourcesDirectory)/survey-angular-ui/
+      #           cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryVue)/. $(Build.SourcesDirectory)/survey-vue3-ui/
+      #           cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryJS)/. $(Build.SourcesDirectory)/survey-js-ui/
+      #         fi
+      #       displayName: "Copy"
 
-          - task: PublishBuildArtifacts@1
-            inputs:
-              PathtoPublish: '$(Build.SourcesDirectory)/survey-core'
-              ArtifactName: $(ArtifactNameLibraryCore)
-              publishLocation: 'Container'
-              StoreAsTar: true
+      #     - task: PublishBuildArtifacts@1
+      #       inputs:
+      #         PathtoPublish: '$(Build.SourcesDirectory)/survey-core'
+      #         ArtifactName: $(ArtifactNameLibraryCore)
+      #         publishLocation: 'Container'
+      #         StoreAsTar: true
 
-          - task: PublishBuildArtifacts@1
-            inputs:
-              PathtoPublish: '$(Build.SourcesDirectory)/survey-react-ui'
-              ArtifactName: $(ArtifactNameLibraryReact)
-              publishLocation: 'Container'
-              StoreAsTar: true
+      #     - task: PublishBuildArtifacts@1
+      #       inputs:
+      #         PathtoPublish: '$(Build.SourcesDirectory)/survey-react-ui'
+      #         ArtifactName: $(ArtifactNameLibraryReact)
+      #         publishLocation: 'Container'
+      #         StoreAsTar: true
 
-          - task: PublishBuildArtifacts@1
-            inputs:
-              PathtoPublish: '$(Build.SourcesDirectory)/survey-angular-ui'
-              ArtifactName: $(ArtifactNameLibraryAngular)
-              publishLocation: 'Container'
-              StoreAsTar: true
+      #     - task: PublishBuildArtifacts@1
+      #       inputs:
+      #         PathtoPublish: '$(Build.SourcesDirectory)/survey-angular-ui'
+      #         ArtifactName: $(ArtifactNameLibraryAngular)
+      #         publishLocation: 'Container'
+      #         StoreAsTar: true
 
-          - task: PublishBuildArtifacts@1
-            inputs:
-              PathtoPublish: '$(Build.SourcesDirectory)/survey-vue3-ui'
-              ArtifactName: $(ArtifactNameLibraryVue)
-              publishLocation: 'Container'
-              StoreAsTar: true
+      #     - task: PublishBuildArtifacts@1
+      #       inputs:
+      #         PathtoPublish: '$(Build.SourcesDirectory)/survey-vue3-ui'
+      #         ArtifactName: $(ArtifactNameLibraryVue)
+      #         publishLocation: 'Container'
+      #         StoreAsTar: true
 
-          - task: PublishBuildArtifacts@1
-            inputs:
-              PathtoPublish: '$(Build.SourcesDirectory)/survey-js-ui'
-              ArtifactName: $(ArtifactNameLibraryJS)
-              publishLocation: 'Container'
-              StoreAsTar: true
+      #     - task: PublishBuildArtifacts@1
+      #       inputs:
+      #         PathtoPublish: '$(Build.SourcesDirectory)/survey-js-ui'
+      #         ArtifactName: $(ArtifactNameLibraryJS)
+      #         publishLocation: 'Container'
+      #         StoreAsTar: true
 
       - job: BuildCore
         displayName: "Build Core"
-        dependsOn: Download
-        condition: in(dependencies.Download.result, 'Failed', 'SucceededWithIssues')
+        # dependsOn: Download
+        # condition: in(dependencies.Download.result, 'Failed', 'SucceededWithIssues')
         steps:
           - checkout: Library
 
@@ -165,8 +165,8 @@ stages:
 
       - job: BuildReact
         displayName: "Build React"
-        dependsOn: Download
-        condition: in(dependencies.Download.result, 'Failed', 'SucceededWithIssues')
+        # dependsOn: Download
+        # condition: in(dependencies.Download.result, 'Failed', 'SucceededWithIssues')
         steps:
           - checkout: Library
 
@@ -199,8 +199,8 @@ stages:
 
       - job: BuildAngular
         displayName: "Build Angular"
-        dependsOn: Download
-        condition: in(dependencies.Download.result, 'Failed', 'SucceededWithIssues')
+        # dependsOn: Download
+        # condition: in(dependencies.Download.result, 'Failed', 'SucceededWithIssues')
         steps:
           - checkout: Library
 
@@ -233,8 +233,8 @@ stages:
 
       - job: BuildVue
         displayName: "Build Vue"
-        dependsOn: Download
-        condition: in(dependencies.Download.result, 'Failed', 'SucceededWithIssues')
+        # dependsOn: Download
+        # condition: in(dependencies.Download.result, 'Failed', 'SucceededWithIssues')
         steps:
           - checkout: Library
 
@@ -267,8 +267,8 @@ stages:
 
       - job: BuildSurveyUI
         displayName: "Build JS UI"
-        dependsOn: Download
-        condition: in(dependencies.Download.result, 'Failed', 'SucceededWithIssues')
+        # dependsOn: Download
+        # condition: in(dependencies.Download.result, 'Failed', 'SucceededWithIssues')
         steps:
           - checkout: Library
 
