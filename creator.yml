@@ -71,6 +71,7 @@ stages:
         steps:
           - template: templates/library/core/build.yml
             parameters:
+              checkout: Library
               store: true
 
   - stage: LibraryReactBuild
@@ -84,7 +85,8 @@ stages:
         steps:
           - template: templates/library/react/build.yml
             parameters:
-                store: true
+              checkout: Library
+              store: true
 
   - stage: LibraryAngularBuild
     displayName: "Library Angular Build"
@@ -97,7 +99,8 @@ stages:
         steps:
           - template: templates/library/angular/build.yml
             parameters:
-                store: true
+              checkout: Library
+              store: true
 
   - stage: LibraryVueBuild
     displayName: "Library Vue Build"
@@ -110,7 +113,8 @@ stages:
         steps:
           - template: templates/library/vue/build.yml
             parameters:
-                store: true
+              checkout: Library
+              store: true
 
   - stage: LibraryJSBuild
     displayName: "Library JS (Preact ShadowDOM BoxSizing) Build"
@@ -123,7 +127,8 @@ stages:
         steps:
           - template: templates/library/js/build.yml
             parameters:
-                store: true
+              checkout: Library
+              store: true
 
 
   ###########
