@@ -99,9 +99,9 @@ jobs:
           git config --global user.email "surveyjs.org@gmail.com"
           git config --global user.name "surveyjsdeveloper"
           git add $(Build.SourcesDirectory)/screenshots
-          if (git status --porcelain) {
-              git commit -m "updated screenshots" --no-verify
-              git pull --rebase origin "$(System.PullRequest.SourceBranch)"
-              git push --no-verify origin "HEAD:$(System.PullRequest.SourceBranch)"
-          }
+          $total = (git diff --cached --name-only | Measure-Object -Line).Lines
+          git commit --allow-empty -m "updated $total screenshots" --no-verify
+          git fetch origin "$(System.PullRequest.SourceBranch)"
+          git rebase --onto "origin/$(System.PullRequest.SourceBranch)" HEAD~1
+          git push --no-verify origin "HEAD:$(System.PullRequest.SourceBranch)"
         displayName: "commit updated screenshots"
