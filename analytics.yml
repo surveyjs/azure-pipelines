@@ -53,77 +53,24 @@ stages:
         steps:
           - template: templates/utils/pr_title_parser.yml
 
-
-
-  - stage: Library
+  - stage: LibraryCoreBuild
+    displayName: "Library Core Build"
     dependsOn:
       - Options
     variables:
       PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
     jobs:
-      - job: Download
-        continueOnError: true
-        variables:
-          LIBRARY_PIPELINE: $[ iif(eq(variables.PR, ''), variables.PipelineLibrary, variables.PipelineLibraryPR) ]
+      - job:
         steps:
-          - checkout: none
-
-          - template: templates/utils/artifact.yml
+          - template: templates/library/core/build.yml
             parameters:
-              pr: $(PR)
-              pipeline: $(LIBRARY_PIPELINE)
-              artifacts:
-                - $(ArtifactNameLibraryCore)
-
-          - bash: |
-              if [ -z "$(PR)" ]; then
-                cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)/packages/survey-core/. $(Build.SourcesDirectory)/survey-core/
-              else
-                cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)/. $(Build.SourcesDirectory)/survey-core/
-              fi
-            displayName: "Copy"
-
-          - task: PublishBuildArtifacts@1
-            inputs:
-              PathtoPublish: '$(Build.SourcesDirectory)/survey-core'
-              ArtifactName: $(ArtifactNameLibraryCore)
-              publishLocation: 'Container'
-              StoreAsTar: true
-
-      - job: BuildCore
-        displayName: "Build Core"
-        dependsOn: Download
-        condition: in(dependencies.Download.result, 'Failed', 'SucceededWithIssues')
-        steps:
-          - checkout: Library
-
-          - script: git fetch origin pull/$(PR)/head && git checkout FETCH_HEAD
-            workingDirectory: $(Build.SourcesDirectory)
-            displayName: "Checkout PR $(PR)"
-            condition: ne(variables.PR, '')
-
-          - template: templates/utils/npm.yml
-            parameters:
-              directories:
-                - $(Build.SourcesDirectory)
-                - $(Build.SourcesDirectory)/packages/survey-core
-
-          - script: npm run build:all
-            workingDirectory: $(Build.SourcesDirectory)/packages/survey-core
-            displayName: "Build"
-
-          - task: PublishBuildArtifacts@1
-            inputs:
-              PathtoPublish: '$(Build.SourcesDirectory)/packages/survey-core/build/'
-              ArtifactName: $(ArtifactNameLibraryCore)
-              publishLocation: 'Container'
-              StoreAsTar: true
-
+              checkout: Library
+              store: true
 
   - stage: Analytics
     displayName: "Analytics"
     dependsOn:
-      - Library
+      - LibraryCoreBuild
     jobs:
       - job:
         displayName: "Build"
