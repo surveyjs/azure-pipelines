@@ -160,6 +160,7 @@ stages:
     jobs:
       - job:
         displayName: "Build"
+        condition: eq(variables['SCR_UPDATE'], '')
         steps:
           - template: templates/creator/react/build.yml
             parameters:
