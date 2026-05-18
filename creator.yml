@@ -57,257 +57,83 @@ stages:
         steps:
           - template: templates/utils/commit_message_parser.yml
 
-
-
-  - stage: Library
+  ###########
+  # LIBRARY #
+  ###########
+  - stage: LibraryCoreBuild
+    displayName: "Library Core Build"
     dependsOn:
       - Options
     variables:
       PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
     jobs:
-      # - job: Download
-      #   continueOnError: true
-      #   variables:
-      #     LIBRARY_PIPELINE: $[ iif(eq(variables.PR, ''), variables.PipelineLibrary, variables.PipelineLibraryPR) ]
-      #   steps:
-      #     - checkout: none
-
-      #     - template: templates/utils/artifact.yml
-      #       parameters:
-      #         pr: $(PR)
-      #         pipeline: $(LIBRARY_PIPELINE)
-      #         artifacts:
-      #           - $(ArtifactNameLibraryCore)
-      #           - $(ArtifactNameLibraryReact)
-      #           - $(ArtifactNameLibraryAngular)
-      #           - $(ArtifactNameLibraryVue)
-      #           - $(ArtifactNameLibraryJS)
-
-      #     - bash: |
-      #         if [ -z "$(PR)" ]; then
-      #           cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)/packages/survey-core/. $(Build.SourcesDirectory)/survey-core/
-      #           cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryReact)/packages/survey-react-ui/. $(Build.SourcesDirectory)/survey-react-ui/
-      #           cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryAngular)/packages/survey-angular-ui/. $(Build.SourcesDirectory)/survey-angular-ui/
-      #           cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryVue)/packages/survey-vue3-ui/. $(Build.SourcesDirectory)/survey-vue3-ui/
-      #           cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryJS)/packages/survey-js-ui/. $(Build.SourcesDirectory)/survey-js-ui/
-      #         else
-      #           cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)/. $(Build.SourcesDirectory)/survey-core/
-      #           cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryReact)/. $(Build.SourcesDirectory)/survey-react-ui/
-      #           cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryAngular)/. $(Build.SourcesDirectory)/survey-angular-ui/
-      #           cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryVue)/. $(Build.SourcesDirectory)/survey-vue3-ui/
-      #           cp -a $(Agent.TempDirectory)/$(ArtifactNameLibraryJS)/. $(Build.SourcesDirectory)/survey-js-ui/
-      #         fi
-      #       displayName: "Copy"
-
-      #     - task: PublishBuildArtifacts@1
-      #       inputs:
-      #         PathtoPublish: '$(Build.SourcesDirectory)/survey-core'
-      #         ArtifactName: $(ArtifactNameLibraryCore)
-      #         publishLocation: 'Container'
-      #         StoreAsTar: true
-
-      #     - task: PublishBuildArtifacts@1
-      #       inputs:
-      #         PathtoPublish: '$(Build.SourcesDirectory)/survey-react-ui'
-      #         ArtifactName: $(ArtifactNameLibraryReact)
-      #         publishLocation: 'Container'
-      #         StoreAsTar: true
-
-      #     - task: PublishBuildArtifacts@1
-      #       inputs:
-      #         PathtoPublish: '$(Build.SourcesDirectory)/survey-angular-ui'
-      #         ArtifactName: $(ArtifactNameLibraryAngular)
-      #         publishLocation: 'Container'
-      #         StoreAsTar: true
-
-      #     - task: PublishBuildArtifacts@1
-      #       inputs:
-      #         PathtoPublish: '$(Build.SourcesDirectory)/survey-vue3-ui'
-      #         ArtifactName: $(ArtifactNameLibraryVue)
-      #         publishLocation: 'Container'
-      #         StoreAsTar: true
-
-      #     - task: PublishBuildArtifacts@1
-      #       inputs:
-      #         PathtoPublish: '$(Build.SourcesDirectory)/survey-js-ui'
-      #         ArtifactName: $(ArtifactNameLibraryJS)
-      #         publishLocation: 'Container'
-      #         StoreAsTar: true
-
-      - job: BuildCore
-        displayName: "Build Core"
-        # dependsOn: Download
-        # condition: in(dependencies.Download.result, 'Failed', 'SucceededWithIssues')
+      - job:
         steps:
-          - checkout: Library
-
-          - script: git fetch origin pull/$(PR)/head && git checkout FETCH_HEAD
-            workingDirectory: $(Build.SourcesDirectory)
-            displayName: "Checkout PR $(PR)"
-            condition: ne(variables.PR, '')
-
-          - template: templates/utils/npm.yml
+          - template: templates/library/core/build.yml
             parameters:
-              directories:
-                - $(Build.SourcesDirectory)
-                - $(Build.SourcesDirectory)/packages/survey-core
+              store: true
 
-          - script: npm run build:all
-            workingDirectory: $(Build.SourcesDirectory)/packages/survey-core
-            displayName: "Build"
-
-          - task: PublishBuildArtifacts@1
-            inputs:
-              PathtoPublish: '$(Build.SourcesDirectory)/packages/survey-core/build/'
-              ArtifactName: $(ArtifactNameLibraryCore)
-              publishLocation: 'Container'
-              StoreAsTar: true
-
-      - job: BuildReact
-        displayName: "Build React"
-        # dependsOn: Download
-        # condition: in(dependencies.Download.result, 'Failed', 'SucceededWithIssues')
+  - stage: LibraryReactBuild
+    displayName: "Library React Build"
+    dependsOn:
+      - Options
+    variables:
+      PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
+    jobs:
+      - job:
         steps:
-          - checkout: Library
-
-          - script: git fetch origin pull/$(PR)/head && git checkout FETCH_HEAD
-            workingDirectory: $(Build.SourcesDirectory)
-            displayName: "Checkout PR $(PR)"
-            condition: ne(variables.PR, '')
-
-          - template: templates/utils/npm.yml
+          - template: templates/library/react/build.yml
             parameters:
-              directories:
-                - $(Build.SourcesDirectory)
-                - $(Build.SourcesDirectory)/packages/survey-core
-                - $(Build.SourcesDirectory)/packages/survey-react-ui
+                store: true
 
-          - script: npm run build:all
-            workingDirectory: $(Build.SourcesDirectory)/packages/survey-core
-            displayName: "Build Core"
-
-          - script: npm run build
-            workingDirectory: $(Build.SourcesDirectory)/packages/survey-react-ui
-            displayName: "Build"
-
-          - task: PublishBuildArtifacts@1
-            inputs:
-              PathtoPublish: '$(Build.SourcesDirectory)/packages/survey-react-ui/build/'
-              ArtifactName: $(ArtifactNameLibraryReact)
-              publishLocation: 'Container'
-              StoreAsTar: true
-
-      - job: BuildAngular
-        displayName: "Build Angular"
-        # dependsOn: Download
-        # condition: in(dependencies.Download.result, 'Failed', 'SucceededWithIssues')
+  - stage: LibraryAngularBuild
+    displayName: "Library Angular Build"
+    dependsOn:
+      - Options
+    variables:
+      PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
+    jobs:
+      - job:
         steps:
-          - checkout: Library
-
-          - script: git fetch origin pull/$(PR)/head && git checkout FETCH_HEAD
-            workingDirectory: $(Build.SourcesDirectory)
-            displayName: "Checkout PR $(PR)"
-            condition: ne(variables.PR, '')
-
-          - template: templates/utils/npm.yml
+          - template: templates/library/angular/build.yml
             parameters:
-              directories:
-                - $(Build.SourcesDirectory)
-                - $(Build.SourcesDirectory)/packages/survey-core
-                - $(Build.SourcesDirectory)/packages/survey-angular-ui
+                store: true
 
-          - script: npm run build:all
-            workingDirectory: $(Build.SourcesDirectory)/packages/survey-core
-            displayName: "Build Core"
-
-          - script: npm run build
-            workingDirectory: $(Build.SourcesDirectory)/packages/survey-angular-ui
-            displayName: "Build"
-
-          - task: PublishBuildArtifacts@1
-            inputs:
-              PathtoPublish: '$(Build.SourcesDirectory)/packages/survey-angular-ui/build/'
-              ArtifactName: $(ArtifactNameLibraryAngular)
-              publishLocation: 'Container'
-              StoreAsTar: true
-
-      - job: BuildVue
-        displayName: "Build Vue"
-        # dependsOn: Download
-        # condition: in(dependencies.Download.result, 'Failed', 'SucceededWithIssues')
+  - stage: LibraryVueBuild
+    displayName: "Library Vue Build"
+    dependsOn:
+      - Options
+    variables:
+      PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
+    jobs:
+      - job:
         steps:
-          - checkout: Library
-
-          - script: git fetch origin pull/$(PR)/head && git checkout FETCH_HEAD
-            workingDirectory: $(Build.SourcesDirectory)
-            displayName: "Checkout PR $(PR)"
-            condition: ne(variables.PR, '')
-
-          - template: templates/utils/npm.yml
+          - template: templates/library/vue/build.yml
             parameters:
-              directories:
-                - $(Build.SourcesDirectory)
-                - $(Build.SourcesDirectory)/packages/survey-core
-                - $(Build.SourcesDirectory)/packages/survey-vue3-ui
+                store: true
 
-          - script: npm run build:all
-            workingDirectory: $(Build.SourcesDirectory)/packages/survey-core
-            displayName: "Build Core"
-
-          - script: npm run build
-            workingDirectory: $(Build.SourcesDirectory)/packages/survey-vue3-ui
-            displayName: "Build"
-
-          - task: PublishBuildArtifacts@1
-            inputs:
-              PathtoPublish: '$(Build.SourcesDirectory)/packages/survey-vue3-ui/build/'
-              ArtifactName: $(ArtifactNameLibraryVue)
-              publishLocation: 'Container'
-              StoreAsTar: true
-
-      - job: BuildSurveyUI
-        displayName: "Build JS UI"
-        # dependsOn: Download
-        # condition: in(dependencies.Download.result, 'Failed', 'SucceededWithIssues')
+  - stage: LibraryJSBuild
+    displayName: "Library JS (Preact ShadowDOM BoxSizing) Build"
+    dependsOn:
+      - Options
+    variables:
+      PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
+    jobs:
+      - job:
         steps:
-          - checkout: Library
-
-          - script: git fetch origin pull/$(PR)/head && git checkout FETCH_HEAD
-            workingDirectory: $(Build.SourcesDirectory)
-            displayName: "Checkout PR $(PR)"
-            condition: ne(variables.PR, '')
-
-          - template: templates/utils/npm.yml
+          - template: templates/library/js/build.yml
             parameters:
-              directories:
-                - $(Build.SourcesDirectory)
-                - $(Build.SourcesDirectory)/packages/survey-core
-                - $(Build.SourcesDirectory)/packages/survey-js-ui
-
-          - script: npm run build:all
-            workingDirectory: $(Build.SourcesDirectory)/packages/survey-core
-            displayName: "Build Core"
-
-          - script: npm run build
-            workingDirectory: $(Build.SourcesDirectory)/packages/survey-js-ui
-            displayName: "Build"
-
-          - task: PublishBuildArtifacts@1
-            inputs:
-              PathtoPublish: '$(Build.SourcesDirectory)/packages/survey-js-ui/build/'
-              ArtifactName: $(ArtifactNameLibraryJS)
-              publishLocation: 'Container'
-              StoreAsTar: true
+                store: true
 
 
-
-
-
+  ###########
+  # CREATOR #
+  ###########
   - stage: CreatorCore
     displayName: "Creator Core"
     dependsOn:
       - Options
-      - Library
+      - LibraryCoreBuild
     condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
       - job:
@@ -322,7 +148,8 @@ stages:
     displayName: "Creator React"
     dependsOn:
       - Options
-      - Library
+      - LibraryCoreBuild
+      - LibraryReactBuild
     variables:
       SCR_UPDATE: $[ stageDependencies.Options.Commit.outputs['data.SCR_UPDATE'] ]
     jobs:
@@ -338,7 +165,8 @@ stages:
     displayName: "Creator Angular"
     dependsOn:
       - Options
-      - Library
+      - LibraryCoreBuild
+      - LibraryAngularBuild
     condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
       - job:
@@ -353,7 +181,8 @@ stages:
     displayName: "Creator Vue"
     dependsOn:
       - Options
-      - Library
+      - LibraryCoreBuild
+      - LibraryVueBuild
     condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
       - job:
@@ -368,7 +197,8 @@ stages:
     displayName: "Creator JS (Preact ShadowDOM BoxSizing)"
     dependsOn:
       - Options
-      - Library
+      - LibraryCoreBuild
+      - LibraryJSBuild
     condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
       - job:
