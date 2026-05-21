@@ -11,7 +11,6 @@ steps:
     persistCredentials: true
     displayName: "Checkout ${{ parameters.checkout }}"
     timeoutInMinutes: 2
-    retryCountOnTaskFailure: 3
 
   - script: git fetch origin pull/$(PR)/head && git checkout FETCH_HEAD
     workingDirectory: $(Build.SourcesDirectory)

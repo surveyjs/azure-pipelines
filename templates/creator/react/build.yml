@@ -9,7 +9,6 @@ parameters:
 steps:
   - checkout: ${{ parameters.checkout }}
     timeoutInMinutes: 2
-    retryCountOnTaskFailure: 3
     persistCredentials: true
     displayName: "Checkout '${{ parameters.checkout }}'"
 
