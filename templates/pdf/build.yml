@@ -8,8 +8,9 @@ parameters:
 
 steps:
   - checkout: ${{ parameters.checkout }}
-    displayName: "Checkout '${{ parameters.checkout }}'"
+    displayName: "Checkout ${{ parameters.checkout }}"
     timeoutInMinutes: 2
+    fetchDepth: 1
 
   - script: git fetch origin pull/$(PR)/head && git checkout FETCH_HEAD
     workingDirectory: $(Build.SourcesDirectory)
