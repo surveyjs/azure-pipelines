@@ -1,5 +1,7 @@
 steps:
   - checkout: none
+    timeoutInMinutes: 2
+    retryCountOnTaskFailure: 3
   - bash: |
       TARGET_BRANCH="$(System.PullRequest.TargetBranch)"
       TARGET_BRANCH="${TARGET_BRANCH#refs/heads/}"

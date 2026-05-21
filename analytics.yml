@@ -36,6 +36,8 @@ stages:
       - job:
         steps:
           - checkout: self
+            timeoutInMinutes: 2
+            retryCountOnTaskFailure: 3
           
           - template: templates/utils/npm.yml
             parameters:
