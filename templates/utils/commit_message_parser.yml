@@ -1,6 +1,7 @@
 steps:
   - checkout: self
     fetchDepth: 1
+    timeoutInMinutes: 2
   - bash: |
       set -e
       SOURCE_SHA="$(System.PullRequest.SourceCommitId)"

@@ -10,6 +10,8 @@ steps:
   - checkout: ${{ parameters.checkout }}
     persistCredentials: true
     displayName: "Checkout ${{ parameters.checkout }}"
+    timeoutInMinutes: 2
+    fetchDepth: 1
 
   - script: git fetch origin pull/$(PR)/head && git checkout FETCH_HEAD
     workingDirectory: $(Build.SourcesDirectory)

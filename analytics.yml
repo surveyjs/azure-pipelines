@@ -36,6 +36,8 @@ stages:
       - job:
         steps:
           - checkout: self
+            timeoutInMinutes: 2
+            fetchDepth: 1
           
           - template: templates/utils/npm.yml
             parameters:
