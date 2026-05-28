@@ -9,7 +9,8 @@ parameters:
 steps:
   - checkout: ${{ parameters.checkout }}
     displayName: "Checkout ${{ parameters.checkout }}"
-    timeoutInMinutes: 2
+    timeoutInMinutes: 5
+    retryCountOnTaskFailure: 5
     fetchDepth: 1
 
   - script: git fetch origin pull/$(PR)/head && git checkout FETCH_HEAD
