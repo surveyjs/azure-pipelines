@@ -1,7 +1,8 @@
 steps:
   - checkout: self
     fetchDepth: 1
-    timeoutInMinutes: 2
+    timeoutInMinutes: 5
+    retryCountOnTaskFailure: 5
   - bash: |
       set -e
       SOURCE_SHA="$(System.PullRequest.SourceCommitId)"
