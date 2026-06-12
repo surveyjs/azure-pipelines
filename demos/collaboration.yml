@@ -1,0 +1,27 @@
+trigger: none
+pr: none
+
+resources:
+  webhooks:
+    - webhook: collaborationPush
+      connection: collaboration-incoming-webhook
+      filters:
+        - path: ref
+          value: refs/heads/main
+
+pool:
+  vmImage: ubuntu-latest
+
+jobs:
+  - job: Deploy
+    timeoutInMinutes: 70
+    steps:
+      - checkout: none
+      - task: SSH@0
+        displayName: make up-collaboration
+        timeoutInMinutes: 60
+        inputs:
+          failOnStdErr: false
+          sshEndpoint: 'sjsdemo'
+          runOptions: commands
+          commands: make -C /survey/env up-collaboration
