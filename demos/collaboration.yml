@@ -1,6 +1,14 @@
 trigger: none
 pr: none
 
+resources:
+  webhooks:
+    - webhook: collaborationPush
+      connection: collaboration-incoming-webhook
+      filters:
+        - path: ref
+          value: refs/heads/main
+
 pool:
   vmImage: ubuntu-latest
 
