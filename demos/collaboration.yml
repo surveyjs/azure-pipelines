@@ -1,3 +1,5 @@
+name: Deploy collaboration demo
+
 trigger: none
 pr: none
 
