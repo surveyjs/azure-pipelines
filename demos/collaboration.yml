@@ -12,8 +12,8 @@ jobs:
       - task: SSH@0
         displayName: make up-collaboration
         timeoutInMinutes: 60
-        failOnStdErr: false
         inputs:
+          failOnStdErr: false
           sshEndpoint: 'sjsdemo'
           runOptions: commands
           commands: make -C /survey/env up-collaboration
