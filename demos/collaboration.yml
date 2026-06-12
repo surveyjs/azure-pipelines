@@ -12,6 +12,7 @@ jobs:
       - task: SSH@0
         displayName: make up-collaboration
         timeoutInMinutes: 60
+        failOnStdErr: false
         inputs:
           sshEndpoint: 'sjsdemo'
           runOptions: commands
