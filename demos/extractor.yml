@@ -1,4 +1,4 @@
-name: Deploy collaboration demo
+name: Deploy extractor demo
 
 trigger: none
 pr: none
@@ -9,7 +9,7 @@ resources:
       connection: sjs-demos-incoming-webhook
       filters:
         - path: repository.name
-          value: survey-creator-collaboration
+          value: ai-form-response-extractor-demo
         - path: ref
           value: refs/heads/main
 
@@ -22,10 +22,10 @@ jobs:
     steps:
       - checkout: none
       - task: SSH@0
-        displayName: make up-collaboration
+        displayName: make up-extractor
         timeoutInMinutes: 60
         inputs:
           failOnStdErr: false
           sshEndpoint: 'sjsdemo'
           runOptions: commands
-          commands: make -C /survey/env up-collaboration
+          commands: make -C /survey/env up-extractor
