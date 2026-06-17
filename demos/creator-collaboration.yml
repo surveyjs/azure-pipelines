@@ -1,4 +1,4 @@
-name: Deploy collaboration demo
+name: Deploy survey-creator-collaboration demo
 
 trigger: none
 pr: none
@@ -22,10 +22,10 @@ jobs:
     steps:
       - checkout: none
       - task: SSH@0
-        displayName: make up-collaboration
+        displayName: make up-creator-collaboration
         timeoutInMinutes: 60
         inputs:
           failOnStdErr: false
           sshEndpoint: 'sjsdemo'
           runOptions: commands
-          commands: make -C /survey/env up-collaboration
+          commands: make -C /survey/env up-creator-collaboration
