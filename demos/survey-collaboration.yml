@@ -12,10 +12,7 @@ resources:
           value: survey-collaboration
         - path: ref
           value: refs/heads/main
-
-pool:
-  vmImage: ubuntu-latest
-
+          
 jobs:
   - job: Deploy
     timeoutInMinutes: 70
