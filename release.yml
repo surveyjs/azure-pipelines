@@ -5,6 +5,7 @@
 # runReleaseArgs - arguments for the release script
 # npmPublishArgs - arguments for the npm publish script
 # azureBlobContainer - Azure Blob Storage container name
+# azureBlobSubscription - Azure subscription name for the Azure Blob Storage service connection
 
 # Projects list for npm publish stage (each usage)
 parameters:
@@ -209,10 +210,14 @@ jobs:
         - $(Build.SourcesDirectory)/survey-analytics
         - $(Build.SourcesDirectory)/survey-pdf
 
+
+
   - script: |
       git config --global user.email "surveyjs.org@gmail.com"
       git config --global user.name "surveyjsdeveloper"
     displayName: 'Set git config'
+
+
 
   # Bump versions and build packages
   - script: |
@@ -303,57 +308,67 @@ jobs:
 
 
 
-  # Publish to npm
-  - ${{ each pkg in parameters.pkgList }}:
-    - task: Npm@1
-      inputs:
-        command: "custom"
-        workingDir: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/${{ pkg }}'
-        customCommand: "publish $(npmPublishArgs)"
-        customEndpoint: 'NPM Registry V2'
-        verbose: true
-      displayName: 'npm publish ${{ pkg }}'
-
-
-
-  # Push tags
-  - pwsh: |
-      $env:GIT_REDIRECT_STDERR = '2>&1'
-
-      cd $(Build.SourcesDirectory)/survey-library/
-      git checkout -B $(projectsBranch)
-      git push origin $(projectsBranch) --follow-tags --no-verify
-
-      cd $(Build.SourcesDirectory)/survey-creator/
-      git checkout -B $(projectsBranch)
-      git push origin $(projectsBranch) --follow-tags --no-verify
-
-      cd $(Build.SourcesDirectory)/survey-analytics/
-      git checkout -B $(projectsBranch)
-      git push origin $(projectsBranch) --follow-tags --no-verify
-
-      cd $(Build.SourcesDirectory)/survey-pdf/
-      git checkout -B $(projectsBranch)
-      git push origin $(projectsBranch) --follow-tags --no-verify
-
-      cd $(Build.SourcesDirectory)/custom-widgets/
-      git checkout -B $(projectsBranch)
-      git push origin $(projectsBranch) --follow-tags --no-verify
-    displayName: 'Push tags'
-
-
-
   # Upload to Azure Blobs
-  - task: AzureFileCopy@6
+  - task: AzureCLI@2
     displayName: 'DevBuilds Upload to Azure Blobs'
     inputs:
-      SourcePath: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/'
-      azureSubscription: 'SurveyJS Azure V3'
-      Destination: 'AzureBlob'
-      storage: 'surveyjsdocsstorage'
-      ContainerName: $(azureBlobContainer)
-      BlobPrefix: '/'
-      CleanTargetBeforeCopy: true
+      azureSubscription: '$(azureBlobSubscription)'
+      scriptType: pscore
+      scriptLocation: inlineScript
+      inlineScript: |
+        $ErrorActionPreference = 'Stop'
+
+        # CleanTargetBeforeCopy: remove existing blobs in the container first
+        az storage blob delete-batch `
+          --account-name surveyjsdocsstorage `
+          --source "$(azureBlobContainer)" `
+          --auth-mode login
+
+        az storage blob upload-batch `
+          --account-name surveyjsdocsstorage `
+          --destination "$(azureBlobContainer)" `
+          --source "$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/" `
+          --auth-mode login `
+          --overwrite true
+
+  # # Publish to npm
+  # - ${{ each pkg in parameters.pkgList }}:
+  #   - task: Npm@1
+  #     inputs:
+  #       command: "custom"
+  #       workingDir: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/${{ pkg }}'
+  #       customCommand: "publish $(npmPublishArgs)"
+  #       customEndpoint: 'NPM Registry V2'
+  #       verbose: true
+  #     displayName: 'npm publish ${{ pkg }}'
+
+  # # Push tags
+  # - pwsh: |
+  #     $env:GIT_REDIRECT_STDERR = '2>&1'
+
+  #     cd $(Build.SourcesDirectory)/survey-library/
+  #     git checkout -B $(projectsBranch)
+  #     git push origin $(projectsBranch) --follow-tags --no-verify
+
+  #     cd $(Build.SourcesDirectory)/survey-creator/
+  #     git checkout -B $(projectsBranch)
+  #     git push origin $(projectsBranch) --follow-tags --no-verify
+
+  #     cd $(Build.SourcesDirectory)/survey-analytics/
+  #     git checkout -B $(projectsBranch)
+  #     git push origin $(projectsBranch) --follow-tags --no-verify
+
+  #     cd $(Build.SourcesDirectory)/survey-pdf/
+  #     git checkout -B $(projectsBranch)
+  #     git push origin $(projectsBranch) --follow-tags --no-verify
+
+  #     cd $(Build.SourcesDirectory)/custom-widgets/
+  #     git checkout -B $(projectsBranch)
+  #     git push origin $(projectsBranch) --follow-tags --no-verify
+  #   displayName: 'Push tags'
+
+
+
 
 
 
