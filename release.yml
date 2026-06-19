@@ -209,7 +209,10 @@ jobs:
         - $(Build.SourcesDirectory)/survey-analytics
         - $(Build.SourcesDirectory)/survey-pdf
 
-
+  - script: |
+      git config --global user.email "surveyjs.org@gmail.com"
+      git config --global user.name "surveyjsdeveloper"
+    displayName: 'Set git config'
 
   # Bump versions and build packages
   - script: |
