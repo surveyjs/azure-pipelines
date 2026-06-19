@@ -345,7 +345,7 @@ jobs:
     displayName: 'DevBuilds Upload to Azure Blobs'
     inputs:
       SourcePath: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/'
-      azureSubscription: 'SurveyJS Azure V2'
+      azureSubscription: 'SurveyJS Azure V3'
       Destination: 'AzureBlob'
       storage: 'surveyjsdocsstorage'
       ContainerName: $(azureBlobContainer)
