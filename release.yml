@@ -258,40 +258,40 @@ jobs:
 
 
 
-  # # Commit and tag the release in each repo
-  # - script: |
-  #     set -e
+  # Commit and tag the release in each repo
+  - script: |
+      set -e
 
-  #     cd $(Build.SourcesDirectory)/survey-library
-  #     git add -A
-  #     VERSION=$(node -p "require('./packages/survey-core/package.json').version")
-  #     git commit -m "Release: $VERSION [azurepipelines skip]"
-  #     git tag -a "v$VERSION" -m "Release: $VERSION"
+      cd $(Build.SourcesDirectory)/survey-library
+      git add -A
+      VERSION=$(node -p "require('./packages/survey-core/package.json').version")
+      git commit -m "Release: $VERSION [azurepipelines skip]"
+      git tag -a "v$VERSION" -m "Release: $VERSION"
 
-  #     cd $(Build.SourcesDirectory)/survey-creator
-  #     git add -A
-  #     VERSION=$(node -p "require('./packages/survey-creator-core/package.json').version")
-  #     git commit -m "Release: $VERSION [azurepipelines skip]"
-  #     git tag -a "v$VERSION" -m "Release: $VERSION"
+      cd $(Build.SourcesDirectory)/survey-creator
+      git add -A
+      VERSION=$(node -p "require('./packages/survey-creator-core/package.json').version")
+      git commit -m "Release: $VERSION [azurepipelines skip]"
+      git tag -a "v$VERSION" -m "Release: $VERSION"
 
-  #     cd $(Build.SourcesDirectory)/survey-analytics
-  #     git add -A
-  #     VERSION=$(node -p "require('./package.json').version")
-  #     git commit -m "Release: $VERSION [azurepipelines skip]"
-  #     git tag -a "v$VERSION" -m "Release: $VERSION"
+      cd $(Build.SourcesDirectory)/survey-analytics
+      git add -A
+      VERSION=$(node -p "require('./package.json').version")
+      git commit -m "Release: $VERSION [azurepipelines skip]"
+      git tag -a "v$VERSION" -m "Release: $VERSION"
 
-  #     cd $(Build.SourcesDirectory)/survey-pdf
-  #     git add -A
-  #     VERSION=$(node -p "require('./package.json').version")
-  #     git commit -m "Release: $VERSION [azurepipelines skip]"
-  #     git tag -a "v$VERSION" -m "Release: $VERSION"
+      cd $(Build.SourcesDirectory)/survey-pdf
+      git add -A
+      VERSION=$(node -p "require('./package.json').version")
+      git commit -m "Release: $VERSION [azurepipelines skip]"
+      git tag -a "v$VERSION" -m "Release: $VERSION"
 
-  #     cd $(Build.SourcesDirectory)/custom-widgets
-  #     git add -A
-  #     VERSION=$(node -p "require('./package.json').version")
-  #     git commit -m "Release: $VERSION [azurepipelines skip]"
-  #     git tag -a "v$VERSION" -m "Release: $VERSION"
-  #   displayName: 'Commit and tag releases'
+      cd $(Build.SourcesDirectory)/custom-widgets
+      git add -A
+      VERSION=$(node -p "require('./package.json').version")
+      git commit -m "Release: $VERSION [azurepipelines skip]"
+      git tag -a "v$VERSION" -m "Release: $VERSION"
+    displayName: 'Commit and tag releases'
 
 
 
@@ -366,44 +366,45 @@ jobs:
           --auth-mode login `
           --overwrite true
 
-  # # Publish to npm
-  # - ${{ each pkg in parameters.pkgList }}:
-  #   - task: Npm@1
-  #     inputs:
-  #       command: "custom"
-  #       workingDir: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/${{ pkg }}'
-  #       customCommand: "publish $(npmPublishArgs)"
-  #       customEndpoint: 'NPM Registry V2'
-  #       verbose: true
-  #     displayName: 'npm publish ${{ pkg }}'
 
-  # # Push tags
-  # - pwsh: |
-  #     $env:GIT_REDIRECT_STDERR = '2>&1'
 
-  #     cd $(Build.SourcesDirectory)/survey-library/
-  #     git checkout -B $(projectsBranch)
-  #     git push origin $(projectsBranch) --follow-tags --no-verify
-
-  #     cd $(Build.SourcesDirectory)/survey-creator/
-  #     git checkout -B $(projectsBranch)
-  #     git push origin $(projectsBranch) --follow-tags --no-verify
-
-  #     cd $(Build.SourcesDirectory)/survey-analytics/
-  #     git checkout -B $(projectsBranch)
-  #     git push origin $(projectsBranch) --follow-tags --no-verify
-
-  #     cd $(Build.SourcesDirectory)/survey-pdf/
-  #     git checkout -B $(projectsBranch)
-  #     git push origin $(projectsBranch) --follow-tags --no-verify
-
-  #     cd $(Build.SourcesDirectory)/custom-widgets/
-  #     git checkout -B $(projectsBranch)
-  #     git push origin $(projectsBranch) --follow-tags --no-verify
-  #   displayName: 'Push tags'
+  # Publish to npm
+  - ${{ each pkg in parameters.pkgList }}:
+    - task: Npm@1
+      inputs:
+        command: "custom"
+        workingDir: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/${{ pkg }}'
+        customCommand: "publish $(npmPublishArgs)"
+        customEndpoint: 'NPM Registry V2'
+        verbose: true
+      displayName: 'npm publish ${{ pkg }}'
 
 
 
+  # Push tags
+  - pwsh: |
+      $env:GIT_REDIRECT_STDERR = '2>&1'
+
+      cd $(Build.SourcesDirectory)/survey-library/
+      git checkout -B $(projectsBranch)
+      git push origin $(projectsBranch) --follow-tags --no-verify
+
+      cd $(Build.SourcesDirectory)/survey-creator/
+      git checkout -B $(projectsBranch)
+      git push origin $(projectsBranch) --follow-tags --no-verify
+
+      cd $(Build.SourcesDirectory)/survey-analytics/
+      git checkout -B $(projectsBranch)
+      git push origin $(projectsBranch) --follow-tags --no-verify
+
+      cd $(Build.SourcesDirectory)/survey-pdf/
+      git checkout -B $(projectsBranch)
+      git push origin $(projectsBranch) --follow-tags --no-verify
+
+      cd $(Build.SourcesDirectory)/custom-widgets/
+      git checkout -B $(projectsBranch)
+      git push origin $(projectsBranch) --follow-tags --no-verify
+    displayName: 'Push tags'
 
 
 
