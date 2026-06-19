@@ -225,8 +225,7 @@ jobs:
       cd packages/survey-react-ui   && npm run release -- $(runReleaseArgs) --skip.commit --skip.tag && npm run build && cd -
       cd packages/survey-angular-ui && npm run release -- $(runReleaseArgs) --skip.commit --skip.tag && npm run build && cd -
       cd packages/survey-vue3-ui    && npm run release -- $(runReleaseArgs) --skip.commit --skip.tag && npm run build && cd -
-      git add -A
-      cd packages/survey-js-ui      && npm run release -- $(runReleaseArgs) --commit-all && npm run build && cd -
+      cd packages/survey-js-ui      && npm run release -- $(runReleaseArgs) --skip.commit --skip.tag && npm run build && cd -
     workingDirectory: $(Build.SourcesDirectory)/survey-library
     displayName: 'Build survey-library'
 
@@ -235,28 +234,64 @@ jobs:
       cd packages/survey-creator-react   && npm run release -- $(runReleaseArgs) --skip.commit --skip.tag && npm run build && cd -
       cd packages/survey-creator-angular && npm run release -- $(runReleaseArgs) --skip.commit --skip.tag && npm run build && cd -
       cd packages/survey-creator-vue     && npm run release -- $(runReleaseArgs) --skip.commit --skip.tag && npm run build && cd -
-      git add -A
-      cd packages/survey-creator-js      && npm run release -- $(runReleaseArgs) --commit-all && npm run build && cd -
+      cd packages/survey-creator-js      && npm run release -- $(runReleaseArgs) --skip.commit --skip.tag && npm run build && cd -
     workingDirectory: $(Build.SourcesDirectory)/survey-creator
     displayName: 'Build survey-creator'
 
   - script: |
-      npm run release -- $(runReleaseArgs)
+      npm run release -- $(runReleaseArgs) --skip.commit --skip.tag
       npm run build
     workingDirectory: $(Build.SourcesDirectory)/survey-analytics
     displayName: 'Build survey-analytics'
 
   - script: |
-      npm run release -- $(runReleaseArgs)
+      npm run release -- $(runReleaseArgs) --skip.commit --skip.tag
       npm run build
     workingDirectory: $(Build.SourcesDirectory)/survey-pdf
     displayName: 'Build survey-pdf'
 
   - script: |
-      npm run release -- $(runReleaseArgs)
+      npm run release -- $(runReleaseArgs) --skip.commit --skip.tag
       npm run build
     workingDirectory: $(Build.SourcesDirectory)/custom-widgets
     displayName: 'Build custom-widgets'
+
+
+
+  # # Commit and tag the release in each repo
+  # - script: |
+  #     set -e
+
+  #     cd $(Build.SourcesDirectory)/survey-library
+  #     git add -A
+  #     VERSION=$(node -p "require('./packages/survey-core/package.json').version")
+  #     git commit -m "Release: $VERSION [azurepipelines skip]"
+  #     git tag -a "v$VERSION" -m "Release: $VERSION"
+
+  #     cd $(Build.SourcesDirectory)/survey-creator
+  #     git add -A
+  #     VERSION=$(node -p "require('./packages/survey-creator-core/package.json').version")
+  #     git commit -m "Release: $VERSION [azurepipelines skip]"
+  #     git tag -a "v$VERSION" -m "Release: $VERSION"
+
+  #     cd $(Build.SourcesDirectory)/survey-analytics
+  #     git add -A
+  #     VERSION=$(node -p "require('./package.json').version")
+  #     git commit -m "Release: $VERSION [azurepipelines skip]"
+  #     git tag -a "v$VERSION" -m "Release: $VERSION"
+
+  #     cd $(Build.SourcesDirectory)/survey-pdf
+  #     git add -A
+  #     VERSION=$(node -p "require('./package.json').version")
+  #     git commit -m "Release: $VERSION [azurepipelines skip]"
+  #     git tag -a "v$VERSION" -m "Release: $VERSION"
+
+  #     cd $(Build.SourcesDirectory)/custom-widgets
+  #     git add -A
+  #     VERSION=$(node -p "require('./package.json').version")
+  #     git commit -m "Release: $VERSION [azurepipelines skip]"
+  #     git tag -a "v$VERSION" -m "Release: $VERSION"
+  #   displayName: 'Commit and tag releases'
 
 
 
