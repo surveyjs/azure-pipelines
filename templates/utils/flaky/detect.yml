@@ -28,28 +28,25 @@ steps:
         exit 0
       fi
 
-      # Parse the Playwright report for flaky tests of this project and print them.
-      PROJECT='${{ parameters.project }}' node <<'JS'
-      const fs = require("fs");
-      const PROJECT = process.env.PROJECT || "";
-      let data;
-      try { data = JSON.parse(fs.readFileSync("test-results/results.json", "utf8")); }
-      catch (e) { console.error("Could not parse results.json: " + e.message); process.exit(0); }
-      const norm = f => { const m = (f || "").match(/(?:e2e|screenshots)\/.*\.spec\.ts$/); return m ? m[0] : null; };
-      const flaky = new Set();
-      (function walk(suite) {
-        (suite.specs || []).forEach(spec => (spec.tests || []).forEach(t => {
-          if (t.status === "flaky" && (!PROJECT || t.projectName === PROJECT)) {
-            const f = norm(spec.file || suite.file);
-            if (f) flaky.add(f + "::" + (spec.title || "").replace(/;/g, " ").replace(/::/g, ": ").trim() + "::" + t.projectName);
-          }
-        }));
-        (suite.suites || []).forEach(walk);
-      })(data);
-      if (flaky.size === 0) { console.log("No flaky tests detected for project '" + PROJECT + "'."); process.exit(0); }
-      console.log("Detected " + flaky.size + " flaky test(s) to fix for project '" + PROJECT + "':");
-      [...flaky].forEach(f => console.log("  " + f));
-      JS
+      # Locate the detector in the vendored azure-pipelines tree and run it. The vendor
+      # path may carry a branch dir (azure-pipelines/<branch>/…) or be flat, so try both,
+      # then a bounded fallback search. Never fail: if it's absent, skip (safe no-op).
+      SRC="$(Build.SourcesDirectory)"
+      SCRIPT=""
+      for c in \
+        "$SRC"/azure-pipelines/*/templates/utils/flaky/detect-flaky.mjs \
+        "$SRC"/azure-pipelines/templates/utils/flaky/detect-flaky.mjs; do
+        if [ -f "$c" ]; then SCRIPT="$c"; break; fi
+      done
+      if [ -z "$SCRIPT" ] && [ -d "$SRC/azure-pipelines" ]; then
+        SCRIPT="$(find "$SRC/azure-pipelines" -path '*/utils/flaky/detect-flaky.mjs' 2>/dev/null | head -1)"
+      fi
+      if [ -z "$SCRIPT" ]; then
+        echo "detect-flaky.mjs not found under $SRC/azure-pipelines — skipping (ensure vendoring copies *.mjs)."
+        exit 0
+      fi
+
+      node "$SCRIPT" '${{ parameters.project }}'
     displayName: "Detect flaky tests"
     condition: always()
     continueOnError: true
