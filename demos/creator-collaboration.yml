@@ -1,4 +1,4 @@
-name: Deploy survey-creator-collaboration demo
+name: Deploy Creator collaboration demo
 
 trigger: none
 pr: none
@@ -9,7 +9,7 @@ resources:
       connection: sjs-demos-incoming-webhook
       filters:
         - path: repository.name
-          value: survey-creator-collaboration
+          value: collaborative-form-editing
         - path: ref
           value: refs/heads/main
 
