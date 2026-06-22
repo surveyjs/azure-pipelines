@@ -1,0 +1,55 @@
+# Lightweight, non-blocking flaky-test detection.
+#
+# Runs AFTER the Playwright test scripts in a test job. Parses the Playwright JSON
+# report (test-results/results.json) for tests with status == "flaky" (failed an
+# attempt, passed on retry — the build stays green) and prints the list of flaky
+# tests that should be stabilized. It does not gate, fail, or trigger anything.
+#
+# IMPORTANT: include these steps with  condition: always()  and  continueOnError: true
+# so detection never delays, gates, or fails the main pipeline.
+#
+# Prerequisite: survey-library playwright.config.ts must include the json reporter
+# writing to test-results/results.json (see AI_FLAKY_FIX_SETUP.md). Without it this
+# step logs "No results.json … skipping" and does nothing (safe no-op).
+
+parameters:
+  - name: workingDirectory      # framework package whose test-results/results.json we parse
+    type: string
+  - name: project               # playwright project to filter on: "e2e" or "vrt"
+    type: string
+
+steps:
+  - bash: |
+      set -uo pipefail
+      cd "${{ parameters.workingDirectory }}"
+
+      if [ ! -f test-results/results.json ]; then
+        echo "No test-results/results.json (json reporter off or no run for this project) — skipping."
+        exit 0
+      fi
+
+      # Parse the Playwright report for flaky tests of this project and print them.
+      PROJECT='${{ parameters.project }}' node <<'JS'
+      const fs = require("fs");
+      const PROJECT = process.env.PROJECT || "";
+      let data;
+      try { data = JSON.parse(fs.readFileSync("test-results/results.json", "utf8")); }
+      catch (e) { console.error("Could not parse results.json: " + e.message); process.exit(0); }
+      const norm = f => { const m = (f || "").match(/(?:e2e|screenshots)\/.*\.spec\.ts$/); return m ? m[0] : null; };
+      const flaky = new Set();
+      (function walk(suite) {
+        (suite.specs || []).forEach(spec => (spec.tests || []).forEach(t => {
+          if (t.status === "flaky" && (!PROJECT || t.projectName === PROJECT)) {
+            const f = norm(spec.file || suite.file);
+            if (f) flaky.add(f + "::" + (spec.title || "").replace(/;/g, " ").replace(/::/g, ": ").trim() + "::" + t.projectName);
+          }
+        }));
+        (suite.suites || []).forEach(walk);
+      })(data);
+      if (flaky.size === 0) { console.log("No flaky tests detected for project '" + PROJECT + "'."); process.exit(0); }
+      console.log("Detected " + flaky.size + " flaky test(s) to fix for project '" + PROJECT + "':");
+      [...flaky].forEach(f => console.log("  " + f));
+      JS
+    displayName: "Detect flaky tests"
+    condition: always()
+    continueOnError: true

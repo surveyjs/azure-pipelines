@@ -51,6 +51,12 @@ jobs:
           testRunTitle: "React E2E Tests"
         condition: succeededOrFailed()
 
+      # Non-blocking: detect & report flaky e2e tests.
+      - template: ../../utils/flaky/detect.yml
+        parameters:
+          workingDirectory: $(Build.SourcesDirectory)/packages/survey-react-ui
+          project: e2e
+
   - job:
     displayName: "SCR Test"
     condition: eq(variables['SCR_UPDATE'], '')
@@ -81,6 +87,12 @@ jobs:
           failTaskOnFailedTests: true
           testRunTitle: "React SCR Tests"
         condition: succeededOrFailed()
+
+      # Non-blocking: detect & report flaky scr (vrt) tests.
+      - template: ../../utils/flaky/detect.yml
+        parameters:
+          workingDirectory: $(Build.SourcesDirectory)/packages/survey-react-ui
+          project: vrt
 
   - job:
     displayName: "SCR Update"
