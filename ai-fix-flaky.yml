@@ -1,0 +1,392 @@
+# AI fix pipeline for FLAKY Playwright tests (pilot: Library React).
+# Reactive: runs after a Library pipeline build, inspects that run's test-results for flaky tests,
+# and only builds + fixes when flaky tests are present. Self = survey-library.
+# Requires variable group `ai-fix-secrets` (ANTHROPIC_API_KEY, GITHUB_TOKEN). Self-contained.
+
+trigger: none
+pr: none
+
+resources:
+  pipelines:
+    - pipeline: Library
+      source: Library PRs
+      trigger:
+        branches:
+          include:
+            - flaky-test
+
+parameters:
+  - name: dryRun            # true = produce report only, do not open a PR
+    type: boolean
+    default: false
+
+variables:
+  - group: ai-fix-secrets
+  - template: templates/utils/variables.yml
+
+stages:
+  - stage: AIFixFlaky
+    displayName: "AI fix flaky tests"
+    jobs:
+      # ── Job 1: cheap inspection — download the triggering run's reports and parse them.
+      - job: Inspect
+        displayName: "Inspect triggering build for flaky tests"
+        timeoutInMinutes: 15
+        steps:
+          - checkout: none
+
+          # Download the triggering run's test-results (Container artifacts). continueOnError so a
+          # missing artifact just yields "no flaky" instead of failing the job.
+          - task: DownloadBuildArtifacts@1
+            displayName: "Download test-results from triggering run"
+            inputs:
+              buildType: specific
+              project: $(System.TeamProjectId)
+              definition: $(resources.pipeline.Library.pipelineID)
+              buildVersionToDownload: specific
+              buildId: $(resources.pipeline.Library.runID)
+              downloadType: specific
+              itemPattern: "Library_React_*/**"
+              downloadPath: $(Agent.TempDirectory)
+            continueOnError: true
+
+          # Parse results.json from each downloaded report -> HAS_FLAKY + EXTRACTED_FLAKY_TESTS.
+          - bash: |
+              set -uo pipefail
+              REPORTS=""
+              for P in "$(Agent.TempDirectory)"/Library_React_*/results.json; do
+                [ -f "$P" ] && REPORTS="$REPORTS$P"$'\n'
+              done
+              if [ -z "$REPORTS" ]; then
+                echo "No results.json downloaded — no flaky tests."
+                echo "##vso[task.setvariable variable=HAS_FLAKY;isOutput=true]false"
+                echo "##vso[task.setvariable variable=EXTRACTED_FLAKY_TESTS;isOutput=true]"
+                exit 0
+              fi
+              cat > /tmp/extract_flaky.js <<'JS'
+              const fs = require("fs");
+              const files = (process.env.REPORTS || "").split("\n").map(s => s.trim()).filter(Boolean);
+              const norm = f => { const m = (f || "").match(/(?:e2e|screenshots)\/.*\.spec\.ts$/); return m ? m[0] : null; };
+              const flaky = new Set();
+              const walk = suite => {
+                (suite.specs || []).forEach(spec => (spec.tests || []).forEach(t => {
+                  if (t.status === "flaky") {
+                    const f = norm(spec.file || suite.file);
+                    if (f) flaky.add(f + "::" + (spec.title || "").replace(/;/g, " ").replace(/::/g, ": ").trim() + "::" + t.projectName);
+                  }
+                }));
+                (suite.suites || []).forEach(walk);
+              };
+              files.forEach(file => { try { walk(JSON.parse(fs.readFileSync(file, "utf8"))); } catch (e) { console.error("skip " + file + ": " + e.message); } });
+              process.stdout.write([...flaky].join(";"));
+              JS
+              FLAKY="$(REPORTS="$REPORTS" node /tmp/extract_flaky.js)"
+              if [ -z "$FLAKY" ]; then
+                echo "No flaky tests in downloaded report(s)."
+                echo "##vso[task.setvariable variable=HAS_FLAKY;isOutput=true]false"
+                echo "##vso[task.setvariable variable=EXTRACTED_FLAKY_TESTS;isOutput=true]"
+              else
+                echo "Detected flaky test(s):"; echo "$FLAKY" | tr ';' '\n' | sed 's/^/  /'
+                echo "##vso[task.setvariable variable=HAS_FLAKY;isOutput=true]true"
+                echo "##vso[task.setvariable variable=EXTRACTED_FLAKY_TESTS;isOutput=true]$FLAKY"
+              fi
+            name: extract
+            displayName: "Extract flaky tests from report(s)"
+            condition: always()
+
+      # ── Job 2: the expensive build + AI fix. Runs only when Inspect found flaky tests.
+      - job: Fix
+        displayName: "Stabilize flaky react tests"
+        dependsOn: Inspect
+        timeoutInMinutes: 120
+        condition: eq(dependencies.Inspect.outputs['extract.HAS_FLAKY'], 'true')
+        variables:
+          AUTO_FLAKY: $[ dependencies.Inspect.outputs['extract.EXTRACTED_FLAKY_TESTS'] ]
+        steps:
+          # checkout self (survey-library, persistCredentials) + npm install + build
+          - template: templates/library/react/build.yml
+
+          # re-download the originals (evidence doesn't survive across jobs) and stage them for the agent
+          - task: DownloadBuildArtifacts@1
+            displayName: "Download original flake evidence"
+            inputs:
+              buildType: specific
+              project: $(System.TeamProjectId)
+              definition: $(resources.pipeline.Library.pipelineID)
+              buildVersionToDownload: specific
+              buildId: $(resources.pipeline.Library.runID)
+              downloadType: specific
+              itemPattern: "Library_React_*/**"
+              downloadPath: $(Agent.TempDirectory)
+            continueOnError: true
+
+          - bash: |
+              set -uo pipefail
+              DEST="$(Build.SourcesDirectory)/packages/survey-react-ui/test-results/original-flake-evidence"
+              mkdir -p "$DEST"
+              for SRC in "$(Agent.TempDirectory)"/Library_React_*; do
+                [ -d "$SRC" ] && cp -r "$SRC" "$DEST/"
+              done
+              echo "Original flake evidence staged under $DEST:"; ls -la "$DEST" || true
+            displayName: "Stage original flake evidence for the agent"
+            condition: always()
+
+          # reproduce flaky tests with retries disabled to seed fresh evidence for the agent
+          - bash: |
+              set -uo pipefail
+              cd "$(Build.SourcesDirectory)/packages/survey-react-ui"
+              cat > /tmp/repro_files.js <<'JS'
+              const flaky = (process.env.FLAKY_TESTS || "").split(";").map(s => s.trim()).filter(Boolean)
+                .map(t => (t.split("::")[0] || "").trim());
+              const e2e = new Set(), vrt = new Set();
+              flaky.forEach(f => { if (!f.endsWith(".spec.ts")) return;
+                if (f.startsWith("e2e/")) e2e.add(f); else if (f.startsWith("screenshots/")) vrt.add(f); });
+              console.log([...e2e].join(" "));
+              console.log([...vrt].join(" "));
+              JS
+              OUT="$(node /tmp/repro_files.js)"
+              E2E_FILES="$(echo "$OUT" | sed -n '1p')"
+              VRT_FILES="$(echo "$OUT" | sed -n '2p')"
+              if [ -n "$E2E_FILES" ]; then npx playwright test $E2E_FILES --project e2e --retries=0 --repeat-each=5 || true; fi
+              if [ -n "$VRT_FILES" ]; then npx playwright test $VRT_FILES --project vrt --retries=0 --repeat-each=5 || true; fi
+            displayName: "Reproduce flaky tests (retries=0)"
+            continueOnError: true
+            env:
+              FLAKY_TESTS: $(AUTO_FLAKY)
+
+          # install the headless Claude Code CLI
+          - script: npm install -g @anthropic-ai/claude-code
+            displayName: "Install Claude Code CLI"
+            retryCountOnTaskFailure: 2
+
+          # Claude Code: diagnose + fix ONLY test code; writes report to test-results/
+          - bash: |
+              set -uo pipefail
+              WD="$(Build.SourcesDirectory)/packages/survey-react-ui"
+              RESULTS_DIR="$WD/test-results"
+              mkdir -p "$RESULTS_DIR"
+              cd "$(Build.SourcesDirectory)"   # agent cwd = repo root (test code lives here)
+
+              STATIC_PROMPT=$(cat <<'EOF'
+              You are stabilizing FLAKY Playwright tests in the SurveyJS "survey-library" repo.
+              A flaky test fails on some attempts but passes on retry — the build is green, but the
+              test is unreliable. Make it reliably pass WITHOUT hiding a real product bug.
+
+              Your working directory is the repo ROOT. Layout:
+                * ./CLAUDE.md           — read this first (architecture & test commands).
+                * ./e2e/                — e2e specs (*.spec.ts) and helpers (*.ts). You MAY edit these.
+                * ./screenshots/        — visual (vrt) specs (*.spec.ts). You MAY edit these.
+                * ./packages/*/src/     — PRODUCT code. NEVER edit.
+                * ./**/*-snapshots/*.png — baseline screenshots. NEVER edit or regenerate.
+                * ./packages/survey-react-ui/test-results/ — failure evidence (junit, results.json, traces)
+                  from the reproduce run.
+                * ./packages/survey-react-ui/test-results/original-flake-evidence/ — trace + results.json from
+                  the ORIGINAL run that flaked; inspect this FIRST (an intermittent flake may not reproduce
+                  locally, so this is often the only evidence of the real failure).
+
+              To RUN a test you MUST run Playwright from the framework package so its web server starts:
+                  cd packages/survey-react-ui && npx playwright test e2e/<file>.spec.ts --project e2e --retries=0 --repeat-each=5
+                (visual tests: --project vrt and screenshots/<file>.spec.ts). The path is a substring filter.
+                --retries=0 --repeat-each exposes flakiness that the default retries=4 would hide.
+
+              POLICY (HYBRID) — for each target test classify the root cause:
+                * TEST FLAKINESS — timing/races (missing awaits, fixed waitForTimeout, animations),
+                  brittle selectors, order/focus/hover dependence, unmasked dynamic regions in
+                  screenshots (carets, scrollbars, timestamps). FIX the test code.
+                * REAL PRODUCT BUG — assertion reflecting changed/incorrect product behavior, a
+                  consistent (non-intermittent) failure, or an error thrown from product code.
+                  DO NOT change anything; just describe it in your final summary.
+
+              WHEN FIXING (test flakiness only): prefer web-first assertions over fixed timeouts,
+              use stable selectors, disable animations, and for vrt add masks / set viewport / await
+              stability — do NOT regenerate the baseline image. Re-run the affected test (command above)
+              until it passes reliably.
+
+              HARD CONSTRAINTS (a violation discards ALL your changes downstream):
+                * Edit ONLY files under  e2e/**  and  screenshots/**/*.spec.ts.
+                * NEVER edit packages/**/src/** (product code).
+                * NEVER edit or regenerate baseline snapshots (*-snapshots/**/*.png).
+                * NEVER weaken comparison tolerances (threshold / maxDiffPixels / maxDiffPixelRatio)
+                  and NEVER add test.skip / test.fixme just to make a test pass — that hides bugs.
+                * Do NOT git add / commit / push — the pipeline handles version control.
+
+              FINAL OUTPUT: a concise summary for a PR body — per target test, flakiness (what you
+              changed) or suspected product bug (why), plus the list of files you changed.
+              EOF
+              )
+
+              FULL_PROMPT="$STATIC_PROMPT
+
+              Target flaky tests to fix (format: <relPath>::<title>::<project>; ';'-separated):
+              ${FLAKY_TESTS:-}
+
+              Fix at most 10 tests."
+
+              echo "Running Claude Code (model=claude-sonnet-4-6, max-turns=10)..."
+              claude -p "$FULL_PROMPT" \
+                --bare \
+                --output-format json \
+                --model "claude-sonnet-4-6" \
+                --max-turns 10 \
+                --permission-mode dontAsk \
+                --allowedTools "Read,Grep,Glob,Edit,Bash(cd *),Bash(npx playwright test *),Bash(git diff *),Bash(git status *)" \
+                --disallowedTools "Bash(git push *),Bash(git commit *),Bash(git reset *),Bash(git checkout *),Bash(rm *),WebFetch,WebSearch" \
+                > "$RESULTS_DIR/ai-fix-claude-output.json" 2> "$RESULTS_DIR/ai-fix-claude-stderr.txt" \
+                || echo "claude exited non-zero (continuing to guard step)"
+
+              cat > /tmp/ai_parse.js <<'JS'
+              const fs = require("fs");
+              const dir = process.env.RESULTS_DIR;
+              let o = {};
+              try { o = JSON.parse(fs.readFileSync(dir + "/ai-fix-claude-output.json", "utf8")); }
+              catch (e) { console.log("Could not parse Claude JSON output: " + e.message); process.exit(0); }
+              const L = [];
+              L.push("=== AI FIX REPORT ===");
+              L.push("model: "    + (o.model         != null ? o.model         : process.env.MODEL || "n/a"));
+              L.push("cost_usd: " + (o.total_cost_usd != null ? o.total_cost_usd : "n/a"));
+              L.push("is_error: " + (o.is_error       != null ? o.is_error       : "n/a"));
+              L.push("num_turns: "+ (o.num_turns      != null ? o.num_turns      : "n/a"));
+              L.push("");
+              L.push(o.result || "(no result text)");
+              const out = L.join("\n");
+              fs.writeFileSync(dir + "/ai-fix-report.txt", out);
+              console.log(out);
+              JS
+              RESULTS_DIR="$RESULTS_DIR" MODEL="claude-sonnet-4-6" node /tmp/ai_parse.js
+            displayName: "Claude: diagnose & fix flaky tests"
+            timeoutInMinutes: 30
+            env:
+              ANTHROPIC_API_KEY: $(ANTHROPIC_API_KEY)
+              CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+              FLAKY_TESTS: $(AUTO_FLAKY)
+
+          # Guard: revert everything unless ONLY test code (e2e/**, screenshots/**/*.spec.ts) changed
+          - bash: |
+              set -uo pipefail
+              cd "$(Build.SourcesDirectory)"
+              CHANGED="$(git diff --name-only)"
+              echo "Files changed by agent:"
+              echo "${CHANGED:-<none>}"
+
+              if [ -z "$CHANGED" ]; then
+                echo "##vso[task.logissue type=warning]Agent produced no changes (likely a product bug or non-reproducible flake)."
+                echo "##vso[task.setvariable variable=AI_HAS_FIX]false"
+                exit 0
+              fi
+
+              VIOLATION=0
+              while IFS= read -r f; do
+                [ -z "$f" ] && continue
+                case "$f" in
+                  *-snapshots/*)                         echo "FORBIDDEN (baseline snapshot): $f"; VIOLATION=1 ;;
+                  src/*|packages/*/src/*)                echo "FORBIDDEN (product source): $f";   VIOLATION=1 ;;
+                  e2e/*.ts|e2e/*/*.ts|e2e/*/*/*.ts)      : ;;
+                  screenshots/*.spec.ts|screenshots/*/*.spec.ts) : ;;
+                  *)                                     echo "FORBIDDEN (outside test allow-list): $f"; VIOLATION=1 ;;
+                esac
+              done <<< "$CHANGED"
+
+              if [ "$VIOLATION" -ne 0 ]; then
+                echo "##vso[task.logissue type=error]Agent touched forbidden paths — reverting ALL changes, no fix will be committed."
+                git checkout -- .
+                echo "##vso[task.setvariable variable=AI_HAS_FIX]false"
+                exit 0
+              fi
+
+              echo "All changes are within the test-code allow-list."
+              echo "##vso[task.setvariable variable=AI_HAS_FIX]true"
+            displayName: "Guard: only test code may change"
+
+          # Re-run gate: the fixed tests must pass reliably (retries=0, repeat-each) before we PR
+          - bash: |
+              set -euo pipefail
+              cd "$(Build.SourcesDirectory)/packages/survey-react-ui"
+              CHANGED="$(git -C "$(Build.SourcesDirectory)" diff --name-only)"
+
+              cat > /tmp/ai_gate_files.js <<'JS'
+              const flaky = (process.env.FLAKY_TESTS || "").split(";").map(s => s.trim()).filter(Boolean)
+                .map(t => (t.split("::")[0] || "").trim());
+              const changed = (process.env.CHANGED || "").split("\n").map(s => s.trim()).filter(Boolean);
+              const e2e = new Set(), vrt = new Set();
+              const add = f => { if (!f.endsWith(".spec.ts")) return;
+                if (f.startsWith("e2e/")) e2e.add(f); else if (f.startsWith("screenshots/")) vrt.add(f); };
+              flaky.forEach(add);
+              changed.forEach(f => { const m = f.match(/(e2e\/.*\.spec\.ts|screenshots\/.*\.spec\.ts)$/); if (m) add(m[1]); });
+              console.log([...e2e].join(" "));
+              console.log([...vrt].join(" "));
+              JS
+              GATE_OUT="$(FLAKY_TESTS="${FLAKY_TESTS:-}" CHANGED="$CHANGED" node /tmp/ai_gate_files.js)"
+              E2E_FILES="$(echo "$GATE_OUT" | sed -n '1p')"
+              VRT_FILES="$(echo "$GATE_OUT" | sed -n '2p')"
+              echo "Gate e2e files: ${E2E_FILES:-<none>}"
+              echo "Gate vrt files: ${VRT_FILES:-<none>}"
+
+              REPEAT="5"
+              RAN=0
+              if [ -n "$E2E_FILES" ]; then npx playwright test $E2E_FILES --project e2e --retries=0 --repeat-each="$REPEAT"; RAN=1; fi
+              if [ -n "$VRT_FILES" ]; then npx playwright test $VRT_FILES --project vrt --retries=0 --repeat-each="$REPEAT"; RAN=1; fi
+
+              if [ "$RAN" -eq 0 ]; then
+                echo "##vso[task.logissue type=warning]No spec files identified to gate — skipping PR."
+                echo "##vso[task.setvariable variable=AI_HAS_FIX]false"
+                exit 0
+              fi
+              echo "Re-run gate passed: fixed tests are stable."
+            displayName: "Re-run gate (retries=0, repeat-each) — green required before commit"
+            condition: eq(variables['AI_HAS_FIX'], 'true')
+            env:
+              FLAKY_TESTS: $(AUTO_FLAKY)
+
+          # commit test-code fix to a NEW branch and open a NEW PR (skipped on dryRun)
+          - powershell: |
+              $env:GIT_REDIRECT_STDERR = '2>&1'
+              Set-Location "$(Build.SourcesDirectory)"
+              git config --global user.email "surveyjs.org@gmail.com"
+              git config --global user.name "surveyjsdeveloper"
+
+              $base   = "$(Build.SourceBranchName)"
+              $branch = "ai-fix/flaky-$base-$(Build.BuildId)"
+
+              git checkout -b $branch
+              git add e2e screenshots
+              git reset -- "*-snapshots/*" | Out-Null
+              $staged = git diff --cached --name-only
+              if (-not $staged) { Write-Host "No test-code changes staged; nothing to PR."; exit 0 }
+              Write-Host "Staged files:"; $staged | ForEach-Object { Write-Host "  $_" }
+
+              # Ensure label exists (idempotent; native failure is non-fatal).
+              gh label create ai-flaky-fix --repo surveyjs/survey-library --color FBCA04 --description "Automated flaky-test stabilization" 2>$null
+
+              # Dedup: skip if an open ai-flaky-fix PR for this base already exists.
+              $openJson = gh pr list --repo surveyjs/survey-library --state open --base $base --label ai-flaky-fix --json headRefName 2>$null
+              if ($openJson) {
+                $dupe = ($openJson | ConvertFrom-Json) | Where-Object { $_.headRefName -like "ai-fix/flaky-$base-*" }
+                if ($dupe) { Write-Host "Open ai-flaky-fix PR already exists for $base ($($dupe.headRefName)); skipping."; exit 0 }
+              }
+
+              $count = ($staged | Measure-Object -Line).Lines
+              git commit -m "[ai_fix] stabilize flaky tests on $base ($count files)" --no-verify
+              git push --no-verify origin "HEAD:$branch"
+
+              $reportFile = "$(Build.SourcesDirectory)/packages/survey-react-ui/test-results/ai-fix-report.txt"
+              $report = if (Test-Path $reportFile) { Get-Content $reportFile -Raw } else { "AI-stabilized flaky tests." }
+              $prBody = "Automated flaky-test stabilization by Claude Code (headless).`n`n" +
+                        "Branch: $base`n`n---`n`n$report"
+              gh pr create --repo surveyjs/survey-library --base $base --head $branch `
+                --title "[ai_fix] Stabilize flaky tests ($base)" `
+                --body $prBody --label ai-flaky-fix
+              Write-Host "Opened PR from $branch into $base."
+            displayName: "Open PR with AI fix"
+            condition: and(succeeded(), eq(variables['AI_HAS_FIX'], 'true'), eq('${{ parameters.dryRun }}', 'False'))
+            env:
+              GH_TOKEN: $(GITHUB_TOKEN)
+              GITHUB_TOKEN: $(GITHUB_TOKEN)
+
+          # always publish the AI report / Claude output for inspection
+          - task: PublishBuildArtifacts@1
+            displayName: "Publish AI fix report"
+            inputs:
+              PathtoPublish: "$(Build.SourcesDirectory)/packages/survey-react-ui/test-results"
+              ArtifactName: "AIFix_Report"
+              publishLocation: "Container"
+            condition: always()
