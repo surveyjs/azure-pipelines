@@ -181,7 +181,7 @@ stages:
 
           - bash: |
               set -uo pipefail
-              DEST="$(Build.SourcesDirectory)/packages/survey-react-ui/test-results/original-flake-evidence"
+              DEST="$(Build.SourcesDirectory)/ai-fix-out/original-flake-evidence"
               mkdir -p "$DEST"
               for SRC in "$(Agent.TempDirectory)"/Library_React_*; do
                 [ -d "$SRC" ] && cp -r "$SRC" "$DEST/"
@@ -218,12 +218,15 @@ stages:
             displayName: "Install Claude Code CLI"
             retryCountOnTaskFailure: 2
 
-          # Claude Code: diagnose + fix ONLY test code; writes report to test-results/
+          # Claude Code: diagnose + fix ONLY test code; writes report to ai-fix-out/
           - bash: |
               set -uo pipefail
-              WD="$(Build.SourcesDirectory)/packages/survey-react-ui"
-              RESULTS_DIR="$WD/test-results"
-              mkdir -p "$RESULTS_DIR"
+              # Write AI artifacts OUTSIDE test-results: the agent runs `npx playwright test`,
+              # and Playwright wipes its outputDir (test-results/) at the start of EVERY run —
+              # that would unlink this JSON mid-write (-> ENOENT in the parser below) and also
+              # destroy the staged original-flake-evidence.
+              AI_OUT="$(Build.SourcesDirectory)/ai-fix-out"
+              mkdir -p "$AI_OUT"
               cd "$(Build.SourcesDirectory)"   # agent cwd = repo root (test code lives here)
 
               STATIC_PROMPT=$(cat <<'EOF'
@@ -239,9 +242,10 @@ stages:
                 * ./**/*-snapshots/*.png — baseline screenshots. NEVER edit or regenerate.
                 * ./packages/survey-react-ui/test-results/ — failure evidence (junit, results.json, traces)
                   from the reproduce run.
-                * ./packages/survey-react-ui/test-results/original-flake-evidence/ — trace + results.json from
-                  the ORIGINAL run that flaked; inspect this FIRST (an intermittent flake may not reproduce
-                  locally, so this is often the only evidence of the real failure).
+                * ./ai-fix-out/original-flake-evidence/ — trace + results.json from the ORIGINAL run
+                  that flaked; inspect this FIRST (an intermittent flake may not reproduce locally, so
+                  this is often the only evidence of the real failure). NOTE: this lives outside
+                  test-results/ on purpose — Playwright clears test-results/ on every run.
 
               To RUN a test you MUST run Playwright from the framework package so its web server starts:
                   cd packages/survey-react-ui && npx playwright test e2e/<file>.spec.ts --project e2e --retries=0 --repeat-each=5
@@ -290,12 +294,12 @@ stages:
                 --permission-mode dontAsk \
                 --allowedTools "Read,Grep,Glob,Edit,Bash(cd *),Bash(npx playwright test *),Bash(git diff *),Bash(git status *)" \
                 --disallowedTools "Bash(git push *),Bash(git commit *),Bash(git reset *),Bash(git checkout *),Bash(rm *),WebFetch,WebSearch" \
-                > "$RESULTS_DIR/ai-fix-claude-output.json" 2> "$RESULTS_DIR/ai-fix-claude-stderr.txt" \
+                > "$AI_OUT/ai-fix-claude-output.json" 2> "$AI_OUT/ai-fix-claude-stderr.txt" \
                 || echo "claude exited non-zero (continuing to guard step)"
 
               cat > /tmp/ai_parse.js <<'JS'
               const fs = require("fs");
-              const dir = process.env.RESULTS_DIR;
+              const dir = process.env.AI_OUT;
               let o = {};
               try { o = JSON.parse(fs.readFileSync(dir + "/ai-fix-claude-output.json", "utf8")); }
               catch (e) { console.log("Could not parse Claude JSON output: " + e.message); process.exit(0); }
@@ -311,7 +315,7 @@ stages:
               fs.writeFileSync(dir + "/ai-fix-report.txt", out);
               console.log(out);
               JS
-              RESULTS_DIR="$RESULTS_DIR" MODEL="claude-sonnet-4-6" node /tmp/ai_parse.js
+              AI_OUT="$AI_OUT" MODEL="claude-sonnet-4-6" node /tmp/ai_parse.js
             displayName: "Claude: diagnose & fix flaky tests"
             timeoutInMinutes: 30
             env:
@@ -455,7 +459,7 @@ stages:
               git commit -m "[ai_fix] stabilize flaky tests on $base ($count files)" --no-verify
               git push --no-verify origin "HEAD:$branch"
 
-              $reportFile = "$(Build.SourcesDirectory)/packages/survey-react-ui/test-results/ai-fix-report.txt"
+              $reportFile = "$(Build.SourcesDirectory)/ai-fix-out/ai-fix-report.txt"
               $report = if (Test-Path $reportFile) { Get-Content $reportFile -Raw } else { "AI-stabilized flaky tests." }
               $prBody = "Automated flaky-test stabilization by Claude Code (headless).`n`n" +
                         "Branch: $base`n`n---`n`n$report"
@@ -473,7 +477,7 @@ stages:
           - task: PublishBuildArtifacts@1
             displayName: "Publish AI fix report"
             inputs:
-              PathtoPublish: "$(Build.SourcesDirectory)/packages/survey-react-ui/test-results"
+              PathtoPublish: "$(Build.SourcesDirectory)/ai-fix-out"
               ArtifactName: "AIFix_Report"
               publishLocation: "Container"
             condition: always()
