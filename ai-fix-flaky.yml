@@ -16,6 +16,9 @@ resources:
             - flaky-test
 
 parameters:
+  - name: buildId           # Library build id to download artifacts from (default: the triggering run)
+    type: string
+    default: ""
   - name: dryRun            # true = produce report only, do not open a PR
     type: boolean
     default: false
@@ -44,7 +47,10 @@ stages:
               project: $(System.TeamProjectId)
               definition: $(resources.pipeline.Library.pipelineID)
               buildVersionToDownload: specific
-              buildId: $(resources.pipeline.Library.runID)
+              ${{ if ne(parameters.buildId, '') }}:
+                buildId: ${{ parameters.buildId }}
+              ${{ else }}:
+                buildId: $(resources.pipeline.Library.runID)
               downloadType: specific
               itemPattern: "Library_React_*/**"
               downloadPath: $(Agent.TempDirectory)
@@ -114,7 +120,10 @@ stages:
               project: $(System.TeamProjectId)
               definition: $(resources.pipeline.Library.pipelineID)
               buildVersionToDownload: specific
-              buildId: $(resources.pipeline.Library.runID)
+              ${{ if ne(parameters.buildId, '') }}:
+                buildId: ${{ parameters.buildId }}
+              ${{ else }}:
+                buildId: $(resources.pipeline.Library.runID)
               downloadType: specific
               itemPattern: "Library_React_*/**"
               downloadPath: $(Agent.TempDirectory)
