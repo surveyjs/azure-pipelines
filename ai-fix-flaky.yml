@@ -319,6 +319,22 @@ stages:
               CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
               FLAKY_TESTS: $(AUTO_FLAKY)
 
+          # Surface the agent's raw changes in the CI log (before the guard reverts anything).
+          # `git add -N` lets the diff include any NEW untracked files too; it's undone right after
+          # so the guard/PR steps see an unmodified index.
+          - bash: |
+              set -uo pipefail
+              cd "$(Build.SourcesDirectory)"
+              git add -N -- e2e screenshots 2>/dev/null || true
+              echo "===== Summary (git diff --stat) ====="
+              git diff --stat || true
+              echo
+              echo "===== Full diff (git diff) ====="
+              git --no-pager diff || true
+              git reset -q -- e2e screenshots 2>/dev/null || true
+            displayName: "Show agent's changes (diff)"
+            condition: always()
+
           # Guard: revert everything unless ONLY test code (e2e/**, screenshots/**/*.spec.ts) changed
           - bash: |
               set -uo pipefail
