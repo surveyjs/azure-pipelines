@@ -86,16 +86,24 @@ stages:
               const files = (process.env.REPORTS || "").split("\n").map(s => s.trim()).filter(Boolean);
               const norm = f => { const m = (f || "").match(/(?:e2e|screenshots)\/.*\.spec\.ts$/); return m ? m[0] : null; };
               const flaky = new Set();
-              const walk = suite => {
+              const clean = s => (s || "").replace(/;/g, " ").replace(/::/g, ": ").trim();
+              // Build the FULL test title (describe chain + test), excluding the file-level suite,
+              // so the gate can target one framework variant (e.g. "react autoNextPage") precisely.
+              const walk = (suite, prefix) => {
+                const isFile = /\.spec\.ts$/.test(suite.title || "");
+                const pfx = (suite.title && !isFile)
+                  ? (prefix ? prefix + " › " + suite.title : suite.title)
+                  : prefix;
                 (suite.specs || []).forEach(spec => (spec.tests || []).forEach(t => {
                   if (t.status === "flaky") {
                     const f = norm(spec.file || suite.file);
-                    if (f) flaky.add(f + "::" + (spec.title || "").replace(/;/g, " ").replace(/::/g, ": ").trim() + "::" + t.projectName);
+                    const full = pfx ? pfx + " › " + (spec.title || "") : (spec.title || "");
+                    if (f) flaky.add(f + "::" + clean(full) + "::" + t.projectName);
                   }
                 }));
-                (suite.suites || []).forEach(walk);
+                (suite.suites || []).forEach(s => walk(s, pfx));
               };
-              files.forEach(file => { try { walk(JSON.parse(fs.readFileSync(file, "utf8"))); } catch (e) { console.error("skip " + file + ": " + e.message); } });
+              files.forEach(file => { try { walk(JSON.parse(fs.readFileSync(file, "utf8")), ""); } catch (e) { console.error("skip " + file + ": " + e.message); } });
               process.stdout.write([...flaky].join(";"));
               JS
               FLAKY="$(REPORTS="$REPORTS" node /tmp/extract_flaky.js)"
@@ -219,20 +227,28 @@ stages:
           - bash: |
               set -uo pipefail
               cd "$(Build.SourcesDirectory)/packages/survey-react-ui"
-              cat > /tmp/repro_files.js <<'JS'
-              const flaky = (process.env.FLAKY_TESTS || "").split(";").map(s => s.trim()).filter(Boolean)
-                .map(t => (t.split("::")[0] || "").trim());
-              const e2e = new Set(), vrt = new Set();
-              flaky.forEach(f => { if (!f.endsWith(".spec.ts")) return;
-                if (f.startsWith("e2e/")) e2e.add(f); else if (f.startsWith("screenshots/")) vrt.add(f); });
-              console.log([...e2e].join(" "));
-              console.log([...vrt].join(" "));
+              # Target each flaky test precisely (file + project + full-title grep) so the agent
+              # gets evidence for ONLY the flaky variant, not every framework in the spec file.
+              cat > /tmp/repro_targets.js <<'JS'
+              const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+              const reFromTitle = t => t.split(" › ").map(p => esc(p.trim())).filter(Boolean).join(".*");
+              const out = [];
+              (process.env.FLAKY_TESTS || "").split(";").map(s => s.trim()).filter(Boolean).forEach(e => {
+                const p = e.split("::");
+                const file = (p[0] || "").trim();
+                const title = (p[1] || "").trim();
+                const project = (p[2] || "").trim();
+                if (!file.endsWith(".spec.ts") || !title || !project) return;
+                out.push([file, project, reFromTitle(title)].join("\t"));
+              });
+              process.stdout.write(out.join("\n"));
               JS
-              OUT="$(node /tmp/repro_files.js)"
-              E2E_FILES="$(echo "$OUT" | sed -n '1p')"
-              VRT_FILES="$(echo "$OUT" | sed -n '2p')"
-              if [ -n "$E2E_FILES" ]; then npx playwright test $E2E_FILES --project e2e --retries=0 --repeat-each=5 || true; fi
-              if [ -n "$VRT_FILES" ]; then npx playwright test $VRT_FILES --project vrt --retries=0 --repeat-each=5 || true; fi
+              TARGETS="$(node /tmp/repro_targets.js)"
+              while IFS=$'\t' read -r FILE PROJECT TITLE_RE; do
+                [ -z "$FILE" ] && continue
+                echo "── Reproducing [$PROJECT] $FILE  -g /$TITLE_RE/"
+                npx playwright test "$FILE" --project "$PROJECT" -g "$TITLE_RE" --retries=0 --repeat-each=5 || true
+              done <<< "$TARGETS"
             displayName: "Reproduce flaky tests (retries=0)"
             continueOnError: true
             env:
@@ -273,8 +289,11 @@ stages:
                   test-results/ on purpose — Playwright clears test-results/ on every run.
 
               To RUN a test you MUST run Playwright from the framework package so its web server starts:
-                  cd packages/survey-react-ui && npx playwright test e2e/<file>.spec.ts --project e2e --retries=0 --repeat-each=5
+                  cd packages/survey-react-ui && npx playwright test e2e/<file>.spec.ts --project e2e -g "<title>" --retries=0 --repeat-each=5
                 (visual tests: --project vrt and screenshots/<file>.spec.ts). The path is a substring filter.
+                ALWAYS pass -g "<title>" with the target's <title> (3rd field is the <project>): each spec file is
+                parametrized across frameworks (angular/react/vue/...), but only react is built/served here — running
+                the file unscoped fails the other frameworks with unrelated errors. Scope to the one target variant.
                 --retries=0 --repeat-each exposes flakiness that the default retries=4 would hide.
 
               POLICY (HYBRID) — for each target test classify the root cause:
@@ -405,36 +424,42 @@ stages:
           - bash: |
               set -euo pipefail
               cd "$(Build.SourcesDirectory)/packages/survey-react-ui"
-              CHANGED="$(git -C "$(Build.SourcesDirectory)" diff --name-only)"
 
-              cat > /tmp/ai_gate_files.js <<'JS'
-              const flaky = (process.env.FLAKY_TESTS || "").split(";").map(s => s.trim()).filter(Boolean)
-                .map(t => (t.split("::")[0] || "").trim());
-              const changed = (process.env.CHANGED || "").split("\n").map(s => s.trim()).filter(Boolean);
-              const e2e = new Set(), vrt = new Set();
-              const add = f => { if (!f.endsWith(".spec.ts")) return;
-                if (f.startsWith("e2e/")) e2e.add(f); else if (f.startsWith("screenshots/")) vrt.add(f); };
-              flaky.forEach(add);
-              changed.forEach(f => { const m = f.match(/(e2e\/.*\.spec\.ts|screenshots\/.*\.spec\.ts)$/); if (m) add(m[1]); });
-              console.log([...e2e].join(" "));
-              console.log([...vrt].join(" "));
+              # Turn each flaky entry "<relPath>::<title>::<project>" into a precise target:
+              # one line per test = "<file>\t<project>\t<grep-regex>". The grep regex matches the
+              # full title path (describe chain + test) so only THAT framework variant runs —
+              # never the whole spec file across angular/react/vue.
+              cat > /tmp/ai_gate_targets.js <<'JS'
+              const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+              const reFromTitle = t => t.split(" › ").map(p => esc(p.trim())).filter(Boolean).join(".*");
+              const out = [];
+              (process.env.FLAKY_TESTS || "").split(";").map(s => s.trim()).filter(Boolean).forEach(e => {
+                const p = e.split("::");
+                const file = (p[0] || "").trim();
+                const title = (p[1] || "").trim();
+                const project = (p[2] || "").trim();
+                if (!file.endsWith(".spec.ts") || !title || !project) return;
+                out.push([file, project, reFromTitle(title)].join("\t"));
+              });
+              process.stdout.write(out.join("\n"));
               JS
-              GATE_OUT="$(FLAKY_TESTS="${FLAKY_TESTS:-}" CHANGED="$CHANGED" node /tmp/ai_gate_files.js)"
-              E2E_FILES="$(echo "$GATE_OUT" | sed -n '1p')"
-              VRT_FILES="$(echo "$GATE_OUT" | sed -n '2p')"
-              echo "Gate e2e files: ${E2E_FILES:-<none>}"
-              echo "Gate vrt files: ${VRT_FILES:-<none>}"
+              TARGETS="$(FLAKY_TESTS="${FLAKY_TESTS:-}" node /tmp/ai_gate_targets.js)"
 
-              REPEAT="5"
-              RAN=0
-              if [ -n "$E2E_FILES" ]; then npx playwright test $E2E_FILES --project e2e --retries=0 --repeat-each="$REPEAT"; RAN=1; fi
-              if [ -n "$VRT_FILES" ]; then npx playwright test $VRT_FILES --project vrt --retries=0 --repeat-each="$REPEAT"; RAN=1; fi
-
-              if [ "$RAN" -eq 0 ]; then
-                echo "##vso[task.logissue type=warning]No spec files identified to gate — skipping PR."
+              if [ -z "$TARGETS" ]; then
+                echo "##vso[task.logissue type=warning]No flaky test targets identified to gate — skipping PR."
                 echo "##vso[task.setvariable variable=AI_HAS_FIX]false"
                 exit 0
               fi
+
+              echo "Gate targets:"; echo "$TARGETS" | sed 's/^/  /'
+
+              REPEAT="5"
+              while IFS=$'\t' read -r FILE PROJECT TITLE_RE; do
+                [ -z "$FILE" ] && continue
+                echo "── Gating [$PROJECT] $FILE  -g /$TITLE_RE/"
+                npx playwright test "$FILE" --project "$PROJECT" -g "$TITLE_RE" --retries=0 --repeat-each="$REPEAT"
+              done <<< "$TARGETS"
+
               echo "Re-run gate passed: fixed tests are stable."
             displayName: "Re-run gate (retries=0, repeat-each) — green required before commit"
             condition: eq(variables['AI_HAS_FIX'], 'true')
