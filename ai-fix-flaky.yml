@@ -156,6 +156,11 @@ stages:
                 - $(Build.SourcesDirectory)
                 - $(Build.SourcesDirectory)/packages/survey-core
                 - $(Build.SourcesDirectory)/packages/survey-react-ui
+                - $(Build.SourcesDirectory)/packages/survey-angular-ui
+                - $(Build.SourcesDirectory)/packages/survey-angular-ui/example
+                - $(Build.SourcesDirectory)/packages/survey-vue3-ui
+                - $(Build.SourcesDirectory)/packages/survey-vue3-ui/example
+                - $(Build.SourcesDirectory)/packages/survey-js-ui
 
           - script: npm run build:all
             workingDirectory: $(Build.SourcesDirectory)/packages/survey-core
@@ -164,6 +169,26 @@ stages:
           - script: npm run build
             workingDirectory: $(Build.SourcesDirectory)/packages/survey-react-ui
             displayName: "Build React"
+
+          - script: npm run build
+            workingDirectory: $(Build.SourcesDirectory)/packages/survey-angular-ui
+            displayName: "Build Angular"
+
+          - script: npm run build:example:prod
+            workingDirectory: $(Build.SourcesDirectory)/packages/survey-angular-ui
+            displayName: "Build Angular Example"
+
+          - script: npm run build
+            workingDirectory: $(Build.SourcesDirectory)/packages/survey-vue3-ui
+            displayName: "Build Vue3"
+
+          - script: npm run build:example:prod
+            workingDirectory: $(Build.SourcesDirectory)/packages/survey-vue3-ui
+            displayName: "Build Vue3 Example"
+
+          - script: npm run build
+            workingDirectory: $(Build.SourcesDirectory)/packages/survey-js-ui
+            displayName: "Build JS"
 
           # re-download the originals (evidence doesn't survive across jobs) and stage them for the agent
           - task: DownloadBuildArtifacts@1
