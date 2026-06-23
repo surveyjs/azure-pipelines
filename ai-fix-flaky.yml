@@ -131,10 +131,24 @@ stages:
 
           - bash: |
               set -euo pipefail
-              BRANCH="$(echo "$(resources.pipeline.Library.sourceBranch)" | sed 's#^refs/heads/##')"
-              echo "Switching survey-library to triggering branch: $BRANCH"
-              git -C "$(Build.SourcesDirectory)" fetch --depth 1 origin "$BRANCH"
-              git -C "$(Build.SourcesDirectory)" checkout FETCH_HEAD
+              SRC="$(resources.pipeline.Library.sourceBranch)"
+              echo "Triggering Library build ran on: $SRC"
+              SD="$(Build.SourcesDirectory)"
+              case "$SRC" in
+                # PR validation build — sourceBranch is refs/pull/<N>/merge|head. The /merge ref is
+                # transient; fetch the stable /head (the PR branch tip), matching build.yml's convention.
+                refs/pull/*)
+                  PR_NUM="$(echo "$SRC" | sed -E 's#^refs/pull/([0-9]+)/.*#\1#')"
+                  echo "PR build detected (PR #$PR_NUM); fetching pull/$PR_NUM/head"
+                  git -C "$SD" fetch --depth 1 origin "pull/$PR_NUM/head"
+                  ;;
+                *)
+                  BRANCH="$(echo "$SRC" | sed 's#^refs/heads/##')"
+                  echo "Branch build; fetching $BRANCH"
+                  git -C "$SD" fetch --depth 1 origin "$BRANCH"
+                  ;;
+              esac
+              git -C "$SD" checkout FETCH_HEAD
             displayName: "Switch survey-library to triggering branch"
 
           - template: templates/utils/npm.yml
@@ -393,8 +407,19 @@ stages:
               git config --global user.email "surveyjs.org@gmail.com"
               git config --global user.name "surveyjsdeveloper"
 
-              # $base is the survey-library branch that flaked (NOT this pipeline's own branch).
-              $base   = "$(resources.pipeline.Library.sourceBranch)" -replace '^refs/heads/', ''
+              # The fix PR targets the survey-library branch that flaked (NOT this pipeline's branch).
+              # For a PR validation build the triggering sourceBranch is refs/pull/<N>/merge — resolve
+              # the PR's head branch so the fix merges into that same PR. For a normal branch build,
+              # just strip refs/heads/.
+              $src = "$(resources.pipeline.Library.sourceBranch)"
+              if ($src -match '^refs/pull/(\d+)/') {
+                $prNum = $Matches[1]
+                $base = (gh pr view $prNum --repo surveyjs/survey-library --json headRefName -q .headRefName).Trim()
+                if (-not $base) { Write-Host "Could not resolve head branch for PR #$prNum; skipping PR."; exit 0 }
+                Write-Host "PR build: fix PR will target PR #$prNum head branch '$base'."
+              } else {
+                $base = $src -replace '^refs/heads/', ''
+              }
               $branch = "ai-fix/flaky-$base-$(Build.BuildId)"
 
               git checkout -b $branch
