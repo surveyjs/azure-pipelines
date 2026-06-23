@@ -255,7 +255,15 @@ stages:
               FLAKY_TESTS: $(AUTO_FLAKY)
 
           # install the headless Claude Code CLI
-          - script: npm install -g @anthropic-ai/claude-code
+          # The agent user can't write to the default global prefix (/usr/lib/node_modules -> EACCES),
+          # so point npm's global prefix at a user-writable dir and expose its bin on PATH.
+          - bash: |
+              set -euo pipefail
+              NPM_PREFIX="$(Agent.TempDirectory)/npm-global"
+              mkdir -p "$NPM_PREFIX"
+              npm config set prefix "$NPM_PREFIX"
+              npm install -g @anthropic-ai/claude-code
+              echo "##vso[task.prependpath]$NPM_PREFIX/bin"
             displayName: "Install Claude Code CLI"
             retryCountOnTaskFailure: 2
 
