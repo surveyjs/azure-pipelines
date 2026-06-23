@@ -1,6 +1,8 @@
 # AI fix pipeline for FLAKY Playwright tests (pilot: Library React).
 # Reactive: runs after a Library pipeline build, inspects that run's test-results for flaky tests,
-# and only builds + fixes when flaky tests are present. Self = survey-library.
+# and only builds + fixes when flaky tests are present. This pipeline runs in the azure-pipelines
+# repo (so `self` is azure-pipelines); it checks out survey-library explicitly via the LibraryRepo
+# resource and operates on it.
 # Requires variable group `ai-fix-secrets` (ANTHROPIC_API_KEY, GITHUB_TOKEN). Self-contained.
 
 trigger: none
@@ -14,6 +16,13 @@ resources:
         branches:
           include:
             - flaky-test
+  repositories:
+    # This pipeline runs in the azure-pipelines repo, so `self` is NOT survey-library.
+    # Declare survey-library explicitly so the Fix job can check it out and operate on it.
+    - repository: LibraryRepo
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/survey-library
 
 parameters:
   - name: buildId           # Library build id to download artifacts from (default: the triggering run)
@@ -109,8 +118,39 @@ stages:
         variables:
           AUTO_FLAKY: $[ dependencies.Inspect.outputs['extract.EXTRACTED_FLAKY_TESTS'] ]
         steps:
-          # checkout self (survey-library, persistCredentials) + npm install + build
-          - template: templates/library/react/build.yml
+          # `self` here is the azure-pipelines repo — NOT survey-library. Check out survey-library
+          # explicitly (single non-self checkout lands in $(Build.SourcesDirectory)), pin it to the
+          # branch the triggering Library build ran on, then install + build core & react-ui.
+          # persistCredentials so the later "Open PR" step can push back to survey-library.
+          - checkout: LibraryRepo
+            persistCredentials: true
+            displayName: "Checkout survey-library"
+            timeoutInMinutes: 5
+            retryCountOnTaskFailure: 5
+            fetchDepth: 1
+
+          - bash: |
+              set -euo pipefail
+              BRANCH="$(echo "$(resources.pipeline.Library.sourceBranch)" | sed 's#^refs/heads/##')"
+              echo "Switching survey-library to triggering branch: $BRANCH"
+              git -C "$(Build.SourcesDirectory)" fetch --depth 1 origin "$BRANCH"
+              git -C "$(Build.SourcesDirectory)" checkout FETCH_HEAD
+            displayName: "Switch survey-library to triggering branch"
+
+          - template: templates/utils/npm.yml
+            parameters:
+              directories:
+                - $(Build.SourcesDirectory)
+                - $(Build.SourcesDirectory)/packages/survey-core
+                - $(Build.SourcesDirectory)/packages/survey-react-ui
+
+          - script: npm run build:all
+            workingDirectory: $(Build.SourcesDirectory)/packages/survey-core
+            displayName: "Build Core"
+
+          - script: npm run build
+            workingDirectory: $(Build.SourcesDirectory)/packages/survey-react-ui
+            displayName: "Build React"
 
           # re-download the originals (evidence doesn't survive across jobs) and stage them for the agent
           - task: DownloadBuildArtifacts@1
@@ -353,7 +393,8 @@ stages:
               git config --global user.email "surveyjs.org@gmail.com"
               git config --global user.name "surveyjsdeveloper"
 
-              $base   = "$(Build.SourceBranchName)"
+              # $base is the survey-library branch that flaked (NOT this pipeline's own branch).
+              $base   = "$(resources.pipeline.Library.sourceBranch)" -replace '^refs/heads/', ''
               $branch = "ai-fix/flaky-$base-$(Build.BuildId)"
 
               git checkout -b $branch
