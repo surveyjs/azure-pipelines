@@ -35,6 +35,12 @@ parameters:
 variables:
   - group: ai-fix-secrets
   - template: templates/utils/variables.yml
+  - ${{ if ne(parameters.buildId, '') }}:
+      - name: LibraryBuildId
+        value: ${{ parameters.buildId }}
+  - ${{ else }}:
+      - name: LibraryBuildId
+        value: $(resources.pipeline.Library.runID)
 
 stages:
   - stage: AIFixFlaky
@@ -56,10 +62,7 @@ stages:
               project: $(System.TeamProjectId)
               definition: $(resources.pipeline.Library.pipelineID)
               buildVersionToDownload: specific
-              ${{ if ne(parameters.buildId, '') }}:
-                buildId: ${{ parameters.buildId }}
-              ${{ else }}:
-                buildId: $(resources.pipeline.Library.runID)
+              buildId: $(LibraryBuildId)
               downloadType: specific
               itemPattern: "Library_React_*/**"
               downloadPath: $(Agent.TempDirectory)
@@ -118,10 +121,6 @@ stages:
         variables:
           AUTO_FLAKY: $[ dependencies.Inspect.outputs['extract.EXTRACTED_FLAKY_TESTS'] ]
         steps:
-          # `self` here is the azure-pipelines repo — NOT survey-library. Check out survey-library
-          # explicitly (single non-self checkout lands in $(Build.SourcesDirectory)), pin it to the
-          # branch the triggering Library build ran on, then install + build core & react-ui.
-          # persistCredentials so the later "Open PR" step can push back to survey-library.
           - checkout: LibraryRepo
             persistCredentials: true
             displayName: "Checkout survey-library"
@@ -174,10 +173,7 @@ stages:
               project: $(System.TeamProjectId)
               definition: $(resources.pipeline.Library.pipelineID)
               buildVersionToDownload: specific
-              ${{ if ne(parameters.buildId, '') }}:
-                buildId: ${{ parameters.buildId }}
-              ${{ else }}:
-                buildId: $(resources.pipeline.Library.runID)
+              buildId: $(LibraryBuildId)
               downloadType: specific
               itemPattern: "Library_React_*/**"
               downloadPath: $(Agent.TempDirectory)
@@ -285,12 +281,12 @@ stages:
 
               Fix at most 10 tests."
 
-              echo "Running Claude Code (model=claude-sonnet-4-6, max-turns=10)..."
+              echo "Running Claude Code (model=claude-sonnet-4-6, max-turns=40)..."
               claude -p "$FULL_PROMPT" \
                 --bare \
                 --output-format json \
                 --model "claude-sonnet-4-6" \
-                --max-turns 10 \
+                --max-turns 40 \
                 --permission-mode dontAsk \
                 --allowedTools "Read,Grep,Glob,Edit,Bash(cd *),Bash(npx playwright test *),Bash(git diff *),Bash(git status *)" \
                 --disallowedTools "Bash(git push *),Bash(git commit *),Bash(git reset *),Bash(git checkout *),Bash(rm *),WebFetch,WebSearch" \
