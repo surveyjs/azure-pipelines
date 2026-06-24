@@ -259,39 +259,39 @@ jobs:
 
 
   # Commit and tag the release in each repo
-  - script: |
-      set -e
+  # - script: |
+  #     set -e
 
-      cd $(Build.SourcesDirectory)/survey-library
-      git add -A
-      VERSION=$(node -p "require('./packages/survey-core/package.json').version")
-      git commit -m "Release: $VERSION [azurepipelines skip]"
-      git tag -a "v$VERSION" -m "Release: $VERSION"
+  #     cd $(Build.SourcesDirectory)/survey-library
+  #     git add -A
+  #     VERSION=$(node -p "require('./packages/survey-core/package.json').version")
+  #     git commit -m "Release: $VERSION [azurepipelines skip]"
+  #     git tag -a "v$VERSION" -m "Release: $VERSION"
 
-      cd $(Build.SourcesDirectory)/survey-creator
-      git add -A
-      VERSION=$(node -p "require('./packages/survey-creator-core/package.json').version")
-      git commit -m "Release: $VERSION [azurepipelines skip]"
-      git tag -a "v$VERSION" -m "Release: $VERSION"
+  #     cd $(Build.SourcesDirectory)/survey-creator
+  #     git add -A
+  #     VERSION=$(node -p "require('./packages/survey-creator-core/package.json').version")
+  #     git commit -m "Release: $VERSION [azurepipelines skip]"
+  #     git tag -a "v$VERSION" -m "Release: $VERSION"
 
-      cd $(Build.SourcesDirectory)/survey-analytics
-      git add -A
-      VERSION=$(node -p "require('./package.json').version")
-      git commit -m "Release: $VERSION [azurepipelines skip]"
-      git tag -a "v$VERSION" -m "Release: $VERSION"
+  #     cd $(Build.SourcesDirectory)/survey-analytics
+  #     git add -A
+  #     VERSION=$(node -p "require('./package.json').version")
+  #     git commit -m "Release: $VERSION [azurepipelines skip]"
+  #     git tag -a "v$VERSION" -m "Release: $VERSION"
 
-      cd $(Build.SourcesDirectory)/survey-pdf
-      git add -A
-      VERSION=$(node -p "require('./package.json').version")
-      git commit -m "Release: $VERSION [azurepipelines skip]"
-      git tag -a "v$VERSION" -m "Release: $VERSION"
+  #     cd $(Build.SourcesDirectory)/survey-pdf
+  #     git add -A
+  #     VERSION=$(node -p "require('./package.json').version")
+  #     git commit -m "Release: $VERSION [azurepipelines skip]"
+  #     git tag -a "v$VERSION" -m "Release: $VERSION"
 
-      cd $(Build.SourcesDirectory)/custom-widgets
-      git add -A
-      VERSION=$(node -p "require('./package.json').version")
-      git commit -m "Release: $VERSION [azurepipelines skip]"
-      git tag -a "v$VERSION" -m "Release: $VERSION"
-    displayName: 'Commit and tag releases'
+  #     cd $(Build.SourcesDirectory)/custom-widgets
+  #     git add -A
+  #     VERSION=$(node -p "require('./package.json').version")
+  #     git commit -m "Release: $VERSION [azurepipelines skip]"
+  #     git tag -a "v$VERSION" -m "Release: $VERSION"
+  #   displayName: 'Commit and tag releases'
 
 
 
@@ -344,67 +344,67 @@ jobs:
 
 
   # Upload to Azure Blobs
-  - task: AzureCLI@2
-    displayName: 'DevBuilds Upload to Azure Blobs'
-    inputs:
-      azureSubscription: '$(azureBlobSubscription)'
-      scriptType: pscore
-      scriptLocation: inlineScript
-      inlineScript: |
-        $ErrorActionPreference = 'Stop'
+  # - task: AzureCLI@2
+  #   displayName: 'DevBuilds Upload to Azure Blobs'
+  #   inputs:
+  #     azureSubscription: '$(azureBlobSubscription)'
+  #     scriptType: pscore
+  #     scriptLocation: inlineScript
+  #     inlineScript: |
+  #       $ErrorActionPreference = 'Stop'
 
-        # CleanTargetBeforeCopy: remove existing blobs in the container first
-        az storage blob delete-batch `
-          --account-name surveyjsdocsstorage `
-          --source "$(azureBlobContainer)" `
-          --auth-mode login
+  #       # CleanTargetBeforeCopy: remove existing blobs in the container first
+  #       az storage blob delete-batch `
+  #         --account-name surveyjsdocsstorage `
+  #         --source "$(azureBlobContainer)" `
+  #         --auth-mode login
 
-        az storage blob upload-batch `
-          --account-name surveyjsdocsstorage `
-          --destination "$(azureBlobContainer)" `
-          --source "$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/" `
-          --auth-mode login `
-          --overwrite true
+  #       az storage blob upload-batch `
+  #         --account-name surveyjsdocsstorage `
+  #         --destination "$(azureBlobContainer)" `
+  #         --source "$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/" `
+  #         --auth-mode login `
+  #         --overwrite true
 
 
 
   # Publish to npm
-  - ${{ each pkg in parameters.pkgList }}:
-    - task: Npm@1
-      inputs:
-        command: "custom"
-        workingDir: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/${{ pkg }}'
-        customCommand: "publish $(npmPublishArgs)"
-        customEndpoint: 'NPM Registry V2'
-        verbose: true
-      displayName: 'npm publish ${{ pkg }}'
+  # - ${{ each pkg in parameters.pkgList }}:
+  #   - task: Npm@1
+  #     inputs:
+  #       command: "custom"
+  #       workingDir: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/${{ pkg }}'
+  #       customCommand: "publish $(npmPublishArgs)"
+  #       customEndpoint: 'NPM Registry V2'
+  #       verbose: true
+  #     displayName: 'npm publish ${{ pkg }}'
 
 
 
   # Push tags
-  - pwsh: |
-      $env:GIT_REDIRECT_STDERR = '2>&1'
+  # - pwsh: |
+  #     $env:GIT_REDIRECT_STDERR = '2>&1'
 
-      cd $(Build.SourcesDirectory)/survey-library/
-      git checkout -B $(projectsBranch)
-      git push origin $(projectsBranch) --follow-tags --no-verify
+  #     cd $(Build.SourcesDirectory)/survey-library/
+  #     git checkout -B $(projectsBranch)
+  #     git push origin $(projectsBranch) --follow-tags --no-verify
 
-      cd $(Build.SourcesDirectory)/survey-creator/
-      git checkout -B $(projectsBranch)
-      git push origin $(projectsBranch) --follow-tags --no-verify
+  #     cd $(Build.SourcesDirectory)/survey-creator/
+  #     git checkout -B $(projectsBranch)
+  #     git push origin $(projectsBranch) --follow-tags --no-verify
 
-      cd $(Build.SourcesDirectory)/survey-analytics/
-      git checkout -B $(projectsBranch)
-      git push origin $(projectsBranch) --follow-tags --no-verify
+  #     cd $(Build.SourcesDirectory)/survey-analytics/
+  #     git checkout -B $(projectsBranch)
+  #     git push origin $(projectsBranch) --follow-tags --no-verify
 
-      cd $(Build.SourcesDirectory)/survey-pdf/
-      git checkout -B $(projectsBranch)
-      git push origin $(projectsBranch) --follow-tags --no-verify
+  #     cd $(Build.SourcesDirectory)/survey-pdf/
+  #     git checkout -B $(projectsBranch)
+  #     git push origin $(projectsBranch) --follow-tags --no-verify
 
-      cd $(Build.SourcesDirectory)/custom-widgets/
-      git checkout -B $(projectsBranch)
-      git push origin $(projectsBranch) --follow-tags --no-verify
-    displayName: 'Push tags'
+  #     cd $(Build.SourcesDirectory)/custom-widgets/
+  #     git checkout -B $(projectsBranch)
+  #     git push origin $(projectsBranch) --follow-tags --no-verify
+  #   displayName: 'Push tags'
 
 
 
