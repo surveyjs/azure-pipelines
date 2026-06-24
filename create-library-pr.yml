@@ -36,35 +36,20 @@ stages:
             displayName: "Checkout survey-library"
             fetchDepth: 1
 
+          # External change prepared by THIS pipeline: a trivial timestamp marker so the PR has a diff.
           - powershell: |
-              $env:GIT_REDIRECT_STDERR = '2>&1'
-              Set-Location "$(Build.SourcesDirectory)"
-              git config --global user.email "surveyjs.org@gmail.com"
-              git config --global user.name "surveyjsdeveloper"
-
-              $base   = "${{ parameters.baseBranch }}"
-              $branch = "auto-pr/$(Build.BuildId)"
-
-              # Start the new branch from the target base.
-              git fetch --depth 1 origin $base
-              git checkout -b $branch FETCH_HEAD
-
-              # Trivial timestamp marker so the PR has a diff.
               $stamp  = Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ"
               $marker = Join-Path "$(Build.SourcesDirectory)" ".ai-pr-marker.md"
               Add-Content -Path $marker -Value "PR created by pipeline $(Build.BuildId) at $stamp"
+              Write-Host "Wrote marker: $marker"
+            displayName: "Write timestamp marker"
 
-              git add .ai-pr-marker.md
-              git commit -m "[auto-pr] timestamp marker ($(Build.BuildId))" --no-verify
-              git push --no-verify origin "HEAD:$branch"
-
-              $prBody = "Automated PR opened by the create-library-pr pipeline.`n`n" +
-                        "Build: $(Build.BuildId)`nBase: $base`nCreated: $stamp"
-              gh pr create --repo surveyjs/survey-library --base $base --head $branch `
-                --title "[auto-pr] Library PR from build $(Build.BuildId)" `
-                --body $prBody
-              Write-Host "Opened PR from $branch into $base."
-            displayName: "Create branch, commit marker, open PR"
-            env:
-              GH_TOKEN: $(GITHUB_TOKEN)
-              GITHUB_TOKEN: $(GITHUB_TOKEN)
+          # Commit the marker to a new branch and open the PR.
+          - template: templates/utils/pr-create.yml
+            parameters:
+              src: surveyjs/survey-library
+              srcBranch: ${{ parameters.baseBranch }}
+              targetBranch: auto-pr/$(Build.BuildId)
+              commitMessage: "[auto-pr] timestamp marker ($(Build.BuildId))"
+              prTitle: "[auto-pr] Library PR from build $(Build.BuildId)"
+              prBody: "Automated PR opened by the create-library-pr pipeline.`n`nBuild: $(Build.BuildId)`nBase: ${{ parameters.baseBranch }}"

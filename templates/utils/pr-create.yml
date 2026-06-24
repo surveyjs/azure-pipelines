@@ -1,0 +1,66 @@
+# Reusable steps template: commit the caller's working-tree changes to a NEW branch and open a PR.
+#
+# Does ONLY "commit + push + open PR". It does NOT modify the repo itself — the caller prepares the
+# working tree (edits files) BEFORE including this template.
+#
+# Caller contract:
+#   * Run `- checkout: <repo>` with `persistCredentials: true` first, sitting on (or based off)
+#     `srcBranch`, then make the changes you want in the working tree.
+#   * Have a `GITHUB_TOKEN` variable in scope (e.g. variable group `ai-fix-secrets`) — `gh` needs it.
+#
+# The new branch is created from the CURRENT HEAD (carrying the caller's uncommitted changes); we do
+# NOT fetch/checkout `srcBranch` here, as that could clobber those changes. `srcBranch` is used only
+# as the PR base (`gh --base`).
+
+parameters:
+  - name: src                 # repository "owner/name" for gh (--repo)
+    type: string
+    default: surveyjs/survey-library
+  - name: srcBranch           # base branch the PR merges into (--base) — required
+    type: string
+  - name: targetBranch        # new branch to create and push (--head)
+    type: string
+    default: auto-pr/$(Build.BuildId)
+  - name: commitMessage
+    type: string
+    default: "[auto-pr] changes ($(Build.BuildId))"
+  - name: prTitle
+    type: string
+    default: "[auto-pr] Library PR from build $(Build.BuildId)"
+  - name: prBody              # use powershell `n for line breaks
+    type: string
+    default: "Automated PR opened by pipeline."
+
+steps:
+  - powershell: |
+      $env:GIT_REDIRECT_STDERR = '2>&1'
+      Set-Location "$(Build.SourcesDirectory)"
+      git config --global user.email "surveyjs.org@gmail.com"
+      git config --global user.name "surveyjsdeveloper"
+
+      $src          = "${{ parameters.src }}"
+      $srcBranch    = "${{ parameters.srcBranch }}"
+      $targetBranch = "${{ parameters.targetBranch }}"
+
+      # New branch from current HEAD — carries the caller's working-tree changes onto it.
+      git checkout -b $targetBranch
+
+      # Stage everything the caller changed, then bail out cleanly if there's nothing to commit.
+      git add -A
+      git diff --cached --quiet
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "No staged changes — nothing to commit; skipping PR."
+        exit 0
+      }
+
+      git commit -m "${{ parameters.commitMessage }}" --no-verify
+      git push --no-verify origin "HEAD:$targetBranch"
+
+      gh pr create --repo $src --base $srcBranch --head $targetBranch `
+        --title "${{ parameters.prTitle }}" `
+        --body "${{ parameters.prBody }}"
+      Write-Host "Opened PR from $targetBranch into $srcBranch."
+    displayName: "Commit changes & open PR"
+    env:
+      GH_TOKEN: $(GITHUB_TOKEN)
+      GITHUB_TOKEN: $(GITHUB_TOKEN)
