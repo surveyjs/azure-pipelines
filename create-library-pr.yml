@@ -1,0 +1,70 @@
+# Manually-triggered pipeline that opens a NEW PR in surveyjs/survey-library.
+# Writes a trivial timestamp marker, commits it to a fresh branch, and opens the PR.
+# Runs in the azure-pipelines repo (so `self` is azure-pipelines); checks out
+# survey-library explicitly via the LibraryRepo resource.
+# Requires variable group `ai-fix-secrets` (GITHUB_TOKEN). Self-contained.
+
+trigger: none
+pr: none
+
+resources:
+  repositories:
+    # This pipeline runs in the azure-pipelines repo, so `self` is NOT survey-library.
+    - repository: LibraryRepo
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/survey-library
+
+parameters:
+  - name: baseBranch        # branch in survey-library the PR targets
+    type: string
+    default: master
+
+variables:
+  - group: ai-fix-secrets
+
+stages:
+  - stage: CreatePR
+    displayName: "Create Library PR"
+    jobs:
+      - job: OpenPR
+        displayName: "Open a new PR in survey-library"
+        timeoutInMinutes: 15
+        steps:
+          - checkout: LibraryRepo
+            persistCredentials: true
+            displayName: "Checkout survey-library"
+            fetchDepth: 1
+
+          - powershell: |
+              $env:GIT_REDIRECT_STDERR = '2>&1'
+              Set-Location "$(Build.SourcesDirectory)"
+              git config --global user.email "surveyjs.org@gmail.com"
+              git config --global user.name "surveyjsdeveloper"
+
+              $base   = "${{ parameters.baseBranch }}"
+              $branch = "auto-pr/$(Build.BuildId)"
+
+              # Start the new branch from the target base.
+              git fetch --depth 1 origin $base
+              git checkout -b $branch FETCH_HEAD
+
+              # Trivial timestamp marker so the PR has a diff.
+              $stamp  = Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ"
+              $marker = Join-Path "$(Build.SourcesDirectory)" ".ai-pr-marker.md"
+              Add-Content -Path $marker -Value "PR created by pipeline $(Build.BuildId) at $stamp"
+
+              git add .ai-pr-marker.md
+              git commit -m "[auto-pr] timestamp marker ($(Build.BuildId))" --no-verify
+              git push --no-verify origin "HEAD:$branch"
+
+              $prBody = "Automated PR opened by the create-library-pr pipeline.`n`n" +
+                        "Build: $(Build.BuildId)`nBase: $base`nCreated: $stamp"
+              gh pr create --repo surveyjs/survey-library --base $base --head $branch `
+                --title "[auto-pr] Library PR from build $(Build.BuildId)" `
+                --body $prBody
+              Write-Host "Opened PR from $branch into $base."
+            displayName: "Create branch, commit marker, open PR"
+            env:
+              GH_TOKEN: $(GITHUB_TOKEN)
+              GITHUB_TOKEN: $(GITHUB_TOKEN)
