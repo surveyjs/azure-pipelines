@@ -136,74 +136,71 @@ stages:
 
           # Resolve the PR base branch and dedup BEFORE the expensive Fix job runs — if an open
           # ai-flaky-fix PR for this base already exists, skip the whole build + AI step.
-          - powershell: |
-              $env:GIT_REDIRECT_STDERR = '2>&1'
+          - bash: |
+              set -uo pipefail
 
               # Resolve the survey-library base branch the fix PR should target.
               # Derive sourceBranch from the build we actually inspect ($(resolve.BuildId)) via the
               # Builds REST API, so a manually-supplied build id checks out THAT build's branch — not
               # the triggering run's. Fall back to the resource's sourceBranch if the API is unavailable.
-              $src = ""
-              $bid = "$(resolve.BuildId)"
-              try {
-                $orgUrl = "$(System.TeamFoundationCollectionUri)"
-                # Query the project the Library build actually lives in (the resource's project),
-                # NOT this pipeline's project — otherwise the build-id lookup 404s cross-project.
-                $projectEnc = [uri]::EscapeDataString("$(resources.pipeline.Library.projectID)")
-                # NB: wrap $bid in $(...) — a bare "$bid?api" mis-parses ('?' next to the var eats it),
-                # producing a URL with no build id (-> 404). $($bid) makes the '?' an unambiguous literal.
-                $url = "${orgUrl}${projectEnc}/_apis/build/builds/$($bid)?api-version=7.0"
-                Write-Host "GET $url"
-                $resp = Invoke-RestMethod -Headers @{ Authorization = "Bearer $env:SYSTEM_ACCESSTOKEN" } -Uri $url -Method Get
-                $src = "$($resp.sourceBranch)"
-                Write-Host "Resolved sourceBranch for build $bid : $src (commit $($resp.sourceVersion))"
-              } catch {
-                Write-Host "Could not resolve sourceBranch for build $bid via API: $($_.Exception.Message)"
-              }
-              if (-not $src) {
-                $src = "$(resources.pipeline.Library.sourceBranch)"
-                Write-Host "Falling back to triggering run sourceBranch: $src"
-              }
+              BID="$(resolve.BuildId)"
+              SRC=""
+              # projectID is a GUID (URL-safe). Query the project the Library build actually lives in
+              # (the resource's project), NOT this pipeline's — else the build-id lookup 404s cross-project.
+              URL="$(System.TeamFoundationCollectionUri)$(resources.pipeline.Library.projectID)/_apis/build/builds/${BID}?api-version=7.0"
+              echo "GET $URL"
+              RESP="$(curl -sf -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" "$URL" || true)"
+              if [ -n "$RESP" ]; then
+                PARSED="$(printf '%s' "$RESP" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const o=JSON.parse(s);process.stdout.write((o.sourceBranch||"")+"\t"+(o.sourceVersion||""))}catch(e){}})')"
+                SRC="${PARSED%%$'\t'*}"
+                COMMIT="${PARSED#*$'\t'}"
+                echo "Resolved sourceBranch for build $BID : $SRC (commit $COMMIT)"
+              else
+                echo "Could not resolve sourceBranch for build $BID via API (empty/failed response)."
+              fi
+              if [ -z "$SRC" ]; then
+                SRC="$(resources.pipeline.Library.sourceBranch)"
+                echo "Falling back to triggering run sourceBranch: $SRC"
+              fi
               # Export immediately (before the early-exit branches below) so the Fix job always sees it.
-              Write-Host "##vso[task.setvariable variable=SOURCE_BRANCH;isOutput=true]$src"
+              echo "##vso[task.setvariable variable=SOURCE_BRANCH;isOutput=true]$SRC"
 
               # PR validation build — sourceBranch is refs/pull/<N>/merge; resolve the PR's head branch
               # so the fix merges into that same PR. For a branch build, strip refs/heads/.
-              if ($src -match '^refs/pull/(\d+)/') {
-                $prNum = $Matches[1]
-                $base = (gh pr view $prNum --repo surveyjs/survey-library --json headRefName -q .headRefName).Trim()
-                if (-not $base) {
-                  Write-Host "Could not resolve head branch for PR #$prNum; skipping fix."
-                  Write-Host "##vso[task.setvariable variable=PR_BASE;isOutput=true]"
-                  Write-Host "##vso[task.setvariable variable=SHOULD_FIX;isOutput=true]false"
-                  exit 0
-                }
-                Write-Host "PR build: fix PR will target PR #$prNum head branch '$base'."
-              } else {
-                $base = $src -replace '^refs/heads/', ''
-              }
+              case "$SRC" in
+                refs/pull/*)
+                  PR_NUM="$(printf '%s' "$SRC" | sed -E 's#^refs/pull/([0-9]+)/.*#\1#')"
+                  BASE="$(gh pr view "$PR_NUM" --repo surveyjs/survey-library --json headRefName -q .headRefName | tr -d '[:space:]')"
+                  if [ -z "$BASE" ]; then
+                    echo "Could not resolve head branch for PR #$PR_NUM; skipping fix."
+                    echo "##vso[task.setvariable variable=PR_BASE;isOutput=true]"
+                    echo "##vso[task.setvariable variable=SHOULD_FIX;isOutput=true]false"
+                    exit 0
+                  fi
+                  echo "PR build: fix PR will target PR #$PR_NUM head branch '$BASE'."
+                  ;;
+                *)
+                  BASE="${SRC#refs/heads/}"
+                  ;;
+              esac
 
               # Ensure the label exists (idempotent) so the dedup query below can filter by it.
-              gh label create ai-flaky-fix --repo surveyjs/survey-library --color FBCA04 --description "Automated flaky-test stabilization" 2>$null
+              gh label create ai-flaky-fix --repo surveyjs/survey-library --color FBCA04 --description "Automated flaky-test stabilization" 2>/dev/null || true
 
               # Dedup: skip if an open ai-flaky-fix PR for this base already exists.
-              $openJson = gh pr list --repo surveyjs/survey-library --state open --base $base --label ai-flaky-fix --json headRefName 2>$null
-              if ($openJson) {
-                $dupe = ($openJson | ConvertFrom-Json) | Where-Object { $_.headRefName -like "ai-fix/flaky-$base-*" }
-                if ($dupe) {
-                  Write-Host "Open ai-flaky-fix PR already exists for $base ($($dupe.headRefName)); skipping fix."
-                  Write-Host "##vso[task.setvariable variable=PR_BASE;isOutput=true]$base"
-                  Write-Host "##vso[task.setvariable variable=SHOULD_FIX;isOutput=true]false"
-                  exit 0
-                }
-              }
+              DUPE="$(gh pr list --repo surveyjs/survey-library --state open --base "$BASE" --label ai-flaky-fix --json headRefName -q '.[].headRefName' 2>/dev/null | awk -v p="ai-fix/flaky-${BASE}-" 'index($0,p)==1{print;exit}')"
+              if [ -n "$DUPE" ]; then
+                echo "Open ai-flaky-fix PR already exists for $BASE ($DUPE); skipping fix."
+                echo "##vso[task.setvariable variable=PR_BASE;isOutput=true]$BASE"
+                echo "##vso[task.setvariable variable=SHOULD_FIX;isOutput=true]false"
+                exit 0
+              fi
 
-              Write-Host "Will stabilize flaky tests; PR base = '$base'."
-              Write-Host "##vso[task.setvariable variable=PR_BASE;isOutput=true]$base"
-              Write-Host "##vso[task.setvariable variable=SHOULD_FIX;isOutput=true]true"
+              echo "Will stabilize flaky tests; PR base = '$BASE'."
+              echo "##vso[task.setvariable variable=PR_BASE;isOutput=true]$BASE"
+              echo "##vso[task.setvariable variable=SHOULD_FIX;isOutput=true]true"
             name: gate
-            displayName: "Resolve PR base & dedup (skip if open fix PR exists)"
-            condition: eq(variables['extract.HAS_FLAKY'], 'true')
+            displayName: "Resolve PR base & dedup"
             env:
               GH_TOKEN: $(GITHUB_TOKEN)
               GITHUB_TOKEN: $(GITHUB_TOKEN)
@@ -277,11 +274,11 @@ stages:
                 # - $(LibDir)/packages/survey-vue3-ui/example
                 # - $(LibDir)/packages/survey-js-ui
 
-          - script: npm run build:all
+          - bash: npm run build:all
             workingDirectory: $(LibDir)/packages/survey-core
             displayName: "Build Core"
 
-          - script: npm run build
+          - bash: npm run build
             workingDirectory: $(LibDir)/packages/survey-react-ui
             displayName: "Build React"
 
@@ -598,15 +595,18 @@ stages:
               FLAKY_TESTS: $(AUTO_FLAKY)
 
           # Build the PR body from the AI report (base resolution + dedup already happened in Inspect).
-          - powershell: |
-              $base = "$(PR_BASE)"
-              $reportFile = "$(Pipeline.Workspace)/ai-fix-out/ai-fix-report.txt"
-              $report = if (Test-Path $reportFile) { Get-Content $reportFile -Raw } else { "AI-stabilized flaky tests." }
-              $body = "Automated flaky-test stabilization by Claude Code (headless).`n`n" +
-                      "Branch: $base`n`n---`n`n$report"
-              $bodyFile = "$(Pipeline.Workspace)/ai-fix-out/pr-body.txt"
-              Set-Content -Path $bodyFile -Value $body -Encoding utf8
-              Write-Host "Wrote PR body to $bodyFile"
+          - bash: |
+              set -uo pipefail
+              BASE="$(PR_BASE)"
+              REPORT_FILE="$(Pipeline.Workspace)/ai-fix-out/ai-fix-report.txt"
+              if [ -f "$REPORT_FILE" ]; then REPORT="$(cat "$REPORT_FILE")"; else REPORT="AI-stabilized flaky tests."; fi
+              BODY_FILE="$(Pipeline.Workspace)/ai-fix-out/pr-body.txt"
+              {
+                printf 'Automated flaky-test stabilization by Claude Code (headless).\n\n'
+                printf 'Branch: %s\n\n---\n\n' "$BASE"
+                printf '%s\n' "$REPORT"
+              } > "$BODY_FILE"
+              echo "Wrote PR body to $BODY_FILE"
             displayName: "Prepare PR body"
             condition: and(succeeded(), eq(variables['AI_HAS_FIX'], 'true'))
 
