@@ -126,9 +126,30 @@ stages:
               $env:GIT_REDIRECT_STDERR = '2>&1'
 
               # Resolve the survey-library base branch the fix PR should target.
+              # Derive sourceBranch from the build we actually inspect ($(LibraryBuildId)) via the
+              # Builds REST API, so a manually-supplied buildId checks out THAT build's branch — not
+              # the triggering run's. Fall back to the resource's sourceBranch if the API is unavailable.
+              $src = ""
+              $bid = "$(LibraryBuildId)"
+              try {
+                $orgUrl = "$(System.TeamFoundationCollectionUri)"
+                $projectEnc = [uri]::EscapeDataString("$(System.TeamProject)")
+                $url = "${orgUrl}${projectEnc}/_apis/build/builds/$bid?api-version=7.0"
+                $resp = Invoke-RestMethod -Headers @{ Authorization = "Bearer $env:SYSTEM_ACCESSTOKEN" } -Uri $url -Method Get
+                $src = "$($resp.sourceBranch)"
+                Write-Host "Resolved sourceBranch for build $bid : $src"
+              } catch {
+                Write-Host "Could not resolve sourceBranch for build $bid via API: $($_.Exception.Message)"
+              }
+              if (-not $src) {
+                $src = "$(resources.pipeline.Library.sourceBranch)"
+                Write-Host "Falling back to triggering run sourceBranch: $src"
+              }
+              # Export immediately (before the early-exit branches below) so the Fix job always sees it.
+              Write-Host "##vso[task.setvariable variable=SOURCE_BRANCH;isOutput=true]$src"
+
               # PR validation build — sourceBranch is refs/pull/<N>/merge; resolve the PR's head branch
               # so the fix merges into that same PR. For a branch build, strip refs/heads/.
-              $src = "$(resources.pipeline.Library.sourceBranch)"
               if ($src -match '^refs/pull/(\d+)/') {
                 $prNum = $Matches[1]
                 $base = (gh pr view $prNum --repo surveyjs/survey-library --json headRefName -q .headRefName).Trim()
@@ -167,6 +188,7 @@ stages:
             env:
               GH_TOKEN: $(GITHUB_TOKEN)
               GITHUB_TOKEN: $(GITHUB_TOKEN)
+              SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 
       # ── Job 2: the expensive build + AI fix. Runs only when Inspect found flaky tests AND no
       # open ai-flaky-fix PR already exists for the target base (dedup decided in Inspect).
@@ -178,6 +200,7 @@ stages:
         variables:
           AUTO_FLAKY: $[ dependencies.Inspect.outputs['extract.EXTRACTED_FLAKY_TESTS'] ]
           PR_BASE: $[ dependencies.Inspect.outputs['gate.PR_BASE'] ]
+          SOURCE_BRANCH: $[ dependencies.Inspect.outputs['gate.SOURCE_BRANCH'] ]
           LibDir: $(Build.SourcesDirectory)/survey-library
           PromptFile: $(Build.SourcesDirectory)/azure-pipelines/prompts/flaky-fix.md
         steps:
@@ -199,7 +222,7 @@ stages:
 
           - bash: |
               set -euo pipefail
-              SRC="$(resources.pipeline.Library.sourceBranch)"
+              SRC="$(SOURCE_BRANCH)"
               echo "Triggering Library build ran on: $SRC"
               SD="$(LibDir)"
               case "$SRC" in
