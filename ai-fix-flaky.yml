@@ -313,25 +313,12 @@ stages:
             env:
               FLAKY_TESTS: $(AUTO_FLAKY)
 
-          # install the headless Claude Code CLI
-          # The agent user can't write to the default global prefix (/usr/lib/node_modules -> EACCES),
-          # so point npm's global prefix at a user-writable dir and expose its bin on PATH.
-          - bash: |
-              set -euo pipefail
-              NPM_PREFIX="$(Agent.TempDirectory)/npm-global"
-              mkdir -p "$NPM_PREFIX"
-              npm config set prefix "$NPM_PREFIX"
-              npm install -g @anthropic-ai/claude-code
-              echo "##vso[task.prependpath]$NPM_PREFIX/bin"
-            displayName: "Install Claude Code CLI"
-            retryCountOnTaskFailure: 2
-
           # Claude Code: diagnose + fix ONLY test code; writes report to ai-fix-out/
           - bash: |
               set -uo pipefail
               # Write AI artifacts OUTSIDE test-results: the agent runs `npx playwright test`,
               # and Playwright wipes its outputDir (test-results/) at the start of EVERY run —
-              # that would unlink this JSON mid-write (-> ENOENT in the parser below) and also
+              # that would unlink these files mid-write (-> ENOENT in the parser below) and also
               # destroy the staged original-flake-evidence.
               AI_OUT="$(Pipeline.Workspace)/ai-fix-out"
               mkdir -p "$AI_OUT"
@@ -350,35 +337,98 @@ stages:
 
               Fix at most 10 tests."
 
-              echo "Running Claude Code (model=claude-sonnet-4-6, max-turns=40)..."
+              # Compact formatter: render each stream-json event as one readable log line, so the CI
+              # log shows turn-by-turn what the agent called and what it got back. Lines that aren't
+              # JSON are silently skipped. The full raw transcript is tee'd to ai-fix-stream.jsonl.
+              cat > /tmp/ai_stream_fmt.js <<'JS'
+              const readline = require("readline");
+              const trunc = (s, n) => { s = String(s == null ? "" : s).replace(/\s+/g, " ").trim(); return s.length > n ? s.slice(0, n) + " …[+" + (s.length - n) + " chars]" : s; };
+              let turn = 0;
+              readline.createInterface({ input: process.stdin }).on("line", (line) => {
+                line = line.trim(); if (!line) return;
+                let e; try { e = JSON.parse(line); } catch (_) { return; }
+                if (e.type === "system" && e.subtype === "init") {
+                  console.log("[init] model=" + (e.model || "?") + " cwd=" + (e.cwd || "?") + " tools=" + ((e.tools || []).length));
+                } else if (e.type === "assistant" && e.message) {
+                  turn++;
+                  for (const b of e.message.content || []) {
+                    if (b.type === "text" && (b.text || "").trim()) console.log("\n[turn " + turn + "] 🤖 " + trunc(b.text, 1000));
+                    else if (b.type === "tool_use") {
+                      const i = b.input || {};
+                      const arg = i.command || i.file_path || i.path || i.pattern || i.description || JSON.stringify(i);
+                      console.log("[turn " + turn + "] 🔧 " + b.name + ": " + trunc(arg, 400));
+                    }
+                  }
+                } else if (e.type === "user" && e.message) {
+                  for (const b of e.message.content || []) {
+                    if (b.type === "tool_result") {
+                      const c = Array.isArray(b.content) ? b.content.map(x => x.text || "").join("") : b.content;
+                      console.log("          ↩ " + (b.is_error ? "[ERROR] " : "") + trunc(c, 1000));
+                    }
+                  }
+                } else if (e.type === "result") {
+                  console.log("\n[result] subtype=" + e.subtype + " is_error=" + e.is_error + " num_turns=" + e.num_turns + " cost_usd=" + e.total_cost_usd + " duration_ms=" + e.duration_ms);
+                }
+              });
+              JS
+
+              echo "Running Claude Code (model=claude-sonnet-4-6, max-turns=80, stream-json)..."
+              # stream-json (requires --verbose) emits one JSON event per line. tee keeps the raw
+              # transcript for the parser/artifact while the formatter renders it live to the log.
+              # pipefail + `|| echo` swallows a non-zero exit (e.g. max-turns) so guard/gate still run.
               claude -p "$FULL_PROMPT" \
                 --bare \
-                --output-format json \
+                --output-format stream-json \
+                --verbose \
                 --model "claude-sonnet-4-6" \
-                --max-turns 40 \
+                --max-turns 80 \
                 --permission-mode dontAsk \
                 --allowedTools "Read,Grep,Glob,Edit,Bash(cd *),Bash(npx playwright test *),Bash(git diff *),Bash(git status *)" \
                 --disallowedTools "Bash(git push *),Bash(git commit *),Bash(git reset *),Bash(git checkout *),Bash(rm *),WebFetch,WebSearch" \
-                > "$AI_OUT/ai-fix-claude-output.json" 2> "$AI_OUT/ai-fix-claude-stderr.txt" \
-                || echo "claude exited non-zero (continuing to guard step)"
+                2> "$AI_OUT/ai-fix-claude-stderr.txt" \
+                | tee "$AI_OUT/ai-fix-stream.jsonl" \
+                | node /tmp/ai_stream_fmt.js \
+                || echo "claude pipeline exited non-zero (continuing to report/guard step)"
 
+              # Surface stderr (warnings / fatal errors) — previously captured to a file but never shown.
+              if [ -s "$AI_OUT/ai-fix-claude-stderr.txt" ]; then
+                echo "===== claude stderr ====="
+                cat "$AI_OUT/ai-fix-claude-stderr.txt"
+                echo "========================="
+              fi
+
+              # Parse the final `result` event (last such line) from the stream into a report.
               cat > /tmp/ai_parse.js <<'JS'
               const fs = require("fs");
               const dir = process.env.AI_OUT;
-              let o = {};
-              try { o = JSON.parse(fs.readFileSync(dir + "/ai-fix-claude-output.json", "utf8")); }
-              catch (e) { console.log("Could not parse Claude JSON output: " + e.message); process.exit(0); }
+              let o = null;
+              try {
+                const lines = fs.readFileSync(dir + "/ai-fix-stream.jsonl", "utf8").split("\n").filter(Boolean);
+                for (let i = lines.length - 1; i >= 0; i--) {
+                  try { const e = JSON.parse(lines[i]); if (e.type === "result") { o = e; break; } } catch (_) {}
+                }
+              } catch (e) { console.log("Could not read stream transcript: " + e.message); }
+              if (!o) { console.log("No result event in stream output (see transcript above / ai-fix-stream.jsonl)."); process.exit(0); }
               const L = [];
               L.push("=== AI FIX REPORT ===");
-              L.push("model: "    + (o.model         != null ? o.model         : process.env.MODEL || "n/a"));
-              L.push("cost_usd: " + (o.total_cost_usd != null ? o.total_cost_usd : "n/a"));
-              L.push("is_error: " + (o.is_error       != null ? o.is_error       : "n/a"));
-              L.push("num_turns: "+ (o.num_turns      != null ? o.num_turns      : "n/a"));
+              L.push("model: "       + (process.env.MODEL || "n/a"));
+              L.push("subtype: "     + (o.subtype        != null ? o.subtype        : "n/a"));
+              L.push("is_error: "    + (o.is_error       != null ? o.is_error       : "n/a"));
+              L.push("num_turns: "   + (o.num_turns      != null ? o.num_turns      : "n/a"));
+              L.push("duration_ms: " + (o.duration_ms    != null ? o.duration_ms    : "n/a"));
+              L.push("cost_usd: "    + (o.total_cost_usd != null ? o.total_cost_usd : "n/a"));
               L.push("");
-              L.push(o.result || "(no result text)");
+              if (o.subtype === "error_max_turns") {
+                L.push("⚠ Agent stopped: it reached the --max-turns limit before finishing. The fix may be");
+                L.push("  partial or absent. Raise --max-turns or narrow the target set, then re-run.");
+                L.push("");
+              }
+              L.push(o.result || "(no result text — agent did not return a final summary; see transcript above)");
               const out = L.join("\n");
               fs.writeFileSync(dir + "/ai-fix-report.txt", out);
               console.log(out);
+              if (o.subtype === "error_max_turns")
+                console.log("##vso[task.logissue type=warning]AI agent hit --max-turns; the flaky-test fix may be incomplete.");
               JS
               AI_OUT="$AI_OUT" MODEL="claude-sonnet-4-6" node /tmp/ai_parse.js
             displayName: "Claude: diagnose & fix flaky tests"
