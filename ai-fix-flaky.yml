@@ -120,18 +120,77 @@ stages:
             displayName: "Extract flaky tests from report(s)"
             condition: always()
 
-      # ── Job 2: the expensive build + AI fix. Runs only when Inspect found flaky tests.
+          # Resolve the PR base branch and dedup BEFORE the expensive Fix job runs — if an open
+          # ai-flaky-fix PR for this base already exists, skip the whole build + AI step.
+          - powershell: |
+              $env:GIT_REDIRECT_STDERR = '2>&1'
+
+              # Resolve the survey-library base branch the fix PR should target.
+              # PR validation build — sourceBranch is refs/pull/<N>/merge; resolve the PR's head branch
+              # so the fix merges into that same PR. For a branch build, strip refs/heads/.
+              $src = "$(resources.pipeline.Library.sourceBranch)"
+              if ($src -match '^refs/pull/(\d+)/') {
+                $prNum = $Matches[1]
+                $base = (gh pr view $prNum --repo surveyjs/survey-library --json headRefName -q .headRefName).Trim()
+                if (-not $base) {
+                  Write-Host "Could not resolve head branch for PR #$prNum; skipping fix."
+                  Write-Host "##vso[task.setvariable variable=PR_BASE;isOutput=true]"
+                  Write-Host "##vso[task.setvariable variable=SHOULD_FIX;isOutput=true]false"
+                  exit 0
+                }
+                Write-Host "PR build: fix PR will target PR #$prNum head branch '$base'."
+              } else {
+                $base = $src -replace '^refs/heads/', ''
+              }
+
+              # Ensure the label exists (idempotent) so the dedup query below can filter by it.
+              gh label create ai-flaky-fix --repo surveyjs/survey-library --color FBCA04 --description "Automated flaky-test stabilization" 2>$null
+
+              # Dedup: skip if an open ai-flaky-fix PR for this base already exists.
+              $openJson = gh pr list --repo surveyjs/survey-library --state open --base $base --label ai-flaky-fix --json headRefName 2>$null
+              if ($openJson) {
+                $dupe = ($openJson | ConvertFrom-Json) | Where-Object { $_.headRefName -like "ai-fix/flaky-$base-*" }
+                if ($dupe) {
+                  Write-Host "Open ai-flaky-fix PR already exists for $base ($($dupe.headRefName)); skipping fix."
+                  Write-Host "##vso[task.setvariable variable=PR_BASE;isOutput=true]$base"
+                  Write-Host "##vso[task.setvariable variable=SHOULD_FIX;isOutput=true]false"
+                  exit 0
+                }
+              }
+
+              Write-Host "Will stabilize flaky tests; PR base = '$base'."
+              Write-Host "##vso[task.setvariable variable=PR_BASE;isOutput=true]$base"
+              Write-Host "##vso[task.setvariable variable=SHOULD_FIX;isOutput=true]true"
+            name: gate
+            displayName: "Resolve PR base & dedup (skip if open fix PR exists)"
+            condition: eq(variables['extract.HAS_FLAKY'], 'true')
+            env:
+              GH_TOKEN: $(GITHUB_TOKEN)
+              GITHUB_TOKEN: $(GITHUB_TOKEN)
+
+      # ── Job 2: the expensive build + AI fix. Runs only when Inspect found flaky tests AND no
+      # open ai-flaky-fix PR already exists for the target base (dedup decided in Inspect).
       - job: Fix
         displayName: "Stabilize flaky react tests"
         dependsOn: Inspect
         timeoutInMinutes: 120
-        condition: eq(dependencies.Inspect.outputs['extract.HAS_FLAKY'], 'true')
+        condition: eq(dependencies.Inspect.outputs['gate.SHOULD_FIX'], 'true')
         variables:
           AUTO_FLAKY: $[ dependencies.Inspect.outputs['extract.EXTRACTED_FLAKY_TESTS'] ]
+          PR_BASE: $[ dependencies.Inspect.outputs['gate.PR_BASE'] ]
+          LibDir: $(Pipeline.Workspace)/library
+          PromptFile: $(Pipeline.Workspace)/azure-pipelines/prompts/flaky-fix.md
         steps:
+          # Check out THIS repo (self = azure-pipelines) to read the AI prompt file under prompts/.
+          - checkout: self
+            path: azure-pipelines     # → $(Pipeline.Workspace)/azure-pipelines (separate from library)
+            fetchDepth: 1
+            displayName: "Checkout azure-pipelines (AI prompts)"
+
           - checkout: LibraryRepo
             persistCredentials: true
-            displayName: "Checkout survey-library"
+            path: library          # → $(Pipeline.Workspace)/library; keeps the repo working tree
+            displayName: "Checkout survey-library"   # separate from ai-fix-out so `git add -A` is safe
             timeoutInMinutes: 5
             retryCountOnTaskFailure: 5
             fetchDepth: 1
@@ -140,7 +199,7 @@ stages:
               set -euo pipefail
               SRC="$(resources.pipeline.Library.sourceBranch)"
               echo "Triggering Library build ran on: $SRC"
-              SD="$(Build.SourcesDirectory)"
+              SD="$(LibDir)"
               case "$SRC" in
                 # PR validation build — sourceBranch is refs/pull/<N>/merge|head. The /merge ref is
                 # transient; fetch the stable /head (the PR branch tip), matching build.yml's convention.
@@ -161,41 +220,41 @@ stages:
           - template: templates/utils/npm.yml
             parameters:
               directories:
-                - $(Build.SourcesDirectory)
-                - $(Build.SourcesDirectory)/packages/survey-core
-                - $(Build.SourcesDirectory)/packages/survey-react-ui
-                # - $(Build.SourcesDirectory)/packages/survey-angular-ui
-                # - $(Build.SourcesDirectory)/packages/survey-angular-ui/example
-                # - $(Build.SourcesDirectory)/packages/survey-vue3-ui
-                # - $(Build.SourcesDirectory)/packages/survey-vue3-ui/example
-                # - $(Build.SourcesDirectory)/packages/survey-js-ui
+                - $(LibDir)
+                - $(LibDir)/packages/survey-core
+                - $(LibDir)/packages/survey-react-ui
+                # - $(LibDir)/packages/survey-angular-ui
+                # - $(LibDir)/packages/survey-angular-ui/example
+                # - $(LibDir)/packages/survey-vue3-ui
+                # - $(LibDir)/packages/survey-vue3-ui/example
+                # - $(LibDir)/packages/survey-js-ui
 
           - script: npm run build:all
-            workingDirectory: $(Build.SourcesDirectory)/packages/survey-core
+            workingDirectory: $(LibDir)/packages/survey-core
             displayName: "Build Core"
 
           - script: npm run build
-            workingDirectory: $(Build.SourcesDirectory)/packages/survey-react-ui
+            workingDirectory: $(LibDir)/packages/survey-react-ui
             displayName: "Build React"
 
           # - script: npm run build
-          #   workingDirectory: $(Build.SourcesDirectory)/packages/survey-angular-ui
+          #   workingDirectory: $(LibDir)/packages/survey-angular-ui
           #   displayName: "Build Angular"
 
           # - script: npm run build:example:prod
-          #   workingDirectory: $(Build.SourcesDirectory)/packages/survey-angular-ui
+          #   workingDirectory: $(LibDir)/packages/survey-angular-ui
           #   displayName: "Build Angular Example"
 
           # - script: npm run build
-          #   workingDirectory: $(Build.SourcesDirectory)/packages/survey-vue3-ui
+          #   workingDirectory: $(LibDir)/packages/survey-vue3-ui
           #   displayName: "Build Vue3"
 
           # - script: npm run build:example:prod
-          #   workingDirectory: $(Build.SourcesDirectory)/packages/survey-vue3-ui
+          #   workingDirectory: $(LibDir)/packages/survey-vue3-ui
           #   displayName: "Build Vue3 Example"
 
           # - script: npm run build
-          #   workingDirectory: $(Build.SourcesDirectory)/packages/survey-js-ui
+          #   workingDirectory: $(LibDir)/packages/survey-js-ui
           #   displayName: "Build JS"
 
           # re-download the originals (evidence doesn't survive across jobs) and stage them for the agent
@@ -214,7 +273,7 @@ stages:
 
           - bash: |
               set -uo pipefail
-              DEST="$(Build.SourcesDirectory)/ai-fix-out/original-flake-evidence"
+              DEST="$(Pipeline.Workspace)/ai-fix-out/original-flake-evidence"
               mkdir -p "$DEST"
               for SRC in "$(Agent.TempDirectory)"/Library_React_*; do
                 [ -d "$SRC" ] && cp -r "$SRC" "$DEST/"
@@ -226,7 +285,7 @@ stages:
           # reproduce flaky tests with retries disabled to seed fresh evidence for the agent
           - bash: |
               set -uo pipefail
-              cd "$(Build.SourcesDirectory)/packages/survey-react-ui"
+              cd "$(LibDir)/packages/survey-react-ui"
               # Target each flaky test precisely (file + project + full-title grep) so the agent
               # gets evidence for ONLY the flaky variant, not every framework in the spec file.
               cat > /tmp/repro_targets.js <<'JS'
@@ -274,66 +333,20 @@ stages:
               # and Playwright wipes its outputDir (test-results/) at the start of EVERY run —
               # that would unlink this JSON mid-write (-> ENOENT in the parser below) and also
               # destroy the staged original-flake-evidence.
-              AI_OUT="$(Build.SourcesDirectory)/ai-fix-out"
+              AI_OUT="$(Pipeline.Workspace)/ai-fix-out"
               mkdir -p "$AI_OUT"
-              cd "$(Build.SourcesDirectory)"   # agent cwd = repo root (test code lives here)
+              cd "$(LibDir)"   # agent cwd = repo root (test code lives here)
 
-              STATIC_PROMPT=$(cat <<'EOF'
-              You are stabilizing FLAKY Playwright tests in the SurveyJS "survey-library" repo.
-              A flaky test fails on some attempts but passes on retry — the build is green, but the
-              test is unreliable. Make it reliably pass WITHOUT hiding a real product bug.
-
-              Your working directory is the repo ROOT. Layout:
-                * ./CLAUDE.md           — read this first (architecture & test commands).
-                * ./e2e/                — e2e specs (*.spec.ts) and helpers (*.ts). You MAY edit these.
-                * ./screenshots/        — visual (vrt) specs (*.spec.ts). You MAY edit these.
-                * ./packages/*/src/     — PRODUCT code. NEVER edit.
-                * ./**/*-snapshots/*.png — baseline screenshots. NEVER edit or regenerate.
-                * ./packages/survey-react-ui/test-results/ — failure evidence (junit, results.json, traces)
-                  from the reproduce run.
-                * ./ai-fix-out/original-flake-evidence/ — trace + results.json from the ORIGINAL run
-                  that flaked; inspect this FIRST (an intermittent flake may not reproduce locally, so
-                  this is often the only evidence of the real failure). NOTE: this lives outside
-                  test-results/ on purpose — Playwright clears test-results/ on every run.
-
-              To RUN a test you MUST run Playwright from the framework package so its web server starts:
-                  cd packages/survey-react-ui && npx playwright test e2e/<file>.spec.ts --project e2e -g "<title>" --retries=0 --repeat-each=5
-                (visual tests: --project vrt and screenshots/<file>.spec.ts). The path is a substring filter.
-                ALWAYS pass -g "<title>" with the target's <title> (3rd field is the <project>): each spec file is
-                parametrized across frameworks (angular/react/vue/...), but only react is built/served here — running
-                the file unscoped fails the other frameworks with unrelated errors. Scope to the one target variant.
-                --retries=0 --repeat-each exposes flakiness that the default retries=4 would hide.
-
-              POLICY (HYBRID) — for each target test classify the root cause:
-                * TEST FLAKINESS — timing/races (missing awaits, fixed waitForTimeout, animations),
-                  brittle selectors, order/focus/hover dependence, unmasked dynamic regions in
-                  screenshots (carets, scrollbars, timestamps). FIX the test code.
-                * REAL PRODUCT BUG — assertion reflecting changed/incorrect product behavior, a
-                  consistent (non-intermittent) failure, or an error thrown from product code.
-                  DO NOT change anything; just describe it in your final summary.
-
-              WHEN FIXING (test flakiness only): prefer web-first assertions over fixed timeouts,
-              use stable selectors, disable animations, and for vrt add masks / set viewport / await
-              stability — do NOT regenerate the baseline image. Re-run the affected test (command above)
-              until it passes reliably.
-
-              HARD CONSTRAINTS (a violation discards ALL your changes downstream):
-                * Edit ONLY files under  e2e/**  and  screenshots/**/*.spec.ts.
-                * NEVER edit packages/**/src/** (product code).
-                * NEVER edit or regenerate baseline snapshots (*-snapshots/**/*.png).
-                * NEVER weaken comparison tolerances (threshold / maxDiffPixels / maxDiffPixelRatio)
-                  and NEVER add test.skip / test.fixme just to make a test pass — that hides bugs.
-                * Do NOT git add / commit / push — the pipeline handles version control.
-
-              FINAL OUTPUT: a concise summary for a PR body — per target test, flakiness (what you
-              changed) or suspected product bug (why), plus the list of files you changed.
-              EOF
-              )
+              # AI instructions live in the azure-pipelines repo (checked out above as `self`).
+              STATIC_PROMPT="$(cat "$(PromptFile)")"
+              echo "Loaded AI prompt from $(PromptFile) (${#STATIC_PROMPT} chars)"
 
               FULL_PROMPT="$STATIC_PROMPT
 
               Target flaky tests to fix (format: <relPath>::<title>::<project>; ';'-separated):
               ${FLAKY_TESTS:-}
+
+              Original flake evidence directory (absolute): $AI_OUT/original-flake-evidence
 
               Fix at most 10 tests."
 
@@ -380,7 +393,7 @@ stages:
           # so the guard/PR steps see an unmodified index.
           - bash: |
               set -uo pipefail
-              cd "$(Build.SourcesDirectory)"
+              cd "$(LibDir)"
               git add -N -- e2e screenshots 2>/dev/null || true
               echo "===== Summary (git diff --stat) ====="
               git diff --stat || true
@@ -394,7 +407,7 @@ stages:
           # Guard: revert everything unless ONLY test code (e2e/**, screenshots/**/*.spec.ts) changed
           - bash: |
               set -uo pipefail
-              cd "$(Build.SourcesDirectory)"
+              cd "$(LibDir)"
               CHANGED="$(git diff --name-only)"
               echo "Files changed by agent:"
               echo "${CHANGED:-<none>}"
@@ -431,7 +444,7 @@ stages:
           # Re-run gate: the fixed tests must pass reliably (retries=0, repeat-each) before we PR
           - bash: |
               set -euo pipefail
-              cd "$(Build.SourcesDirectory)/packages/survey-react-ui"
+              cd "$(LibDir)/packages/survey-react-ui"
 
               # Turn each flaky entry "<relPath>::<title>::<project>" into a precise target:
               # one line per test = "<file>\t<project>\t<grep-regex>". The grep regex matches the
@@ -474,68 +487,40 @@ stages:
             env:
               FLAKY_TESTS: $(AUTO_FLAKY)
 
-          # commit test-code fix to a NEW branch and open a NEW PR (skipped on dryRun)
+          # Build the PR body from the AI report (base resolution + dedup already happened in Inspect).
           - powershell: |
-              $env:GIT_REDIRECT_STDERR = '2>&1'
-              Set-Location "$(Build.SourcesDirectory)"
-              git config --global user.email "surveyjs.org@gmail.com"
-              git config --global user.name "surveyjsdeveloper"
-
-              # The fix PR targets the survey-library branch that flaked (NOT this pipeline's branch).
-              # For a PR validation build the triggering sourceBranch is refs/pull/<N>/merge — resolve
-              # the PR's head branch so the fix merges into that same PR. For a normal branch build,
-              # just strip refs/heads/.
-              $src = "$(resources.pipeline.Library.sourceBranch)"
-              if ($src -match '^refs/pull/(\d+)/') {
-                $prNum = $Matches[1]
-                $base = (gh pr view $prNum --repo surveyjs/survey-library --json headRefName -q .headRefName).Trim()
-                if (-not $base) { Write-Host "Could not resolve head branch for PR #$prNum; skipping PR."; exit 0 }
-                Write-Host "PR build: fix PR will target PR #$prNum head branch '$base'."
-              } else {
-                $base = $src -replace '^refs/heads/', ''
-              }
-              $branch = "ai-fix/flaky-$base-$(Build.BuildId)"
-
-              git checkout -b $branch
-              git add e2e screenshots
-              git reset -- "*-snapshots/*" | Out-Null
-              $staged = git diff --cached --name-only
-              if (-not $staged) { Write-Host "No test-code changes staged; nothing to PR."; exit 0 }
-              Write-Host "Staged files:"; $staged | ForEach-Object { Write-Host "  $_" }
-
-              # Ensure label exists (idempotent; native failure is non-fatal).
-              gh label create ai-flaky-fix --repo surveyjs/survey-library --color FBCA04 --description "Automated flaky-test stabilization" 2>$null
-
-              # Dedup: skip if an open ai-flaky-fix PR for this base already exists.
-              $openJson = gh pr list --repo surveyjs/survey-library --state open --base $base --label ai-flaky-fix --json headRefName 2>$null
-              if ($openJson) {
-                $dupe = ($openJson | ConvertFrom-Json) | Where-Object { $_.headRefName -like "ai-fix/flaky-$base-*" }
-                if ($dupe) { Write-Host "Open ai-flaky-fix PR already exists for $base ($($dupe.headRefName)); skipping."; exit 0 }
-              }
-
-              $count = ($staged | Measure-Object -Line).Lines
-              git commit -m "[ai_fix] stabilize flaky tests on $base ($count files)" --no-verify
-              git push --no-verify origin "HEAD:$branch"
-
-              $reportFile = "$(Build.SourcesDirectory)/ai-fix-out/ai-fix-report.txt"
+              $base = "$(PR_BASE)"
+              $reportFile = "$(Pipeline.Workspace)/ai-fix-out/ai-fix-report.txt"
               $report = if (Test-Path $reportFile) { Get-Content $reportFile -Raw } else { "AI-stabilized flaky tests." }
-              $prBody = "Automated flaky-test stabilization by Claude Code (headless).`n`n" +
-                        "Branch: $base`n`n---`n`n$report"
-              gh pr create --repo surveyjs/survey-library --base $base --head $branch `
-                --title "[ai_fix] Stabilize flaky tests ($base)" `
-                --body $prBody --label ai-flaky-fix
-              Write-Host "Opened PR from $branch into $base."
-            displayName: "Open PR with AI fix"
-            condition: and(succeeded(), eq(variables['AI_HAS_FIX'], 'true'), eq('${{ parameters.dryRun }}', 'False'))
-            env:
-              GH_TOKEN: $(GITHUB_TOKEN)
-              GITHUB_TOKEN: $(GITHUB_TOKEN)
+              $body = "Automated flaky-test stabilization by Claude Code (headless).`n`n" +
+                      "Branch: $base`n`n---`n`n$report"
+              $bodyFile = "$(Pipeline.Workspace)/ai-fix-out/pr-body.txt"
+              Set-Content -Path $bodyFile -Value $body -Encoding utf8
+              Write-Host "Wrote PR body to $bodyFile"
+            displayName: "Prepare PR body"
+            condition: and(succeeded(), eq(variables['AI_HAS_FIX'], 'true'))
+
+          # commit test-code fix to a NEW branch and open a NEW PR (skipped on dryRun).
+          # Reuses the shared pr-create template: commit `git add -A` + push + `gh pr create`.
+          # `git add -A` is safe here — ai-fix-out lives outside $(LibDir), and the guard step
+          # already reverted anything outside the test-code allow-list.
+          - ${{ if eq(parameters.dryRun, false) }}:
+              - template: templates/utils/pr-create.yml
+                parameters:
+                  src: surveyjs/survey-library
+                  srcBranch: $(PR_BASE)
+                  targetBranch: ai-fix/flaky-$(PR_BASE)-$(Build.BuildId)
+                  workingDir: $(LibDir)
+                  label: ai-flaky-fix
+                  commitMessage: "[ai_fix] stabilize flaky tests on $(PR_BASE)"
+                  prTitle: "[ai_fix] Stabilize flaky tests ($(PR_BASE))"
+                  prBodyFile: $(Pipeline.Workspace)/ai-fix-out/pr-body.txt
 
           # always publish the AI report / Claude output for inspection
           - task: PublishBuildArtifacts@1
             displayName: "Publish AI fix report"
             inputs:
-              PathtoPublish: "$(Build.SourcesDirectory)/ai-fix-out"
+              PathtoPublish: "$(Pipeline.Workspace)/ai-fix-out"
               ArtifactName: "AIFix_Report"
               publishLocation: "Container"
             condition: always()

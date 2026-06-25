@@ -27,14 +27,23 @@ parameters:
   - name: prTitle
     type: string
     default: "[auto-pr] Library PR from build $(Build.BuildId)"
-  - name: prBody              # use powershell `n for line breaks
+  - name: prBody              # use powershell `n for line breaks (ignored when prBodyFile is set)
     type: string
     default: "Automated PR opened by pipeline."
+  - name: prBodyFile          # optional: read the PR body from this file instead of prBody
+    type: string
+    default: ""
+  - name: label               # optional: add this label to the PR (gh --label)
+    type: string
+    default: ""
+  - name: workingDir          # repo working tree for git/gh operations
+    type: string
+    default: $(Build.SourcesDirectory)
 
 steps:
   - powershell: |
       $env:GIT_REDIRECT_STDERR = '2>&1'
-      Set-Location "$(Build.SourcesDirectory)"
+      Set-Location "${{ parameters.workingDir }}"
       git config --global user.email "surveyjs.org@gmail.com"
       git config --global user.name "surveyjsdeveloper"
 
@@ -56,9 +65,18 @@ steps:
       git commit -m "${{ parameters.commitMessage }}" --no-verify
       git push --no-verify origin "HEAD:$targetBranch"
 
-      gh pr create --repo $src --base $srcBranch --head $targetBranch `
-        --title "${{ parameters.prTitle }}" `
-        --body "${{ parameters.prBody }}"
+      # Body: from file when prBodyFile is set, otherwise the prBody parameter.
+      $bodyFile = "${{ parameters.prBodyFile }}"
+      if ($bodyFile -and (Test-Path $bodyFile)) {
+        $body = Get-Content $bodyFile -Raw
+      } else {
+        $body = "${{ parameters.prBody }}"
+      }
+
+      $ghArgs = @("pr", "create", "--repo", $src, "--base", $srcBranch, "--head", $targetBranch,
+                  "--title", "${{ parameters.prTitle }}", "--body", $body)
+      if ("${{ parameters.label }}") { $ghArgs += @("--label", "${{ parameters.label }}") }
+      gh @ghArgs
       Write-Host "Opened PR from $targetBranch into $srcBranch."
     displayName: "Commit changes & open PR"
     env:
