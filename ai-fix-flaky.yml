@@ -42,7 +42,6 @@ stages:
   - stage: AIFixFlaky
     displayName: "AI fix flaky tests"
     jobs:
-      # ── Job 1: cheap inspection — download the triggering run's reports and parse them.
       - job: Inspect
         displayName: "Inspect triggering build for flaky tests"
         timeoutInMinutes: 15
@@ -85,42 +84,42 @@ stages:
           # Parse results.json from each downloaded report -> HAS_FLAKY + EXTRACTED_FLAKY_TESTS.
           - bash: |
               set -uo pipefail
-              REPORTS=""
-              for P in "$(Agent.TempDirectory)"/Library_React_*/results.json; do
-                [ -f "$P" ] && REPORTS="$REPORTS$P"$'\n'
-              done
-              if [ -z "$REPORTS" ]; then
+              shopt -s nullglob
+              FILES=( "$(Agent.TempDirectory)"/Library_React_*/results.json )
+              if [ ${#FILES[@]} -eq 0 ]; then
                 echo "No results.json downloaded — no flaky tests."
                 echo "##vso[task.setvariable variable=HAS_FLAKY;isOutput=true]false"
                 echo "##vso[task.setvariable variable=EXTRACTED_FLAKY_TESTS;isOutput=true]"
                 exit 0
               fi
-              cat > /tmp/extract_flaky.js <<'JS'
-              const fs = require("fs");
-              const files = (process.env.REPORTS || "").split("\n").map(s => s.trim()).filter(Boolean);
-              const norm = f => { const m = (f || "").match(/(?:e2e|screenshots)\/.*\.spec\.ts$/); return m ? m[0] : null; };
-              const flaky = new Set();
-              const clean = s => (s || "").replace(/;/g, " ").replace(/::/g, ": ").trim();
-              // Build the FULL test title (describe chain + test), excluding the file-level suite,
-              // so the gate can target one framework variant (e.g. "react autoNextPage") precisely.
-              const walk = (suite, prefix) => {
-                const isFile = /\.spec\.ts$/.test(suite.title || "");
-                const pfx = (suite.title && !isFile)
-                  ? (prefix ? prefix + " › " + suite.title : suite.title)
-                  : prefix;
-                (suite.specs || []).forEach(spec => (spec.tests || []).forEach(t => {
-                  if (t.status === "flaky") {
-                    const f = norm(spec.file || suite.file);
-                    const full = pfx ? pfx + " › " + (spec.title || "") : (spec.title || "");
-                    if (f) flaky.add(f + "::" + clean(full) + "::" + t.projectName);
-                  }
-                }));
-                (suite.suites || []).forEach(s => walk(s, pfx));
-              };
-              files.forEach(file => { try { walk(JSON.parse(fs.readFileSync(file, "utf8")), ""); } catch (e) { console.error("skip " + file + ": " + e.message); } });
-              process.stdout.write([...flaky].join(";"));
-              JS
-              FLAKY="$(REPORTS="$REPORTS" node /tmp/extract_flaky.js)"
+
+              # For each Playwright JSON report, jq walks the suite tree building the FULL test title
+              # (describe chain + test, excluding the file-level suite) so the gate can target one
+              # framework variant precisely, and emits one "<relPath>::<title>::<project>" line per
+              # flaky test. ';' and '::' are stripped from titles so they can't corrupt the list.
+              FLAKY="$(
+                for f in "${FILES[@]}"; do
+                  jq -r '
+                    def clean: gsub(";";" ") | gsub("::";": ") | gsub("^\\s+|\\s+$";"");
+                    def walk($p):
+                      . as $suite
+                      | ($suite.title // "") as $t
+                      | (if ($t|test("\\.spec\\.ts$")) or $t=="" then $p
+                         elif $p=="" then $t else $p+" › "+$t end) as $pfx
+                      | ( $suite.specs[]? as $s
+                          | $s.tests[]? | select(.status=="flaky")
+                          | (($s.file // $suite.file // "")
+                             | [match("(?:e2e|screenshots)/.*\\.spec\\.ts$")][0].string?) as $rel
+                          | select($rel != null)
+                          | $rel + "::"
+                            + (($pfx + (if $pfx=="" then "" else " › " end) + ($s.title // "")) | clean)
+                            + "::" + .projectName ),
+                        ( $suite.suites[]? | walk($pfx) );
+                    .suites[]? | walk("")
+                  ' "$f" 2>/dev/null || echo "skip $f" >&2
+                done | sort -u | paste -sd ';' -
+              )"
+
               if [ -z "$FLAKY" ]; then
                 echo "No flaky tests in downloaded report(s)."
                 echo "##vso[task.setvariable variable=HAS_FLAKY;isOutput=true]false"
