@@ -25,9 +25,6 @@ resources:
       name: surveyjs/survey-library
 
 parameters:
-  - name: buildId           # Library build id to download artifacts from (default: the triggering run)
-    type: string
-    default: ""
   - name: dryRun            # true = produce report only, do not open a PR
     type: boolean
     default: false
@@ -35,12 +32,11 @@ parameters:
 variables:
   - group: ai-fix-secrets
   - template: templates/utils/variables.yml
-  - ${{ if ne(parameters.buildId, '') }}:
-      - name: LibraryBuildId
-        value: ${{ parameters.buildId }}
-  - ${{ else }}:
-      - name: LibraryBuildId
-        value: $(resources.pipeline.Library.runID)
+  # `LibraryBuildId` is a QUEUE-TIME variable defined in the pipeline UI
+  # (Edit → Variables → add `LibraryBuildId`, check "Settable at queue time", default empty) —
+  # NOT here, because a YAML-defined variable cannot be overridden at queue time. Leave it blank to
+  # use the triggering/latest Library run, or enter a specific Library build id when running manually.
+  # It is resolved into the effective build id by the "Resolve effective Library build id" step below.
 
 stages:
   - stage: AIFixFlaky
@@ -53,6 +49,24 @@ stages:
         steps:
           - checkout: none
 
+          # Resolve the effective Library build id: use the queue-time `LibraryBuildId` variable when it
+          # holds a real (positive integer) build id, otherwise fall back to the triggering/latest run.
+          # Passed via env so an unset/blank UI variable is just an empty string (no command-substitution).
+          - bash: |
+              set -euo pipefail
+              BID="${LIBRARY_BUILD_ID:-}"
+              if ! printf '%s' "$BID" | grep -Eq '^[1-9][0-9]*$'; then
+                echo "No explicit LibraryBuildId ('$BID'); using triggering/latest Library run."
+                BID="$RUN_ID"
+              fi
+              echo "Effective Library build id: $BID"
+              echo "##vso[task.setvariable variable=BuildId;isOutput=true]$BID"
+            name: resolve
+            displayName: "Resolve effective Library build id"
+            env:
+              LIBRARY_BUILD_ID: $(LibraryBuildId)
+              RUN_ID: $(resources.pipeline.Library.runID)
+
           # Download the triggering run's test-results (Container artifacts). continueOnError so a
           # missing artifact just yields "no flaky" instead of failing the job.
           - task: DownloadBuildArtifacts@1
@@ -62,7 +76,7 @@ stages:
               project: $(System.TeamProjectId)
               definition: $(resources.pipeline.Library.pipelineID)
               buildVersionToDownload: specific
-              buildId: $(LibraryBuildId)
+              buildId: $(resolve.BuildId)
               downloadType: specific
               itemPattern: "Library_React_*/**"
               downloadPath: $(Agent.TempDirectory)
@@ -126,11 +140,11 @@ stages:
               $env:GIT_REDIRECT_STDERR = '2>&1'
 
               # Resolve the survey-library base branch the fix PR should target.
-              # Derive sourceBranch from the build we actually inspect ($(LibraryBuildId)) via the
-              # Builds REST API, so a manually-supplied buildId checks out THAT build's branch — not
+              # Derive sourceBranch from the build we actually inspect ($(resolve.BuildId)) via the
+              # Builds REST API, so a manually-supplied build id checks out THAT build's branch — not
               # the triggering run's. Fall back to the resource's sourceBranch if the API is unavailable.
               $src = ""
-              $bid = "$(LibraryBuildId)"
+              $bid = "$(resolve.BuildId)"
               try {
                 $orgUrl = "$(System.TeamFoundationCollectionUri)"
                 # Query the project the Library build actually lives in (the resource's project),
@@ -208,6 +222,8 @@ stages:
           AUTO_FLAKY: $[ dependencies.Inspect.outputs['extract.EXTRACTED_FLAKY_TESTS'] ]
           PR_BASE: $[ dependencies.Inspect.outputs['gate.PR_BASE'] ]
           SOURCE_BRANCH: $[ dependencies.Inspect.outputs['gate.SOURCE_BRANCH'] ]
+          # Effective build id resolved in Inspect — use this (NOT the raw queue-time LibraryBuildId).
+          EffectiveBuildId: $[ dependencies.Inspect.outputs['resolve.BuildId'] ]
           LibDir: $(Build.SourcesDirectory)/survey-library
           PromptFile: $(Build.SourcesDirectory)/azure-pipelines/prompts/flaky-fix.md
         steps:
@@ -297,7 +313,7 @@ stages:
               project: $(System.TeamProjectId)
               definition: $(resources.pipeline.Library.pipelineID)
               buildVersionToDownload: specific
-              buildId: $(LibraryBuildId)
+              buildId: $(EffectiveBuildId)
               downloadType: specific
               itemPattern: "Library_React_*/**"
               downloadPath: $(Agent.TempDirectory)
