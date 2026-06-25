@@ -11,7 +11,7 @@ pr: none
 resources:
   pipelines:
     - pipeline: Library
-      source: Library PRs
+      source: Library Main
       trigger:
         branches:
           include:
