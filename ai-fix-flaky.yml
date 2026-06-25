@@ -136,7 +136,9 @@ stages:
                 # Query the project the Library build actually lives in (the resource's project),
                 # NOT this pipeline's project — otherwise the build-id lookup 404s cross-project.
                 $projectEnc = [uri]::EscapeDataString("$(resources.pipeline.Library.projectID)")
-                $url = "${orgUrl}${projectEnc}/_apis/build/builds/$bid?api-version=7.0"
+                # NB: wrap $bid in $(...) — a bare "$bid?api" mis-parses ('?' next to the var eats it),
+                # producing a URL with no build id (-> 404). $($bid) makes the '?' an unambiguous literal.
+                $url = "${orgUrl}${projectEnc}/_apis/build/builds/$($bid)?api-version=7.0"
                 Write-Host "GET $url"
                 $resp = Invoke-RestMethod -Headers @{ Authorization = "Bearer $env:SYSTEM_ACCESSTOKEN" } -Uri $url -Method Get
                 $src = "$($resp.sourceBranch)"
@@ -199,7 +201,9 @@ stages:
         displayName: "Stabilize flaky react tests"
         dependsOn: Inspect
         timeoutInMinutes: 120
-        condition: eq(dependencies.Inspect.outputs['gate.SHOULD_FIX'], 'true')
+        # TEMP: Fix job disabled while validating the source-branch resolution in Inspect.
+        # Restore: condition: eq(dependencies.Inspect.outputs['gate.SHOULD_FIX'], 'true')
+        condition: false
         variables:
           AUTO_FLAKY: $[ dependencies.Inspect.outputs['extract.EXTRACTED_FLAKY_TESTS'] ]
           PR_BASE: $[ dependencies.Inspect.outputs['gate.PR_BASE'] ]
