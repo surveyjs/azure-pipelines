@@ -10,11 +10,14 @@ Your working directory is the repo ROOT. Layout:
   * ./**/*-snapshots/*.png — baseline screenshots. NEVER edit or regenerate.
   * ./packages/survey-react-ui/test-results/ — failure evidence (junit, results.json, traces)
     from the reproduce run.
-  * The ORIGINAL-run flake evidence (trace + results.json from the run that flaked) —
-    its absolute directory path is given at the END of this prompt. Inspect it FIRST (an
-    intermittent flake may not reproduce locally, so this is often the only evidence of
-    the real failure). NOTE: it lives OUTSIDE the repo on purpose, so Playwright — which
-    clears test-results/ on every run — can't touch it.
+  * The ORIGINAL-run flake evidence (trace + results.json from the run that flaked) — the
+    END of this prompt lists the exact absolute file paths (they may sit in per-job
+    subfolders). Read those files FIRST with the Read tool (an intermittent flake may not
+    reproduce locally, so this is often the only evidence of the real failure). If that
+    list is empty, the original artifacts didn't download — fall back to
+    packages/survey-react-ui/test-results/ from the reproduce run. NOTE: this evidence
+    lives OUTSIDE the repo on purpose, so Playwright — which clears test-results/ on every
+    run — can't touch it; pass the absolute paths to Read (relative globs won't find it).
 
 To RUN a test you MUST run Playwright from the framework package so its web server starts:
     cd packages/survey-react-ui && npx playwright test e2e/<file>.spec.ts --project e2e -g "<title>" --retries=0 --repeat-each=5

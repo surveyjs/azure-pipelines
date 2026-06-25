@@ -178,19 +178,21 @@ stages:
         variables:
           AUTO_FLAKY: $[ dependencies.Inspect.outputs['extract.EXTRACTED_FLAKY_TESTS'] ]
           PR_BASE: $[ dependencies.Inspect.outputs['gate.PR_BASE'] ]
-          LibDir: $(Pipeline.Workspace)/library
-          PromptFile: $(Pipeline.Workspace)/azure-pipelines/prompts/flaky-fix.md
+          LibDir: $(Build.SourcesDirectory)/survey-library
+          PromptFile: $(Build.SourcesDirectory)/azure-pipelines/prompts/flaky-fix.md
         steps:
           # Check out THIS repo (self = azure-pipelines) to read the AI prompt file under prompts/.
+          # No `path:` — with multiple checkouts Azure puts each repo in its default
+          # $(Build.SourcesDirectory)/<repo>, here .../azure-pipelines.
           - checkout: self
-            path: azure-pipelines     # → $(Pipeline.Workspace)/azure-pipelines (separate from library)
             fetchDepth: 1
             displayName: "Checkout azure-pipelines (AI prompts)"
 
+          # Default checkout location → $(Build.SourcesDirectory)/survey-library. The repo working
+          # tree stays under s/, while ai-fix-out lives outside s/, so `git add -A` here is safe.
           - checkout: LibraryRepo
             persistCredentials: true
-            path: library          # → $(Pipeline.Workspace)/library; keeps the repo working tree
-            displayName: "Checkout survey-library"   # separate from ai-fix-out so `git add -A` is safe
+            displayName: "Checkout survey-library"
             timeoutInMinutes: 5
             retryCountOnTaskFailure: 5
             fetchDepth: 1
@@ -278,7 +280,9 @@ stages:
               for SRC in "$(Agent.TempDirectory)"/Library_React_*; do
                 [ -d "$SRC" ] && cp -r "$SRC" "$DEST/"
               done
-              echo "Original flake evidence staged under $DEST:"; ls -la "$DEST" || true
+              echo "Original flake evidence staged under $DEST. Files (recursive):"
+              find "$DEST" -type f 2>/dev/null | sort || true
+              echo "Total evidence files: $(find "$DEST" -type f 2>/dev/null | wc -l | tr -d ' ')"
             displayName: "Stage original flake evidence for the agent"
             condition: always()
 
@@ -328,12 +332,22 @@ stages:
               STATIC_PROMPT="$(cat "$(PromptFile)")"
               echo "Loaded AI prompt from $(PromptFile) (${#STATIC_PROMPT} chars)"
 
+              # The flake evidence lives OUTSIDE the agent's cwd and is nested under per-job
+              # Library_React_* folders. List the exact absolute file paths and inject them into the
+              # prompt so the agent Reads them directly — instead of burning turns guessing paths or
+              # hitting denied `ls`/`find` on an out-of-cwd directory (Read works on absolute paths).
+              EVIDENCE_DIR="$AI_OUT/original-flake-evidence"
+              EVIDENCE_FILES="$(find "$EVIDENCE_DIR" -type f 2>/dev/null | sort)"
+              echo "Evidence files available to the agent: $(printf '%s\n' "$EVIDENCE_FILES" | grep -c . || true)"
+
               FULL_PROMPT="$STATIC_PROMPT
 
               Target flaky tests to fix (format: <relPath>::<title>::<project>; ';'-separated):
               ${FLAKY_TESTS:-}
 
-              Original flake evidence directory (absolute): $AI_OUT/original-flake-evidence
+              Original flake evidence directory (absolute): $EVIDENCE_DIR
+              Evidence files (absolute paths — Read these directly; they may be nested under per-job subfolders):
+              ${EVIDENCE_FILES:-(none downloaded — rely on packages/survey-react-ui/test-results/ from the reproduce run instead)}
 
               Fix at most 10 tests."
 
@@ -383,7 +397,7 @@ stages:
                 --model "claude-sonnet-4-6" \
                 --max-turns 80 \
                 --permission-mode dontAsk \
-                --allowedTools "Read,Grep,Glob,Edit,Bash(cd *),Bash(npx playwright test *),Bash(git diff *),Bash(git status *)" \
+                --allowedTools "Read,Grep,Glob,Edit,Bash(cd *),Bash(ls *),Bash(cat *),Bash(find *),Bash(head *),Bash(tail *),Bash(grep *),Bash(npx playwright test *),Bash(git diff *),Bash(git status *),Bash(git log *)" \
                 --disallowedTools "Bash(git push *),Bash(git commit *),Bash(git reset *),Bash(git checkout *),Bash(rm *),WebFetch,WebSearch" \
                 2> "$AI_OUT/ai-fix-claude-stderr.txt" \
                 | tee "$AI_OUT/ai-fix-stream.jsonl" \
