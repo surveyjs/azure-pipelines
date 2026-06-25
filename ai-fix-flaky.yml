@@ -150,7 +150,7 @@ stages:
               echo "GET $URL"
               RESP="$(curl -sf -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" "$URL" || true)"
               if [ -n "$RESP" ]; then
-                PARSED="$(printf '%s' "$RESP" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const o=JSON.parse(s);process.stdout.write((o.sourceBranch||"")+"\t"+(o.sourceVersion||""))}catch(e){}})')"
+                PARSED="$(printf '%s' "$RESP" | jq -r '[.sourceBranch // "", .sourceVersion // ""] | @tsv' 2>/dev/null || true)"
                 SRC="${PARSED%%$'\t'*}"
                 COMMIT="${PARSED#*$'\t'}"
                 echo "Resolved sourceBranch for build $BID : $SRC (commit $COMMIT)"
@@ -211,9 +211,7 @@ stages:
         displayName: "Stabilize flaky react tests"
         dependsOn: Inspect
         timeoutInMinutes: 120
-        # TEMP: Fix job disabled while validating the source-branch resolution in Inspect.
-        # Restore: condition: eq(dependencies.Inspect.outputs['gate.SHOULD_FIX'], 'true')
-        condition: false
+        condition: eq(dependencies.Inspect.outputs['gate.SHOULD_FIX'], 'true')
         variables:
           AUTO_FLAKY: $[ dependencies.Inspect.outputs['extract.EXTRACTED_FLAKY_TESTS'] ]
           PR_BASE: $[ dependencies.Inspect.outputs['gate.PR_BASE'] ]
@@ -334,21 +332,32 @@ stages:
               cd "$(LibDir)/packages/survey-react-ui"
               # Target each flaky test precisely (file + project + full-title grep) so the agent
               # gets evidence for ONLY the flaky variant, not every framework in the spec file.
-              cat > /tmp/repro_targets.js <<'JS'
-              const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-              const reFromTitle = t => t.split(" › ").map(p => esc(p.trim())).filter(Boolean).join(".*");
-              const out = [];
-              (process.env.FLAKY_TESTS || "").split(";").map(s => s.trim()).filter(Boolean).forEach(e => {
-                const p = e.split("::");
-                const file = (p[0] || "").trim();
-                const title = (p[1] || "").trim();
-                const project = (p[2] || "").trim();
-                if (!file.endsWith(".spec.ts") || !title || !project) return;
-                out.push([file, project, reFromTitle(title)].join("\t"));
-              });
-              process.stdout.write(out.join("\n"));
-              JS
-              TARGETS="$(node /tmp/repro_targets.js)"
+              trim() { sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'; }
+              # Escape regex metacharacters . * + ? ^ $ { } ( ) | [ ] \ (same set the old JS escaped).
+              # Backslash first, then the rest, then ']' — separate sed commands so we never build a
+              # bracket expression containing '\' or '[.' (which sed parses as a collating symbol).
+              esc() { sed -e 's/\\/\\\\/g' -e 's/[.[*+?^${}()|]/\\&/g' -e 's/\]/\\]/g'; }
+              # FLAKY_TESTS = "<file>::<title>::<project>;...". Build one TAB-separated target line
+              # "<file>\t<project>\t<grep-regex>" per test; the regex is the full title split on
+              # " › ", each segment escaped and joined by ".*", so only THAT variant runs.
+              TARGETS=""
+              OLD_IFS="$IFS"; IFS=';' read -ra ENTRIES <<< "${FLAKY_TESTS:-}" || true; IFS="$OLD_IFS"
+              for E in "${ENTRIES[@]:-}"; do
+                E="$(printf '%s' "$E" | trim)"; [ -z "$E" ] && continue
+                IFS=$'\t' read -r FILE TITLE PROJECT _ <<< "${E//::/$'\t'}"
+                FILE="$(printf '%s' "${FILE:-}" | trim)"
+                TITLE="$(printf '%s' "${TITLE:-}" | trim)"
+                PROJECT="$(printf '%s' "${PROJECT:-}" | trim)"
+                case "$FILE" in *.spec.ts) ;; *) continue ;; esac
+                [ -z "$TITLE" ] && continue
+                [ -z "$PROJECT" ] && continue
+                RE=""
+                while IFS= read -r SEG; do
+                  SEG="$(printf '%s' "$SEG" | trim)"; [ -z "$SEG" ] && continue
+                  RE="${RE:+$RE.*}$(printf '%s' "$SEG" | esc)"
+                done <<< "$(printf '%s' "$TITLE" | sed 's/ › /\n/g')"
+                TARGETS="${TARGETS:+$TARGETS$'\n'}${FILE}"$'\t'"${PROJECT}"$'\t'"${RE}"
+              done
               while IFS=$'\t' read -r FILE PROJECT TITLE_RE; do
                 [ -z "$FILE" ] && continue
                 echo "── Reproducing [$PROJECT] $FILE  -g /$TITLE_RE/"
@@ -394,39 +403,39 @@ stages:
               Fix at most 10 tests."
 
               # Compact formatter: render each stream-json event as one readable log line, so the CI
-              # log shows turn-by-turn what the agent called and what it got back. Lines that aren't
-              # JSON are silently skipped. The full raw transcript is tee'd to ai-fix-stream.jsonl.
-              cat > /tmp/ai_stream_fmt.js <<'JS'
-              const readline = require("readline");
-              const trunc = (s, n) => { s = String(s == null ? "" : s).replace(/\s+/g, " ").trim(); return s.length > n ? s.slice(0, n) + " …[+" + (s.length - n) + " chars]" : s; };
-              let turn = 0;
-              readline.createInterface({ input: process.stdin }).on("line", (line) => {
-                line = line.trim(); if (!line) return;
-                let e; try { e = JSON.parse(line); } catch (_) { return; }
-                if (e.type === "system" && e.subtype === "init") {
-                  console.log("[init] model=" + (e.model || "?") + " cwd=" + (e.cwd || "?") + " tools=" + ((e.tools || []).length));
-                } else if (e.type === "assistant" && e.message) {
-                  turn++;
-                  for (const b of e.message.content || []) {
-                    if (b.type === "text" && (b.text || "").trim()) console.log("\n[turn " + turn + "] 🤖 " + trunc(b.text, 1000));
-                    else if (b.type === "tool_use") {
-                      const i = b.input || {};
-                      const arg = i.command || i.file_path || i.path || i.pattern || i.description || JSON.stringify(i);
-                      console.log("[turn " + turn + "] 🔧 " + b.name + ": " + trunc(arg, 400));
-                    }
-                  }
-                } else if (e.type === "user" && e.message) {
-                  for (const b of e.message.content || []) {
-                    if (b.type === "tool_result") {
-                      const c = Array.isArray(b.content) ? b.content.map(x => x.text || "").join("") : b.content;
-                      console.log("          ↩ " + (b.is_error ? "[ERROR] " : "") + trunc(c, 1000));
-                    }
-                  }
-                } else if (e.type === "result") {
-                  console.log("\n[result] subtype=" + e.subtype + " is_error=" + e.is_error + " num_turns=" + e.num_turns + " cost_usd=" + e.total_cost_usd + " duration_ms=" + e.duration_ms);
-                }
-              });
-              JS
+              # log shows turn-by-turn what the agent called and what it got back. Non-JSON lines are
+              # skipped (fromjson?). The full raw transcript is tee'd to ai-fix-stream.jsonl.
+              # Single-quoted so $e/$turn/$i stay jq variables (not bash); \\s -> jq regex \s.
+              STREAM_FMT='
+                def trunc($s; $n):
+                  ($s | if . == null then "" else tostring end | gsub("\\s+"; " ") | gsub("^\\s+|\\s+$"; "")) as $t
+                  | if ($t | length) > $n then $t[:$n] + " …[+" + (($t | length) - $n | tostring) + " chars]" else $t end;
+                foreach (inputs | fromjson?) as $e (
+                  0;
+                  . + (if ($e.type == "assistant" and ($e.message | type) == "object") then 1 else 0 end);
+                  . as $turn
+                  | if ($e.type == "system" and $e.subtype == "init") then
+                      "[init] model=" + ($e.model // "?") + " cwd=" + ($e.cwd // "?") + " tools=" + (($e.tools // [] | length) | tostring)
+                    elif ($e.type == "assistant" and ($e.message | type) == "object") then
+                      ($e.message.content // [])[]
+                      | if (.type == "text" and ((.text // "") | gsub("^\\s+|\\s+$"; "")) != "") then
+                          "\n[turn " + ($turn | tostring) + "] 🤖 " + trunc(.text; 1000)
+                        elif (.type == "tool_use") then
+                          (if (.input | type) == "object" then .input else {} end) as $i
+                          | (([$i.command, $i.file_path, $i.path, $i.pattern, $i.description]
+                              | map(select(type == "string" and . != "")) | .[0]) // ($i | tojson)) as $arg
+                          | "[turn " + ($turn | tostring) + "] 🔧 " + (.name // "") + ": " + trunc($arg; 400)
+                        else empty end
+                    elif ($e.type == "user" and ($e.message | type) == "object") then
+                      ($e.message.content // [])[]
+                      | if (.type == "tool_result") then
+                          (if (.content | type) == "array" then (.content | map(.text // "") | join("")) else .content end) as $c
+                          | "          ↩ " + (if .is_error then "[ERROR] " else "" end) + trunc($c; 1000)
+                        else empty end
+                    elif ($e.type == "result") then
+                      "\n[result] subtype=" + ($e.subtype | tostring) + " is_error=" + ($e.is_error | tostring) + " num_turns=" + ($e.num_turns | tostring) + " cost_usd=" + ($e.total_cost_usd | tostring) + " duration_ms=" + ($e.duration_ms | tostring)
+                    else empty end
+                )'
 
               echo "Running Claude Code (model=claude-sonnet-4-6, max-turns=80, stream-json)..."
               # stream-json (requires --verbose) emits one JSON event per line. tee keeps the raw
@@ -443,7 +452,7 @@ stages:
                 --disallowedTools "Bash(git push *),Bash(git commit *),Bash(git reset *),Bash(git checkout *),Bash(rm *),WebFetch,WebSearch" \
                 2> "$AI_OUT/ai-fix-claude-stderr.txt" \
                 | tee "$AI_OUT/ai-fix-stream.jsonl" \
-                | node /tmp/ai_stream_fmt.js \
+                | jq -rRn "$STREAM_FMT" \
                 || echo "claude pipeline exited non-zero (continuing to report/guard step)"
 
               # Surface stderr (warnings / fatal errors) — previously captured to a file but never shown.
@@ -454,39 +463,38 @@ stages:
               fi
 
               # Parse the final `result` event (last such line) from the stream into a report.
-              cat > /tmp/ai_parse.js <<'JS'
-              const fs = require("fs");
-              const dir = process.env.AI_OUT;
-              let o = null;
-              try {
-                const lines = fs.readFileSync(dir + "/ai-fix-stream.jsonl", "utf8").split("\n").filter(Boolean);
-                for (let i = lines.length - 1; i >= 0; i--) {
-                  try { const e = JSON.parse(lines[i]); if (e.type === "result") { o = e; break; } } catch (_) {}
-                }
-              } catch (e) { console.log("Could not read stream transcript: " + e.message); }
-              if (!o) { console.log("No result event in stream output (see transcript above / ai-fix-stream.jsonl)."); process.exit(0); }
-              const L = [];
-              L.push("=== AI FIX REPORT ===");
-              L.push("model: "       + (process.env.MODEL || "n/a"));
-              L.push("subtype: "     + (o.subtype        != null ? o.subtype        : "n/a"));
-              L.push("is_error: "    + (o.is_error       != null ? o.is_error       : "n/a"));
-              L.push("num_turns: "   + (o.num_turns      != null ? o.num_turns      : "n/a"));
-              L.push("duration_ms: " + (o.duration_ms    != null ? o.duration_ms    : "n/a"));
-              L.push("cost_usd: "    + (o.total_cost_usd != null ? o.total_cost_usd : "n/a"));
-              L.push("");
-              if (o.subtype === "error_max_turns") {
-                L.push("⚠ Agent stopped: it reached the --max-turns limit before finishing. The fix may be");
-                L.push("  partial or absent. Raise --max-turns or narrow the target set, then re-run.");
-                L.push("");
-              }
-              L.push(o.result || "(no result text — agent did not return a final summary; see transcript above)");
-              const out = L.join("\n");
-              fs.writeFileSync(dir + "/ai-fix-report.txt", out);
-              console.log(out);
-              if (o.subtype === "error_max_turns")
-                console.log("##vso[task.logissue type=warning]AI agent hit --max-turns; the flaky-test fix may be incomplete.");
-              JS
-              AI_OUT="$AI_OUT" MODEL="claude-sonnet-4-6" node /tmp/ai_parse.js
+              MODEL="claude-sonnet-4-6"
+              STREAM="$AI_OUT/ai-fix-stream.jsonl"
+              [ -f "$STREAM" ] || echo "Could not read stream transcript ($STREAM not found)."
+              # fromjson? skips non-JSON lines; tail -n1 keeps the final result event (empty if none).
+              RESULT="$(jq -c -R 'fromjson? | select(.type == "result")' "$STREAM" 2>/dev/null | tail -n1 || true)"
+              if [ -z "$RESULT" ]; then
+                echo "No result event in stream output (see transcript above / ai-fix-stream.jsonl)."
+              else
+                # Build the report. s() prints "n/a" only for MISSING (null) fields — not for
+                # is_error=false. The result text falls back like JS `||` (null or empty -> default).
+                REPORT="$(printf '%s' "$RESULT" | jq -r --arg model "$MODEL" '
+                  def s($v): if $v == null then "n/a" else ($v | tostring) end;
+                  [ "=== AI FIX REPORT ===",
+                    "model: " + $model,
+                    "subtype: " + s(.subtype),
+                    "is_error: " + s(.is_error),
+                    "num_turns: " + s(.num_turns),
+                    "duration_ms: " + s(.duration_ms),
+                    "cost_usd: " + s(.total_cost_usd),
+                    "",
+                    (if .subtype == "error_max_turns"
+                       then "⚠ Agent stopped: it reached the --max-turns limit before finishing. The fix may be\n  partial or absent. Raise --max-turns or narrow the target set, then re-run.\n"
+                       else empty end),
+                    (if (.result // "") == "" then "(no result text — agent did not return a final summary; see transcript above)" else .result end)
+                  ] | join("\n")
+                ')"
+                printf '%s' "$REPORT" > "$AI_OUT/ai-fix-report.txt"
+                printf '%s\n' "$REPORT"
+                if [ "$(printf '%s' "$RESULT" | jq -r '.subtype // ""')" = "error_max_turns" ]; then
+                  echo "##vso[task.logissue type=warning]AI agent hit --max-turns; the flaky-test fix may be incomplete."
+                fi
+              fi
             displayName: "Claude: diagnose & fix flaky tests"
             timeoutInMinutes: 30
             env:
@@ -556,21 +564,29 @@ stages:
               # one line per test = "<file>\t<project>\t<grep-regex>". The grep regex matches the
               # full title path (describe chain + test) so only THAT framework variant runs —
               # never the whole spec file across angular/react/vue.
-              cat > /tmp/ai_gate_targets.js <<'JS'
-              const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-              const reFromTitle = t => t.split(" › ").map(p => esc(p.trim())).filter(Boolean).join(".*");
-              const out = [];
-              (process.env.FLAKY_TESTS || "").split(";").map(s => s.trim()).filter(Boolean).forEach(e => {
-                const p = e.split("::");
-                const file = (p[0] || "").trim();
-                const title = (p[1] || "").trim();
-                const project = (p[2] || "").trim();
-                if (!file.endsWith(".spec.ts") || !title || !project) return;
-                out.push([file, project, reFromTitle(title)].join("\t"));
-              });
-              process.stdout.write(out.join("\n"));
-              JS
-              TARGETS="$(FLAKY_TESTS="${FLAKY_TESTS:-}" node /tmp/ai_gate_targets.js)"
+              trim() { sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'; }
+              # Escape regex metacharacters . * + ? ^ $ { } ( ) | [ ] \ (same set the old JS escaped).
+              # Backslash first, then the rest, then ']' — separate sed commands so we never build a
+              # bracket expression containing '\' or '[.' (which sed parses as a collating symbol).
+              esc() { sed -e 's/\\/\\\\/g' -e 's/[.[*+?^${}()|]/\\&/g' -e 's/\]/\\]/g'; }
+              TARGETS=""
+              OLD_IFS="$IFS"; IFS=';' read -ra ENTRIES <<< "${FLAKY_TESTS:-}" || true; IFS="$OLD_IFS"
+              for E in "${ENTRIES[@]:-}"; do
+                E="$(printf '%s' "$E" | trim)"; [ -z "$E" ] && continue
+                IFS=$'\t' read -r FILE TITLE PROJECT _ <<< "${E//::/$'\t'}"
+                FILE="$(printf '%s' "${FILE:-}" | trim)"
+                TITLE="$(printf '%s' "${TITLE:-}" | trim)"
+                PROJECT="$(printf '%s' "${PROJECT:-}" | trim)"
+                case "$FILE" in *.spec.ts) ;; *) continue ;; esac
+                [ -z "$TITLE" ] && continue
+                [ -z "$PROJECT" ] && continue
+                RE=""
+                while IFS= read -r SEG; do
+                  SEG="$(printf '%s' "$SEG" | trim)"; [ -z "$SEG" ] && continue
+                  RE="${RE:+$RE.*}$(printf '%s' "$SEG" | esc)"
+                done <<< "$(printf '%s' "$TITLE" | sed 's/ › /\n/g')"
+                TARGETS="${TARGETS:+$TARGETS$'\n'}${FILE}"$'\t'"${PROJECT}"$'\t'"${RE}"
+              done
 
               if [ -z "$TARGETS" ]; then
                 echo "##vso[task.logissue type=warning]No flaky test targets identified to gate — skipping PR."
