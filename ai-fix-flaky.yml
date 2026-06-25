@@ -15,7 +15,7 @@ resources:
       trigger:
         branches:
           include:
-            - flaky-test
+            - '*'
   repositories:
     # This pipeline runs in the azure-pipelines repo, so `self` is NOT survey-library.
     # Declare survey-library explicitly so the Fix job can check it out and operate on it.
