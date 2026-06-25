@@ -133,11 +133,14 @@ stages:
               $bid = "$(LibraryBuildId)"
               try {
                 $orgUrl = "$(System.TeamFoundationCollectionUri)"
-                $projectEnc = [uri]::EscapeDataString("$(System.TeamProject)")
+                # Query the project the Library build actually lives in (the resource's project),
+                # NOT this pipeline's project — otherwise the build-id lookup 404s cross-project.
+                $projectEnc = [uri]::EscapeDataString("$(resources.pipeline.Library.projectID)")
                 $url = "${orgUrl}${projectEnc}/_apis/build/builds/$bid?api-version=7.0"
+                Write-Host "GET $url"
                 $resp = Invoke-RestMethod -Headers @{ Authorization = "Bearer $env:SYSTEM_ACCESSTOKEN" } -Uri $url -Method Get
                 $src = "$($resp.sourceBranch)"
-                Write-Host "Resolved sourceBranch for build $bid : $src"
+                Write-Host "Resolved sourceBranch for build $bid : $src (commit $($resp.sourceVersion))"
               } catch {
                 Write-Host "Could not resolve sourceBranch for build $bid via API: $($_.Exception.Message)"
               }
