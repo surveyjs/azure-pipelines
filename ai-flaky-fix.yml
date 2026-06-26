@@ -726,7 +726,7 @@ stages:
                   workingDir: $(LibDir)
                   label: ai-flaky-fix
                   commitMessage: "[ai_fix] stabilize flaky test $(SLUG) on $(PR_BASE)"
-                  prTitle: "Stabilize flaky test $(TEST_NAME) from $(TEST_FILE) on branch $(PR_BASE)"
+                  prTitle: "Stabilize flaky test '$(TEST_NAME)' from '$(TEST_FILE)' on branch '$(PR_BASE)'"
                   prBodyFile: $(Pipeline.Workspace)/ai-fix-out/pr-body.txt
 
           # always publish the AI report / Claude output for inspection
