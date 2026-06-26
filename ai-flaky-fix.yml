@@ -430,10 +430,41 @@ stages:
               EVIDENCE_FILES="$(find "$EVIDENCE_DIR" -type f 2>/dev/null | sort)"
               echo "Evidence files available to the agent: $(printf '%s\n' "$EVIDENCE_FILES" | grep -c . || true)"
 
+              # Build the exact, ready-to-run reproduce command for THIS target test, reusing the same
+              # regex construction as the Reproduce / Re-run-gate steps: `-g` is a JS regex over the
+              # SPACE-joined full title, so the " › " separators in <title> (a reporter-only glyph,
+              # absent from the real title) must become ".*" with metacharacters escaped. The agent is
+              # given this verbatim so it never translates " › " itself — a literal "›" in -g matches
+              # nothing ("No tests found").
+              trim() { sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'; }
+              esc() { sed -e 's/\\/\\\\/g' -e 's/[.[*+?^${}()|]/\\&/g' -e 's/\]/\\]/g'; }
+              REPRO_CMD=""
+              ENTRY="$(printf '%s' "${FLAKY_TESTS:-}" | trim)"
+              if [ -n "$ENTRY" ]; then
+                IFS=$'\t' read -r RFILE RTITLE RPROJECT _ <<< "${ENTRY//::/$'\t'}"
+                RFILE="$(printf '%s' "${RFILE:-}" | trim)"
+                RTITLE="$(printf '%s' "${RTITLE:-}" | trim)"
+                RPROJECT="$(printf '%s' "${RPROJECT:-}" | trim)"
+                RE=""
+                while IFS= read -r SEG; do
+                  SEG="$(printf '%s' "$SEG" | trim)"; [ -z "$SEG" ] && continue
+                  RE="${RE:+$RE.*}$(printf '%s' "$SEG" | esc)"
+                done <<< "$(printf '%s' "$RTITLE" | sed 's/ › /\n/g')"
+                # Pilot is React-only: every project maps to the survey-react-ui package.
+                if [ -n "$RFILE" ] && [ -n "$RPROJECT" ] && [ -n "$RE" ]; then
+                  REPRO_CMD="cd packages/survey-react-ui && npx playwright test $RFILE --project $RPROJECT -g '$RE' --retries=0 --repeat-each=5"
+                  echo "Ready-to-run reproduce command for the agent: $REPRO_CMD"
+                fi
+              fi
+
               FULL_PROMPT="$STATIC_PROMPT
 
               Target flaky test to fix (exactly ONE; format <relPath>::<title>::<project>):
               ${FLAKY_TESTS:-}
+
+              To RE-RUN this exact test, use this command VERBATIM from the repo root (the -g value is
+              a regex over the SPACE-joined full title — do NOT retype the title with \" › \"):
+              ${REPRO_CMD:-cd packages/survey-react-ui && npx playwright test <file> --project <project> -g '<regex>' --retries=0 --repeat-each=5}
 
               Original flake evidence directory (absolute): $EVIDENCE_DIR
               Evidence files (absolute paths — Read these directly; they may be nested under per-job subfolders):
@@ -662,6 +693,21 @@ stages:
                 printf '%s\n' "$REPORT"
               } > "$BODY_FILE"
               echo "Wrote PR body to $BODY_FILE"
+
+              # Derive a human-readable PR title from this leg's "<file>::<title>::<project>" entry.
+              # TEST_FILE = basename; TEST_NAME = leaf test name (last " › " segment). Both feed the
+              # prTitle macro in pr-create — sanitize chars that would break the value once Azure
+              # inlines it as raw text into pr-create's double-quoted PowerShell string (" ` $) and
+              # flatten whitespace/newlines.
+              trim() { sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'; }
+              sanitize() { tr -d '"`$' | tr '\n\t' '  ' | sed -E 's/[[:space:]]+/ /g' | trim; }
+              ENTRY="$(printf '%s' "${FLAKY_TESTS:-}" | trim)"
+              IFS=$'\t' read -r TFILE TTITLE _ <<< "${ENTRY//::/$'\t'}"
+              TEST_FILE="$(basename "$(printf '%s' "${TFILE:-}" | trim)" | sanitize)"
+              TEST_NAME="$(printf '%s' "${TTITLE:-}" | trim)"; TEST_NAME="$(printf '%s' "${TEST_NAME##* › }" | sanitize)"
+              echo "PR title parts: TEST_NAME='$TEST_NAME' TEST_FILE='$TEST_FILE' branch='$BASE'"
+              echo "##vso[task.setvariable variable=TEST_NAME]$TEST_NAME"
+              echo "##vso[task.setvariable variable=TEST_FILE]$TEST_FILE"
             displayName: "Prepare PR body"
             condition: and(succeeded(), eq(variables['AI_HAS_FIX'], 'true'))
             env:
@@ -680,7 +726,7 @@ stages:
                   workingDir: $(LibDir)
                   label: ai-flaky-fix
                   commitMessage: "[ai_fix] stabilize flaky test $(SLUG) on $(PR_BASE)"
-                  prTitle: "[ai_fix] Stabilize flaky test ($(SLUG)) on $(PR_BASE)"
+                  prTitle: "Stabilize flaky test $(TEST_NAME) from $(TEST_FILE) on branch $(PR_BASE)"
                   prBodyFile: $(Pipeline.Workspace)/ai-fix-out/pr-body.txt
 
           # always publish the AI report / Claude output for inspection

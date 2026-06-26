@@ -19,13 +19,16 @@ Your working directory is the repo ROOT. Layout:
     lives OUTSIDE the repo on purpose, so Playwright — which clears test-results/ on every
     run — can't touch it; pass the absolute paths to Read (relative globs won't find it).
 
-To RUN a test you MUST run Playwright from the framework package so its web server starts:
-    cd packages/survey-react-ui && npx playwright test e2e/<file>.spec.ts --project e2e -g "<title>" --retries=0 --repeat-each=5
-  (visual tests: --project vrt and screenshots/<file>.spec.ts). The path is a substring filter.
-  ALWAYS pass -g "<title>" with the target's <title> (3rd field is the <project>): each spec file is
-  parametrized across frameworks (angular/react/vue/...), but only react is built/served here — running
-  the file unscoped fails the other frameworks with unrelated errors. Scope to the one target variant.
-  --retries=0 --repeat-each exposes flakiness that the default retries=4 would hide.
+To RUN the target test you MUST run Playwright from the framework package so its web server starts.
+  The END of this prompt gives the EXACT ready-to-run command for this target ("To RE-RUN this exact
+  test…") — use it VERBATIM. It already scopes to the one framework variant (only react is built/served
+  here; running the file unscoped fails angular/vue with unrelated errors) and uses --retries=0
+  --repeat-each to expose flakiness that the default retries=4 would hide.
+  If you ever build the command yourself, note that -g is a JS REGEX matched against the SPACE-joined
+  full title — the " › " you see in <title> is a reporter glyph, NOT part of the real title. Replace
+  each " › " with ".*" and escape regex metacharacters ( ) [ ] $ . * + ? ^ { } | — e.g.
+  -g "react autoNextPage.*check auto next page with keyboard". A literal "›" in -g matches nothing
+  ("No tests found"). (Visual tests: --project vrt and screenshots/<file>.spec.ts.)
 
 POLICY (HYBRID) — for each target test classify the root cause:
   * TEST FLAKINESS — timing/races (missing awaits, fixed waitForTimeout, animations),
