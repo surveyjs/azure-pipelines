@@ -20,6 +20,12 @@ Your working directory is the repo ROOT. Layout:
     packages/survey-react-ui/test-results/ from the reproduce run. NOTE: this evidence
     lives OUTSIDE the repo on purpose, so Playwright — which clears test-results/ on every
     run — can't touch it; pass the absolute paths to Read (relative globs won't find it).
+    For the actual screenshots/diffs use the sibling trace.zip / *.png next to it. DO NOT Read
+    results.json in full — it can exceed the Read tool's size limit and waste a turn. Instead
+    search it from Bash with the absolute path, e.g.
+    `grep -n -i -A30 '"status": "flaky"' <abs-path>` or `grep -n -A20 -E '"(error|message|stack)"' <abs-path>`
+    to pull only the failing test's error/stack. Apply the same partial-read approach (grep / head)
+    to any other evidence file that is too large for Read.
 
 To RUN the target test you MUST run Playwright from the framework package so its web server starts.
   The END of this prompt gives the EXACT ready-to-run command for this target ("To RE-RUN this exact
