@@ -10,11 +10,13 @@ Your working directory is the repo ROOT. Layout:
   * ./**/*-snapshots/*.png — baseline screenshots. NEVER edit or regenerate.
   * ./packages/survey-react-ui/test-results/ — failure evidence (junit, results.json, traces)
     from the reproduce run.
+  * The pipeline's Reproduce step has ALREADY reproduced this flake here (the leg only reaches
+    you when it did), so packages/survey-react-ui/test-results/ holds FRESH failure evidence from
+    that run — start there.
   * The ORIGINAL-run flake evidence (trace + results.json from the run that flaked) — the
     END of this prompt lists the exact absolute file paths (they may sit in per-job
-    subfolders). Read those files FIRST with the Read tool (an intermittent flake may not
-    reproduce locally, so this is often the only evidence of the real failure). If that
-    list is empty, the original artifacts didn't download — fall back to
+    subfolders). Read those files too with the Read tool for additional context on the real
+    failure. If that list is empty, the original artifacts didn't download — rely on
     packages/survey-react-ui/test-results/ from the reproduce run. NOTE: this evidence
     lives OUTSIDE the repo on purpose, so Playwright — which clears test-results/ on every
     run — can't touch it; pass the absolute paths to Read (relative globs won't find it).

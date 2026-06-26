@@ -365,12 +365,23 @@ stages:
             displayName: "Stage original flake evidence for the agent"
             condition: always()
 
-          # reproduce flaky tests with retries disabled to seed fresh evidence for the agent
+          # Reproduce the flaky test with retries disabled to seed FRESH evidence for the agent and,
+          # crucially, to PROVE the flake is reproducible here — if it isn't, the leg is skipped (no
+          # blind fix, no PR). A rare flake rarely surfaces in a single repeat-each=5 run, so we loop
+          # in escalating rounds (repeat-each 5→10→20→40), stopping early on the FIRST failure, and
+          # bound the work by both a round cap and a wall-clock budget.
           - bash: |
               set -uo pipefail
               cd "$(LibDir)/packages/survey-react-ui"
-              # Target each flaky test precisely (file + project + full-title grep) so the agent
-              # gets evidence for ONLY the flaky variant, not every framework in the spec file.
+              AI_OUT="$(Pipeline.Workspace)/ai-fix-out"; mkdir -p "$AI_OUT"
+
+              # Tunables (inline, minimal — per repo convention; no extra pipeline parameters).
+              INITIAL_REPEAT=5     # --repeat-each for round 1 (doubles each round: 5,10,20,40)
+              MAX_ROUNDS=4         # hard cap on escalating rounds
+              TIME_BUDGET=900      # seconds per leg — stop starting new rounds past this
+
+              # Target the flaky test precisely (file + project + full-title grep) so we reproduce
+              # ONLY the flaky variant, not every framework in the spec file.
               trim() { sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'; }
               # Escape regex metacharacters . * + ? ^ $ { } ( ) | [ ] \ (same set the old JS escaped).
               # Backslash first, then the rest, then ']' — separate sed commands so we never build a
@@ -397,11 +408,56 @@ stages:
                 done <<< "$(printf '%s' "$TITLE" | sed 's/ › /\n/g')"
                 TARGETS="${TARGETS:+$TARGETS$'\n'}${FILE}"$'\t'"${PROJECT}"$'\t'"${RE}"
               done
+
+              REPRODUCED=false
+              STATUS="NOT_REPRODUCED"
+              START="$(date +%s)"
+
               while IFS=$'\t' read -r FILE PROJECT TITLE_RE; do
                 [ -z "$FILE" ] && continue
-                echo "── Reproducing [$PROJECT] $FILE  -g /$TITLE_RE/"
-                npx playwright test "$FILE" --project "$PROJECT" -g "$TITLE_RE" --retries=0 --repeat-each=5 || true
+
+                # 0) Targeting pre-check: confirm the -g regex actually matches ≥1 test. Playwright
+                #    also exits non-zero on "No tests found", so without this a targeting miss would
+                #    be FALSELY counted as a reproduced failure. --list ignores --repeat-each.
+                MATCHED="$(npx playwright test "$FILE" --project "$PROJECT" -g "$TITLE_RE" --list 2>/dev/null \
+                          | grep -cE '\.spec\.ts' || true)"
+                if [ "${MATCHED:-0}" -eq 0 ]; then
+                  echo "##vso[task.logissue type=error]Repro targeting miss: -g /$TITLE_RE/ matched 0 tests for $FILE [$PROJECT]. This is a targeting problem, not flakiness."
+                  STATUS="NO_MATCH"
+                  break
+                fi
+                echo "Targeting OK: -g /$TITLE_RE/ matches $MATCHED test(s) in $FILE [$PROJECT]."
+
+                REPEAT="$INITIAL_REPEAT"
+                for ROUND in $(seq 1 "$MAX_ROUNDS"); do
+                  NOW="$(date +%s)"; ELAPSED=$((NOW - START))
+                  if [ "$ELAPSED" -ge "$TIME_BUDGET" ]; then
+                    echo "Time budget ${TIME_BUDGET}s exhausted after round $((ROUND - 1)); stopping."
+                    break
+                  fi
+                  echo "── Repro round $ROUND/$MAX_ROUNDS [$PROJECT] $FILE  -g /$TITLE_RE/  --repeat-each=$REPEAT (elapsed ${ELAPSED}s)"
+                  if npx playwright test "$FILE" --project "$PROJECT" -g "$TITLE_RE" --retries=0 --repeat-each="$REPEAT"; then
+                    echo "Round $ROUND: all $REPEAT runs passed — not reproduced yet."
+                    REPEAT=$((REPEAT * 2))
+                  else
+                    echo "Round $ROUND: a run FAILED — flake reproduced. Fresh evidence seeded in test-results/."
+                    REPRODUCED=true
+                    STATUS="REPRODUCED"
+                    break
+                  fi
+                done
+                [ "$REPRODUCED" = "true" ] && break
               done <<< "$TARGETS"
+
+              echo "Reproduce status: $STATUS"
+              if [ "$REPRODUCED" = "true" ]; then
+                echo "##vso[task.setvariable variable=REPRODUCED]true"
+              else
+                echo "##vso[task.logissue type=warning]Flaky test NOT reproduced ($STATUS) — skipping AI fix + PR for this leg."
+                echo "##vso[task.setvariable variable=REPRODUCED]false"
+                printf 'AI fix skipped: flaky test could not be reproduced on this agent.\nStatus: %s\nTarget: %s\n' \
+                  "$STATUS" "${FLAKY_TESTS:-(unknown)}" > "$AI_OUT/ai-fix-report.txt"
+              fi
             displayName: "Reproduce flaky tests (retries=0)"
             continueOnError: true
             env:
@@ -567,6 +623,9 @@ stages:
               fi
             displayName: "Claude: diagnose & fix flaky tests"
             timeoutInMinutes: 30
+            # Only run the (expensive) AI fix when the flake actually reproduced here — otherwise the
+            # leg is skipped (no blind fix, no PR). REPRODUCED is set by the Reproduce step above.
+            condition: and(succeeded(), eq(variables['REPRODUCED'], 'true'))
             env:
               ANTHROPIC_API_KEY: $(ANTHROPIC_API_KEY)
               CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
@@ -624,6 +683,10 @@ stages:
               echo "All changes are within the test-code allow-list."
               echo "##vso[task.setvariable variable=AI_HAS_FIX]true"
             displayName: "Guard: only test code may change"
+            # Skipped when the flake didn't reproduce (AI step skipped). With the guard skipped,
+            # AI_HAS_FIX is never set → re-run gate + Prepare PR (gated on AI_HAS_FIX) are skipped and
+            # pr-create.yml bails on "nothing to commit" — so the leg opens no PR.
+            condition: and(succeeded(), eq(variables['REPRODUCED'], 'true'))
 
           # Re-run gate: the fixed tests must pass reliably (retries=0, repeat-each) before we PR
           - bash: |
@@ -666,7 +729,9 @@ stages:
 
               echo "Gate targets:"; echo "$TARGETS" | sed 's/^/  /'
 
-              REPEAT="5"
+              # Match the reproduce loop's strongest base so a green gate actually proves the fix
+              # holds for a rare flake (repeat-each=5 passed too easily to validate anything).
+              REPEAT="20"
               while IFS=$'\t' read -r FILE PROJECT TITLE_RE; do
                 [ -z "$FILE" ] && continue
                 echo "── Gating [$PROJECT] $FILE  -g /$TITLE_RE/"
