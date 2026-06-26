@@ -173,6 +173,7 @@ stages:
                   if [ -z "$BASE" ]; then
                     echo "Could not resolve head branch for PR #$PR_NUM; skipping fix."
                     echo "##vso[task.setvariable variable=PR_BASE;isOutput=true]"
+                    echo "##vso[task.setvariable variable=MATRIX;isOutput=true]{}"
                     echo "##vso[task.setvariable variable=SHOULD_FIX;isOutput=true]false"
                     exit 0
                   fi
@@ -186,34 +187,72 @@ stages:
               # Ensure the label exists (idempotent) so the dedup query below can filter by it.
               gh label create ai-flaky-fix --repo surveyjs/survey-library --color FBCA04 --description "Automated flaky-test stabilization" 2>/dev/null || true
 
-              # Dedup: skip if an open ai-flaky-fix PR for this base already exists.
-              DUPE="$(gh pr list --repo surveyjs/survey-library --state open --base "$BASE" --label ai-flaky-fix --json headRefName -q '.[].headRefName' 2>/dev/null | awk -v p="ai-fix/flaky-${BASE}-" 'index($0,p)==1{print;exit}')"
-              if [ -n "$DUPE" ]; then
-                echo "Open ai-flaky-fix PR already exists for $BASE ($DUPE); skipping fix."
-                echo "##vso[task.setvariable variable=PR_BASE;isOutput=true]$BASE"
-                echo "##vso[task.setvariable variable=SHOULD_FIX;isOutput=true]false"
-                exit 0
-              fi
+              # One open-PR query for this base, reused for every test's dedup check below.
+              OPEN_BRANCHES="$(gh pr list --repo surveyjs/survey-library --state open --base "$BASE" --label ai-flaky-fix --json headRefName -q '.[].headRefName' 2>/dev/null || true)"
 
-              echo "Will stabilize flaky tests; PR base = '$BASE'."
+              # Build the fan-out matrix: ONE leg per flaky test that still needs a fix. For each
+              # entry "<file>::<title>::<project>" compute a STABLE slug (basename + sha8 of the full
+              # identity — independent of list position, so the same test always maps to the same
+              # branch across runs/commits), dedup against the open PRs above, and add survivors to a
+              # JSON object the Fix job consumes as `strategy: matrix`.
+              trim() { sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'; }
+              MATRIX="{}"
+              OLD_IFS="$IFS"; IFS=';' read -ra ENTRIES <<< "${FLAKY_TESTS:-}" || true; IFS="$OLD_IFS"
+              for E in "${ENTRIES[@]:-}"; do
+                E="$(printf '%s' "$E" | trim)"; [ -z "$E" ] && continue
+                IFS=$'\t' read -r FILE _TITLE _PROJECT _ <<< "${E//::/$'\t'}"
+                FILE="$(printf '%s' "${FILE:-}" | trim)"
+                case "$FILE" in *.spec.ts) ;; *) echo "Skipping unparseable entry: $E"; continue ;; esac
+
+                BASENAME="$(basename "$FILE" .spec.ts | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g' | cut -c1-30)"
+                SHA8="$(printf '%s' "$E" | sha256sum | cut -c1-8)"
+                SLUG="${BASENAME}-${SHA8}"
+                BRANCH="ai-flaky-fix/${BASE}-${SLUG}"
+
+                # Per-test dedup: skip when an open ai-flaky-fix PR already targets this exact branch.
+                if printf '%s\n' "$OPEN_BRANCHES" | grep -Fxq "$BRANCH"; then
+                  echo "Open PR already exists for '$BRANCH'; skipping this test."
+                  continue
+                fi
+
+                echo "Queueing fix leg: slug=$SLUG  ($E)"
+                MATRIX="$(printf '%s' "$MATRIX" | jq -c --arg k "t_${SHA8}" --arg entry "$E" --arg slug "$SLUG" '. + {($k): {FLAKY_ENTRY: $entry, SLUG: $slug}}')"
+              done
+
+              NLEGS="$(printf '%s' "$MATRIX" | jq 'length')"
+              echo "PR base = '$BASE'; fix legs queued: $NLEGS"
+              echo "Matrix: $MATRIX"
               echo "##vso[task.setvariable variable=PR_BASE;isOutput=true]$BASE"
-              echo "##vso[task.setvariable variable=SHOULD_FIX;isOutput=true]true"
+              echo "##vso[task.setvariable variable=MATRIX;isOutput=true]$MATRIX"
+              if [ "$NLEGS" -gt 0 ]; then
+                echo "##vso[task.setvariable variable=SHOULD_FIX;isOutput=true]true"
+              else
+                echo "Nothing to fix (all flaky tests already have an open PR, or none parseable)."
+                echo "##vso[task.setvariable variable=SHOULD_FIX;isOutput=true]false"
+              fi
             name: gate
-            displayName: "Resolve PR base & dedup"
+            displayName: "Resolve PR base, build matrix & dedup"
             env:
               GH_TOKEN: $(GITHUB_TOKEN)
               GITHUB_TOKEN: $(GITHUB_TOKEN)
               SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+              FLAKY_TESTS: $(extract.EXTRACTED_FLAKY_TESTS)
 
       # ── Job 2: the expensive build + AI fix. Runs only when Inspect found flaky tests AND no
       # open ai-flaky-fix PR already exists for the target base (dedup decided in Inspect).
       - job: Fix
-        displayName: "Stabilize flaky react tests"
+        displayName: "Stabilize flaky react test"
         dependsOn: Inspect
         timeoutInMinutes: 120
         condition: eq(dependencies.Inspect.outputs['gate.SHOULD_FIX'], 'true')
+        # Fan out one parallel leg per flaky test. The matrix is built at runtime by the Inspect
+        # `gate` step (one entry per test that still needs a fix); each leg gets its own
+        # $(FLAKY_ENTRY) + $(SLUG) and fixes/opens a PR for ONLY that test. The condition above keeps
+        # an empty `{}` matrix from expanding (job is skipped when no test needs fixing).
+        strategy:
+          maxParallel: 5
+          matrix: $[ dependencies.Inspect.outputs['gate.MATRIX'] ]
         variables:
-          AUTO_FLAKY: $[ dependencies.Inspect.outputs['extract.EXTRACTED_FLAKY_TESTS'] ]
           PR_BASE: $[ dependencies.Inspect.outputs['gate.PR_BASE'] ]
           SOURCE_BRANCH: $[ dependencies.Inspect.outputs['gate.SOURCE_BRANCH'] ]
           # Effective build id resolved in Inspect — use this (NOT the raw queue-time LibraryBuildId).
@@ -366,7 +405,7 @@ stages:
             displayName: "Reproduce flaky tests (retries=0)"
             continueOnError: true
             env:
-              FLAKY_TESTS: $(AUTO_FLAKY)
+              FLAKY_TESTS: $(FLAKY_ENTRY)
 
           # Claude Code: diagnose + fix ONLY test code; writes report to ai-fix-out/
           - bash: |
@@ -393,14 +432,14 @@ stages:
 
               FULL_PROMPT="$STATIC_PROMPT
 
-              Target flaky tests to fix (format: <relPath>::<title>::<project>; ';'-separated):
+              Target flaky test to fix (exactly ONE; format <relPath>::<title>::<project>):
               ${FLAKY_TESTS:-}
 
               Original flake evidence directory (absolute): $EVIDENCE_DIR
               Evidence files (absolute paths — Read these directly; they may be nested under per-job subfolders):
               ${EVIDENCE_FILES:-(none downloaded — rely on packages/survey-react-ui/test-results/ from the reproduce run instead)}
 
-              Fix at most 10 tests."
+              Fix ONLY this single target test."
 
               # Compact formatter: render each stream-json event as one readable log line, so the CI
               # log shows turn-by-turn what the agent called and what it got back. Non-JSON lines are
@@ -500,7 +539,7 @@ stages:
             env:
               ANTHROPIC_API_KEY: $(ANTHROPIC_API_KEY)
               CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
-              FLAKY_TESTS: $(AUTO_FLAKY)
+              FLAKY_TESTS: $(FLAKY_ENTRY)
 
           # Surface the agent's raw changes in the CI log (before the guard reverts anything).
           # `git add -N` lets the diff include any NEW untracked files too; it's undone right after
@@ -607,7 +646,7 @@ stages:
             displayName: "Re-run gate (retries=0, repeat-each) — green required before commit"
             condition: eq(variables['AI_HAS_FIX'], 'true')
             env:
-              FLAKY_TESTS: $(AUTO_FLAKY)
+              FLAKY_TESTS: $(FLAKY_ENTRY)
 
           # Build the PR body from the AI report (base resolution + dedup already happened in Inspect).
           - bash: |
@@ -618,12 +657,15 @@ stages:
               BODY_FILE="$(Pipeline.Workspace)/ai-fix-out/pr-body.txt"
               {
                 printf 'Automated flaky-test stabilization by Claude Code (headless).\n\n'
-                printf 'Branch: %s\n\n---\n\n' "$BASE"
+                printf 'Branch: %s\n' "$BASE"
+                printf 'Target test: %s\n\n---\n\n' "${FLAKY_TESTS:-(unknown)}"
                 printf '%s\n' "$REPORT"
               } > "$BODY_FILE"
               echo "Wrote PR body to $BODY_FILE"
             displayName: "Prepare PR body"
             condition: and(succeeded(), eq(variables['AI_HAS_FIX'], 'true'))
+            env:
+              FLAKY_TESTS: $(FLAKY_ENTRY)
 
           # commit test-code fix to a NEW branch and open a NEW PR (skipped on dryRun).
           # Reuses the shared pr-create template: commit `git add -A` + push + `gh pr create`.
@@ -634,11 +676,11 @@ stages:
                 parameters:
                   src: surveyjs/survey-library
                   srcBranch: $(PR_BASE)
-                  targetBranch: ai-fix/flaky-$(PR_BASE)-$(Build.BuildId)
+                  targetBranch: ai-flaky-fix/$(PR_BASE)-$(SLUG)
                   workingDir: $(LibDir)
                   label: ai-flaky-fix
-                  commitMessage: "[ai_fix] stabilize flaky tests on $(PR_BASE)"
-                  prTitle: "[ai_fix] Stabilize flaky tests ($(PR_BASE))"
+                  commitMessage: "[ai_fix] stabilize flaky test $(SLUG) on $(PR_BASE)"
+                  prTitle: "[ai_fix] Stabilize flaky test ($(SLUG)) on $(PR_BASE)"
                   prBodyFile: $(Pipeline.Workspace)/ai-fix-out/pr-body.txt
 
           # always publish the AI report / Claude output for inspection
@@ -646,6 +688,6 @@ stages:
             displayName: "Publish AI fix report"
             inputs:
               PathtoPublish: "$(Pipeline.Workspace)/ai-fix-out"
-              ArtifactName: "AIFix_Report"
+              ArtifactName: "AIFix_Report_$(SLUG)"
               publishLocation: "Container"
             condition: always()
