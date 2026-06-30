@@ -106,5 +106,4 @@ stages:
       jobs:
       - job:
         steps:
-          - script: echo "Staging phase"
-        # - template: templates/analytics/staging.yml
+          - template: templates/analytics/staging.yml

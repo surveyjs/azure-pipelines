@@ -98,5 +98,4 @@ stages:
       jobs:
       - job:
         steps:
-          - script: echo "Staging phase"
-        # - template: templates/pdf/staging.yml
+          - template: templates/pdf/staging.yml
