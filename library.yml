@@ -43,10 +43,7 @@ resources:
       type: github
       endpoint: github.com_surveyjsdeveloper
       name: surveyjs/surveyjs-site-data
-      ${{ if eq(variables['Build.SourceBranchName'], 'V3') }}:
-        ref: V3
-      ${{ else }}:
-        ref: V2
+      ref: $(siteDataRef)
 
     - repository: Utils
       type: github
