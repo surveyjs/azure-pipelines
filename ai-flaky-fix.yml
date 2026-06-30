@@ -173,6 +173,7 @@ stages:
                   if [ -z "$BASE" ]; then
                     echo "Could not resolve head branch for PR #$PR_NUM; skipping fix."
                     echo "##vso[task.setvariable variable=PR_BASE;isOutput=true]"
+                    echo "##vso[task.setvariable variable=MATRIX;isOutput=true]{}"
                     echo "##vso[task.setvariable variable=SHOULD_FIX;isOutput=true]false"
                     exit 0
                   fi
@@ -186,34 +187,72 @@ stages:
               # Ensure the label exists (idempotent) so the dedup query below can filter by it.
               gh label create ai-flaky-fix --repo surveyjs/survey-library --color FBCA04 --description "Automated flaky-test stabilization" 2>/dev/null || true
 
-              # Dedup: skip if an open ai-flaky-fix PR for this base already exists.
-              DUPE="$(gh pr list --repo surveyjs/survey-library --state open --base "$BASE" --label ai-flaky-fix --json headRefName -q '.[].headRefName' 2>/dev/null | awk -v p="ai-fix/flaky-${BASE}-" 'index($0,p)==1{print;exit}')"
-              if [ -n "$DUPE" ]; then
-                echo "Open ai-flaky-fix PR already exists for $BASE ($DUPE); skipping fix."
-                echo "##vso[task.setvariable variable=PR_BASE;isOutput=true]$BASE"
-                echo "##vso[task.setvariable variable=SHOULD_FIX;isOutput=true]false"
-                exit 0
-              fi
+              # One open-PR query for this base, reused for every test's dedup check below.
+              OPEN_BRANCHES="$(gh pr list --repo surveyjs/survey-library --state open --base "$BASE" --label ai-flaky-fix --json headRefName -q '.[].headRefName' 2>/dev/null || true)"
 
-              echo "Will stabilize flaky tests; PR base = '$BASE'."
+              # Build the fan-out matrix: ONE leg per flaky test that still needs a fix. For each
+              # entry "<file>::<title>::<project>" compute a STABLE slug (basename + sha8 of the full
+              # identity — independent of list position, so the same test always maps to the same
+              # branch across runs/commits), dedup against the open PRs above, and add survivors to a
+              # JSON object the Fix job consumes as `strategy: matrix`.
+              trim() { sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'; }
+              MATRIX="{}"
+              OLD_IFS="$IFS"; IFS=';' read -ra ENTRIES <<< "${FLAKY_TESTS:-}" || true; IFS="$OLD_IFS"
+              for E in "${ENTRIES[@]:-}"; do
+                E="$(printf '%s' "$E" | trim)"; [ -z "$E" ] && continue
+                IFS=$'\t' read -r FILE _TITLE _PROJECT _ <<< "${E//::/$'\t'}"
+                FILE="$(printf '%s' "${FILE:-}" | trim)"
+                case "$FILE" in *.spec.ts) ;; *) echo "Skipping unparseable entry: $E"; continue ;; esac
+
+                BASENAME="$(basename "$FILE" .spec.ts | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g' | cut -c1-30)"
+                SHA8="$(printf '%s' "$E" | sha256sum | cut -c1-8)"
+                SLUG="${BASENAME}-${SHA8}"
+                BRANCH="ai-flaky-fix/${BASE}-${SLUG}"
+
+                # Per-test dedup: skip when an open ai-flaky-fix PR already targets this exact branch.
+                if printf '%s\n' "$OPEN_BRANCHES" | grep -Fxq "$BRANCH"; then
+                  echo "Open PR already exists for '$BRANCH'; skipping this test."
+                  continue
+                fi
+
+                echo "Queueing fix leg: slug=$SLUG  ($E)"
+                MATRIX="$(printf '%s' "$MATRIX" | jq -c --arg k "t_${SHA8}" --arg entry "$E" --arg slug "$SLUG" '. + {($k): {FLAKY_ENTRY: $entry, SLUG: $slug}}')"
+              done
+
+              NLEGS="$(printf '%s' "$MATRIX" | jq 'length')"
+              echo "PR base = '$BASE'; fix legs queued: $NLEGS"
+              echo "Matrix: $MATRIX"
               echo "##vso[task.setvariable variable=PR_BASE;isOutput=true]$BASE"
-              echo "##vso[task.setvariable variable=SHOULD_FIX;isOutput=true]true"
+              echo "##vso[task.setvariable variable=MATRIX;isOutput=true]$MATRIX"
+              if [ "$NLEGS" -gt 0 ]; then
+                echo "##vso[task.setvariable variable=SHOULD_FIX;isOutput=true]true"
+              else
+                echo "Nothing to fix (all flaky tests already have an open PR, or none parseable)."
+                echo "##vso[task.setvariable variable=SHOULD_FIX;isOutput=true]false"
+              fi
             name: gate
-            displayName: "Resolve PR base & dedup"
+            displayName: "Resolve PR base, build matrix & dedup"
             env:
               GH_TOKEN: $(GITHUB_TOKEN)
               GITHUB_TOKEN: $(GITHUB_TOKEN)
               SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+              FLAKY_TESTS: $(extract.EXTRACTED_FLAKY_TESTS)
 
       # ── Job 2: the expensive build + AI fix. Runs only when Inspect found flaky tests AND no
       # open ai-flaky-fix PR already exists for the target base (dedup decided in Inspect).
       - job: Fix
-        displayName: "Stabilize flaky react tests"
+        displayName: "Stabilize flaky react test"
         dependsOn: Inspect
         timeoutInMinutes: 120
         condition: eq(dependencies.Inspect.outputs['gate.SHOULD_FIX'], 'true')
+        # Fan out one parallel leg per flaky test. The matrix is built at runtime by the Inspect
+        # `gate` step (one entry per test that still needs a fix); each leg gets its own
+        # $(FLAKY_ENTRY) + $(SLUG) and fixes/opens a PR for ONLY that test. The condition above keeps
+        # an empty `{}` matrix from expanding (job is skipped when no test needs fixing).
+        strategy:
+          maxParallel: 5
+          matrix: $[ dependencies.Inspect.outputs['gate.MATRIX'] ]
         variables:
-          AUTO_FLAKY: $[ dependencies.Inspect.outputs['extract.EXTRACTED_FLAKY_TESTS'] ]
           PR_BASE: $[ dependencies.Inspect.outputs['gate.PR_BASE'] ]
           SOURCE_BRANCH: $[ dependencies.Inspect.outputs['gate.SOURCE_BRANCH'] ]
           # Effective build id resolved in Inspect — use this (NOT the raw queue-time LibraryBuildId).
@@ -326,12 +365,23 @@ stages:
             displayName: "Stage original flake evidence for the agent"
             condition: always()
 
-          # reproduce flaky tests with retries disabled to seed fresh evidence for the agent
+          # Reproduce the flaky test with retries disabled to seed FRESH evidence for the agent and,
+          # crucially, to PROVE the flake is reproducible here — if it isn't, the leg is skipped (no
+          # blind fix, no PR). A rare flake rarely surfaces in a single repeat-each=5 run, so we loop
+          # in escalating rounds (repeat-each 5→10→20→40), stopping early on the FIRST failure, and
+          # bound the work by both a round cap and a wall-clock budget.
           - bash: |
               set -uo pipefail
               cd "$(LibDir)/packages/survey-react-ui"
-              # Target each flaky test precisely (file + project + full-title grep) so the agent
-              # gets evidence for ONLY the flaky variant, not every framework in the spec file.
+              AI_OUT="$(Pipeline.Workspace)/ai-fix-out"; mkdir -p "$AI_OUT"
+
+              # Tunables (inline, minimal — per repo convention; no extra pipeline parameters).
+              INITIAL_REPEAT=5     # --repeat-each for round 1 (doubles each round: 5,10,20,40)
+              MAX_ROUNDS=4         # hard cap on escalating rounds
+              TIME_BUDGET=900      # seconds per leg — stop starting new rounds past this
+
+              # Target the flaky test precisely (file + project + full-title grep) so we reproduce
+              # ONLY the flaky variant, not every framework in the spec file.
               trim() { sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'; }
               # Escape regex metacharacters . * + ? ^ $ { } ( ) | [ ] \ (same set the old JS escaped).
               # Backslash first, then the rest, then ']' — separate sed commands so we never build a
@@ -358,15 +408,60 @@ stages:
                 done <<< "$(printf '%s' "$TITLE" | sed 's/ › /\n/g')"
                 TARGETS="${TARGETS:+$TARGETS$'\n'}${FILE}"$'\t'"${PROJECT}"$'\t'"${RE}"
               done
+
+              REPRODUCED=false
+              STATUS="NOT_REPRODUCED"
+              START="$(date +%s)"
+
               while IFS=$'\t' read -r FILE PROJECT TITLE_RE; do
                 [ -z "$FILE" ] && continue
-                echo "── Reproducing [$PROJECT] $FILE  -g /$TITLE_RE/"
-                npx playwright test "$FILE" --project "$PROJECT" -g "$TITLE_RE" --retries=0 --repeat-each=5 || true
+
+                # 0) Targeting pre-check: confirm the -g regex actually matches ≥1 test. Playwright
+                #    also exits non-zero on "No tests found", so without this a targeting miss would
+                #    be FALSELY counted as a reproduced failure. --list ignores --repeat-each.
+                MATCHED="$(npx playwright test "$FILE" --project "$PROJECT" -g "$TITLE_RE" --list 2>/dev/null \
+                          | grep -cE '\.spec\.ts' || true)"
+                if [ "${MATCHED:-0}" -eq 0 ]; then
+                  echo "##vso[task.logissue type=error]Repro targeting miss: -g /$TITLE_RE/ matched 0 tests for $FILE [$PROJECT]. This is a targeting problem, not flakiness."
+                  STATUS="NO_MATCH"
+                  break
+                fi
+                echo "Targeting OK: -g /$TITLE_RE/ matches $MATCHED test(s) in $FILE [$PROJECT]."
+
+                REPEAT="$INITIAL_REPEAT"
+                for ROUND in $(seq 1 "$MAX_ROUNDS"); do
+                  NOW="$(date +%s)"; ELAPSED=$((NOW - START))
+                  if [ "$ELAPSED" -ge "$TIME_BUDGET" ]; then
+                    echo "Time budget ${TIME_BUDGET}s exhausted after round $((ROUND - 1)); stopping."
+                    break
+                  fi
+                  echo "── Repro round $ROUND/$MAX_ROUNDS [$PROJECT] $FILE  -g /$TITLE_RE/  --repeat-each=$REPEAT (elapsed ${ELAPSED}s)"
+                  if npx playwright test "$FILE" --project "$PROJECT" -g "$TITLE_RE" --retries=0 --repeat-each="$REPEAT"; then
+                    echo "Round $ROUND: all $REPEAT runs passed — not reproduced yet."
+                    REPEAT=$((REPEAT * 2))
+                  else
+                    echo "Round $ROUND: a run FAILED — flake reproduced. Fresh evidence seeded in test-results/."
+                    REPRODUCED=true
+                    STATUS="REPRODUCED"
+                    break
+                  fi
+                done
+                [ "$REPRODUCED" = "true" ] && break
               done <<< "$TARGETS"
+
+              echo "Reproduce status: $STATUS"
+              if [ "$REPRODUCED" = "true" ]; then
+                echo "##vso[task.setvariable variable=REPRODUCED]true"
+              else
+                echo "##vso[task.logissue type=warning]Flaky test NOT reproduced ($STATUS) — skipping AI fix + PR for this leg."
+                echo "##vso[task.setvariable variable=REPRODUCED]false"
+                printf 'AI fix skipped: flaky test could not be reproduced on this agent.\nStatus: %s\nTarget: %s\n' \
+                  "$STATUS" "${FLAKY_TESTS:-(unknown)}" > "$AI_OUT/ai-fix-report.txt"
+              fi
             displayName: "Reproduce flaky tests (retries=0)"
             continueOnError: true
             env:
-              FLAKY_TESTS: $(AUTO_FLAKY)
+              FLAKY_TESTS: $(FLAKY_ENTRY)
 
           # Claude Code: diagnose + fix ONLY test code; writes report to ai-fix-out/
           - bash: |
@@ -391,16 +486,47 @@ stages:
               EVIDENCE_FILES="$(find "$EVIDENCE_DIR" -type f 2>/dev/null | sort)"
               echo "Evidence files available to the agent: $(printf '%s\n' "$EVIDENCE_FILES" | grep -c . || true)"
 
+              # Build the exact, ready-to-run reproduce command for THIS target test, reusing the same
+              # regex construction as the Reproduce / Re-run-gate steps: `-g` is a JS regex over the
+              # SPACE-joined full title, so the " › " separators in <title> (a reporter-only glyph,
+              # absent from the real title) must become ".*" with metacharacters escaped. The agent is
+              # given this verbatim so it never translates " › " itself — a literal "›" in -g matches
+              # nothing ("No tests found").
+              trim() { sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'; }
+              esc() { sed -e 's/\\/\\\\/g' -e 's/[.[*+?^${}()|]/\\&/g' -e 's/\]/\\]/g'; }
+              REPRO_CMD=""
+              ENTRY="$(printf '%s' "${FLAKY_TESTS:-}" | trim)"
+              if [ -n "$ENTRY" ]; then
+                IFS=$'\t' read -r RFILE RTITLE RPROJECT _ <<< "${ENTRY//::/$'\t'}"
+                RFILE="$(printf '%s' "${RFILE:-}" | trim)"
+                RTITLE="$(printf '%s' "${RTITLE:-}" | trim)"
+                RPROJECT="$(printf '%s' "${RPROJECT:-}" | trim)"
+                RE=""
+                while IFS= read -r SEG; do
+                  SEG="$(printf '%s' "$SEG" | trim)"; [ -z "$SEG" ] && continue
+                  RE="${RE:+$RE.*}$(printf '%s' "$SEG" | esc)"
+                done <<< "$(printf '%s' "$RTITLE" | sed 's/ › /\n/g')"
+                # Pilot is React-only: every project maps to the survey-react-ui package.
+                if [ -n "$RFILE" ] && [ -n "$RPROJECT" ] && [ -n "$RE" ]; then
+                  REPRO_CMD="cd packages/survey-react-ui && npx playwright test $RFILE --project $RPROJECT -g '$RE' --retries=0 --repeat-each=5"
+                  echo "Ready-to-run reproduce command for the agent: $REPRO_CMD"
+                fi
+              fi
+
               FULL_PROMPT="$STATIC_PROMPT
 
-              Target flaky tests to fix (format: <relPath>::<title>::<project>; ';'-separated):
+              Target flaky test to fix (exactly ONE; format <relPath>::<title>::<project>):
               ${FLAKY_TESTS:-}
+
+              To RE-RUN this exact test, use this command VERBATIM from the repo root (the -g value is
+              a regex over the SPACE-joined full title — do NOT retype the title with \" › \"):
+              ${REPRO_CMD:-cd packages/survey-react-ui && npx playwright test <file> --project <project> -g '<regex>' --retries=0 --repeat-each=5}
 
               Original flake evidence directory (absolute): $EVIDENCE_DIR
               Evidence files (absolute paths — Read these directly; they may be nested under per-job subfolders):
               ${EVIDENCE_FILES:-(none downloaded — rely on packages/survey-react-ui/test-results/ from the reproduce run instead)}
 
-              Fix at most 10 tests."
+              Fix ONLY this single target test."
 
               # Compact formatter: render each stream-json event as one readable log line, so the CI
               # log shows turn-by-turn what the agent called and what it got back. Non-JSON lines are
@@ -497,10 +623,13 @@ stages:
               fi
             displayName: "Claude: diagnose & fix flaky tests"
             timeoutInMinutes: 30
+            # Only run the (expensive) AI fix when the flake actually reproduced here — otherwise the
+            # leg is skipped (no blind fix, no PR). REPRODUCED is set by the Reproduce step above.
+            condition: and(succeeded(), eq(variables['REPRODUCED'], 'true'))
             env:
               ANTHROPIC_API_KEY: $(ANTHROPIC_API_KEY)
               CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
-              FLAKY_TESTS: $(AUTO_FLAKY)
+              FLAKY_TESTS: $(FLAKY_ENTRY)
 
           # Surface the agent's raw changes in the CI log (before the guard reverts anything).
           # `git add -N` lets the diff include any NEW untracked files too; it's undone right after
@@ -554,6 +683,10 @@ stages:
               echo "All changes are within the test-code allow-list."
               echo "##vso[task.setvariable variable=AI_HAS_FIX]true"
             displayName: "Guard: only test code may change"
+            # Skipped when the flake didn't reproduce (AI step skipped). With the guard skipped,
+            # AI_HAS_FIX is never set → re-run gate + Prepare PR (gated on AI_HAS_FIX) are skipped and
+            # pr-create.yml bails on "nothing to commit" — so the leg opens no PR.
+            condition: and(succeeded(), eq(variables['REPRODUCED'], 'true'))
 
           # Re-run gate: the fixed tests must pass reliably (retries=0, repeat-each) before we PR
           - bash: |
@@ -596,7 +729,9 @@ stages:
 
               echo "Gate targets:"; echo "$TARGETS" | sed 's/^/  /'
 
-              REPEAT="5"
+              # Match the reproduce loop's strongest base so a green gate actually proves the fix
+              # holds for a rare flake (repeat-each=5 passed too easily to validate anything).
+              REPEAT="20"
               while IFS=$'\t' read -r FILE PROJECT TITLE_RE; do
                 [ -z "$FILE" ] && continue
                 echo "── Gating [$PROJECT] $FILE  -g /$TITLE_RE/"
@@ -607,7 +742,7 @@ stages:
             displayName: "Re-run gate (retries=0, repeat-each) — green required before commit"
             condition: eq(variables['AI_HAS_FIX'], 'true')
             env:
-              FLAKY_TESTS: $(AUTO_FLAKY)
+              FLAKY_TESTS: $(FLAKY_ENTRY)
 
           # Build the PR body from the AI report (base resolution + dedup already happened in Inspect).
           - bash: |
@@ -618,12 +753,30 @@ stages:
               BODY_FILE="$(Pipeline.Workspace)/ai-fix-out/pr-body.txt"
               {
                 printf 'Automated flaky-test stabilization by Claude Code (headless).\n\n'
-                printf 'Branch: %s\n\n---\n\n' "$BASE"
+                printf 'Branch: %s\n' "$BASE"
+                printf 'Target test: %s\n\n---\n\n' "${FLAKY_TESTS:-(unknown)}"
                 printf '%s\n' "$REPORT"
               } > "$BODY_FILE"
               echo "Wrote PR body to $BODY_FILE"
+
+              # Derive a human-readable PR title from this leg's "<file>::<title>::<project>" entry.
+              # TEST_FILE = basename; TEST_NAME = leaf test name (last " › " segment). Both feed the
+              # prTitle macro in pr-create — sanitize chars that would break the value once Azure
+              # inlines it as raw text into pr-create's double-quoted PowerShell string (" ` $) and
+              # flatten whitespace/newlines.
+              trim() { sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'; }
+              sanitize() { tr -d '"`$' | tr '\n\t' '  ' | sed -E 's/[[:space:]]+/ /g' | trim; }
+              ENTRY="$(printf '%s' "${FLAKY_TESTS:-}" | trim)"
+              IFS=$'\t' read -r TFILE TTITLE _ <<< "${ENTRY//::/$'\t'}"
+              TEST_FILE="$(basename "$(printf '%s' "${TFILE:-}" | trim)" | sanitize)"
+              TEST_NAME="$(printf '%s' "${TTITLE:-}" | trim)"; TEST_NAME="$(printf '%s' "${TEST_NAME##* › }" | sanitize)"
+              echo "PR title parts: TEST_NAME='$TEST_NAME' TEST_FILE='$TEST_FILE' branch='$BASE'"
+              echo "##vso[task.setvariable variable=TEST_NAME]$TEST_NAME"
+              echo "##vso[task.setvariable variable=TEST_FILE]$TEST_FILE"
             displayName: "Prepare PR body"
             condition: and(succeeded(), eq(variables['AI_HAS_FIX'], 'true'))
+            env:
+              FLAKY_TESTS: $(FLAKY_ENTRY)
 
           # commit test-code fix to a NEW branch and open a NEW PR (skipped on dryRun).
           # Reuses the shared pr-create template: commit `git add -A` + push + `gh pr create`.
@@ -634,11 +787,11 @@ stages:
                 parameters:
                   src: surveyjs/survey-library
                   srcBranch: $(PR_BASE)
-                  targetBranch: ai-fix/flaky-$(PR_BASE)-$(Build.BuildId)
+                  targetBranch: ai-flaky-fix/$(PR_BASE)-$(SLUG)
                   workingDir: $(LibDir)
                   label: ai-flaky-fix
-                  commitMessage: "[ai_fix] stabilize flaky tests on $(PR_BASE)"
-                  prTitle: "[ai_fix] Stabilize flaky tests ($(PR_BASE))"
+                  commitMessage: "[ai_fix] stabilize flaky test $(SLUG) on $(PR_BASE)"
+                  prTitle: "Stabilize flaky test '$(TEST_NAME)' from '$(TEST_FILE)' on branch '$(PR_BASE)'"
                   prBodyFile: $(Pipeline.Workspace)/ai-fix-out/pr-body.txt
 
           # always publish the AI report / Claude output for inspection
@@ -646,6 +799,6 @@ stages:
             displayName: "Publish AI fix report"
             inputs:
               PathtoPublish: "$(Pipeline.Workspace)/ai-fix-out"
-              ArtifactName: "AIFix_Report"
+              ArtifactName: "AIFix_Report_$(SLUG)"
               publishLocation: "Container"
             condition: always()
