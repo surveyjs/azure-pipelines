@@ -415,7 +415,7 @@ stages:
       jobs:
       - job:
         steps:
-          script: echo "Staging phase"
+          - script: echo "Staging phase"
         # - template: templates/library/staging.yml
 
 
