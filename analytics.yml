@@ -28,6 +28,14 @@ resources:
       endpoint: github.com_surveyjsdeveloper
       name: surveyjs/survey-pdf
       ref: $(System.PullRequest.TargetBranch)
+    - repository: SiteData
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/surveyjs-site-data
+    - repository: Utils
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/survey-utils
 
 stages:
   - stage: Lint
@@ -90,3 +98,16 @@ stages:
             parameters:
               store: true
       - template: templates/analytics/test.yml
+
+
+
+  ###############
+  # Stage Phase #
+  ###############
+  - ${{ if eq(variables.isStage, 'True') }}:
+    - stage: Staging
+      displayName: "Staging"
+      dependsOn:
+        - Analytics
+      jobs:
+        - template: templates/analytics/staging.yml
