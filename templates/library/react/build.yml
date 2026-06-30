@@ -37,5 +37,5 @@ steps:
     - task: PublishBuildArtifacts@1
       inputs:
         PathtoPublish: "$(Build.SourcesDirectory)/packages/survey-react-ui/build"
-        ArtifactName: "$(ArtifactNameLibraryReact)"
+        ArtifactName: $(ArtifactNameLibraryReact)-$(Build.BuildId)
         StoreAsTar: true

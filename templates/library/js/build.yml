@@ -36,5 +36,5 @@ steps:
     - task: PublishBuildArtifacts@1
       inputs:
         PathtoPublish: "$(Build.SourcesDirectory)/packages/survey-js-ui/build"
-        ArtifactName: "$(ArtifactNameLibraryJS)"
+        ArtifactName: $(ArtifactNameLibraryJS)-$(Build.BuildId)
         StoreAsTar: true

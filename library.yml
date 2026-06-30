@@ -5,6 +5,11 @@
 
 variables:
   - template: templates/utils/variables.yml
+  - name: branch
+    value: $[coalesce(variables['System.PullRequest.TargetBranch'], variables['Build.SourceBranchName'])]
+  - name: isStage
+    value: ${{ and(ne(variables['Build.Reason'], 'PullRequest'), in(variables['Build.SourceBranchName'], 'master', 'main', 'V3', 'V2', 'pipeline-merging')) }}
+
 
 resources:
   repositories:
@@ -12,22 +17,43 @@ resources:
       type: github
       endpoint: github.com_surveyjsdeveloper
       name: surveyjs/survey-library
-      ref: $(System.PullRequest.TargetBranch)
+      ref: $(branch)
+
     - repository: Creator
       type: github
       endpoint: github.com_surveyjsdeveloper
       name: surveyjs/survey-creator
-      ref: $(System.PullRequest.TargetBranch)
+      ref: $(branch)
+
     - repository: Analytics
       type: github
       endpoint: github.com_surveyjsdeveloper
       name: surveyjs/survey-analytics
-      ref: $(System.PullRequest.TargetBranch)
+      ref: $(branch)
+
     - repository: PDF
       type: github
       endpoint: github.com_surveyjsdeveloper
       name: surveyjs/survey-pdf
-      ref: $(System.PullRequest.TargetBranch)
+      ref: $(branch)
+
+    - repository: Service
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/service
+      # ref: $(branch)
+
+    - repository: SiteData
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/surveyjs-site-data
+      # ref: $(branch)
+
+    - repository: Utils
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/survey-utils
+      # ref: $(branch)
 
 stages:
   - stage: Lint
@@ -53,10 +79,12 @@ stages:
     jobs:
       - job: PRTitle
         displayName: "PR title"
+        condition: eq(variables.isStage, 'False')
         steps:
           - template: templates/utils/pr_title_parser.yml
       - job: Commit
         displayName: "Commit message"
+        condition: eq(variables.isStage, 'False')
         steps:
           - template: templates/utils/commit_message_parser.yml
  
@@ -66,7 +94,8 @@ stages:
   ###############
   - stage: LibraryCoreBuild
     displayName: "Library Core Build"
-    dependsOn: []
+    dependsOn: 
+      - Options
     jobs:
       - job:
         steps:
@@ -76,7 +105,8 @@ stages:
 
   - stage: LibraryReactBuild
     displayName: "Library React Build"
-    dependsOn: []
+    dependsOn: 
+      - Options
     jobs:
       - job:
         steps:
@@ -370,3 +400,26 @@ stages:
       - template: templates/pdf/test.yml
         parameters:
           checkout: PDF
+
+
+
+
+  ###############
+  # Stage Phase #
+  ###############
+  # - ${{ if eq(variables.isStage, 'True') }}:
+  #   - stage: Staging
+  #     displayName: "Staging"
+  #     dependsOn:
+  #       - LibraryCoreTest
+  #       - LibraryReactTest
+  #       - LibraryAngularTest
+  #       - LibraryVueTest
+  #       - LibraryJSTest
+  #     jobs:
+  #       - template: templates/library/staging.yml
+
+
+
+
+  

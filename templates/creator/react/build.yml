@@ -29,17 +29,17 @@ steps:
   - template: ../../utils/artifact.yml
     parameters:
       artifacts:
-        - $(ArtifactNameLibraryCore)
-        - $(ArtifactNameLibraryReact)
+        - $(ArtifactNameLibraryCore)-$(Build.BuildId)
+        - $(ArtifactNameLibraryReact)-$(Build.BuildId)
 
   - template: ../../utils/copy.yml
     parameters:
       items:
-        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)
+        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)-$(Build.BuildId)
           destination: $(Build.SourcesDirectory)/packages/survey-creator-core/node_modules/survey-core
-        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)
+        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)-$(Build.BuildId)
           destination: $(Build.SourcesDirectory)/packages/survey-creator-react/node_modules/survey-core
-        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryReact)
+        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryReact)-$(Build.BuildId)
           destination: $(Build.SourcesDirectory)/packages/survey-creator-react/node_modules/survey-react-ui
 
   - script: npm run build:all
@@ -54,6 +54,6 @@ steps:
     - task: PublishBuildArtifacts@1
       inputs:
         PathtoPublish: '$(Build.SourcesDirectory)/packages/survey-creator-react/build/'
-        ArtifactName: $(ArtifactNameCreatorReact)
+        ArtifactName: $(ArtifactNameCreatorReact)-$(Build.BuildId)
         publishLocation: 'Container'
         StoreAsTar: true

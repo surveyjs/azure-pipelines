@@ -11,5 +11,3 @@ variables:
   ArtifactNameCreatorJS: "SurveyJSCreatorBuildJS"
   ArtifactNameAnalytics: "SurveyJSAnalyticsBuild"
   ArtifactNamePDF: "SurveyjsPDFbuild"
-  PipelineLibrary: $[ iif(eq(variables['System.PullRequest.TargetBranch'], 'V3'), '138', '130') ]
-  PipelineLibraryPR: $[ iif(eq(variables['System.PullRequest.TargetBranch'], 'V3'), '139', '133') ]

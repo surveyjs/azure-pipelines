@@ -37,5 +37,5 @@ steps:
     - task: PublishBuildArtifacts@1
       inputs:
         PathtoPublish: "$(Build.SourcesDirectory)/packages/survey-angular-ui/build"
-        ArtifactName: $(ArtifactNameLibraryAngular)
+        ArtifactName: $(ArtifactNameLibraryAngular)-$(Build.BuildId)
         StoreAsTar: true

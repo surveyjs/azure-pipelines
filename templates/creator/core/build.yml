@@ -26,12 +26,12 @@ steps:
   - template: ../../utils/artifact.yml
     parameters:
       artifacts:
-        - $(ArtifactNameLibraryCore)
+        - $(ArtifactNameLibraryCore)-$(Build.BuildId)
 
   - template: ../../utils/copy.yml
     parameters:
       items:
-        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)
+        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)-$(Build.BuildId)
           destination: $(Build.SourcesDirectory)/packages/survey-creator-core/node_modules/survey-core
 
   - script: npm run build:all
