@@ -14,33 +14,20 @@ resources:
       name: surveyjs/survey-library
       ref: $(branch)
       
-    - repository: Creator
-      type: github
-      endpoint: github.com_surveyjsdeveloper
-      name: surveyjs/survey-creator
-      ref: $(branch)
-
-    - repository: Analytics
-      type: github
-      endpoint: github.com_surveyjsdeveloper
-      name: surveyjs/survey-analytics
-      ref: $(branch)
-
-    - repository: PDF
-      type: github
-      endpoint: github.com_surveyjsdeveloper
-      name: surveyjs/survey-pdf
-      ref: $(branch)
-
     - repository: Service
       type: github
       endpoint: github.com_surveyjsdeveloper
       name: surveyjs/service
-      
+      ref: $(branch)
+
     - repository: SiteData
       type: github
       endpoint: github.com_surveyjsdeveloper
       name: surveyjs/surveyjs-site-data
+      ${{ if eq(variables['Build.SourceBranchName'], 'V3') }}:
+        ref: V3
+      ${{ else }}:
+        ref: V2
 
     - repository: Utils
       type: github
@@ -112,4 +99,7 @@ stages:
       dependsOn:
         - PDF
       jobs:
-        - template: templates/pdf/staging.yml
+      - job:
+        steps:
+          script: echo "Staging phase"
+        # - template: templates/pdf/staging.yml
