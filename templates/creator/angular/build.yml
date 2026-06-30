@@ -29,17 +29,17 @@ steps:
   - template: ../../utils/artifact.yml
     parameters:
       artifacts:
-        - $(ArtifactNameLibraryCore)-$(Build.BuildId)
-        - $(ArtifactNameLibraryAngular)-$(Build.BuildId)
+        - $(ArtifactNameLibraryCore)
+        - $(ArtifactNameLibraryAngular)
 
   - template: ../../utils/copy.yml
     parameters:
       items:
-        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)-$(Build.BuildId)
+        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)
           destination: $(Build.SourcesDirectory)/packages/survey-creator-core/node_modules/survey-core
-        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)-$(Build.BuildId)
+        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)
           destination: $(Build.SourcesDirectory)/packages/survey-creator-angular/node_modules/survey-core
-        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryAngular)-$(Build.BuildId)
+        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryAngular)
           destination: $(Build.SourcesDirectory)/packages/survey-creator-angular/node_modules/survey-angular-ui
 
   - script: npm run build:all
@@ -54,6 +54,6 @@ steps:
     - task: PublishBuildArtifacts@1
       inputs:
         PathtoPublish: '$(Build.SourcesDirectory)/packages/survey-creator-angular/build/'
-        ArtifactName: $(ArtifactNameCreatorAngular)-$(Build.BuildId)
+        ArtifactName: $(ArtifactNameCreatorAngular)
         publishLocation: 'Container'
         StoreAsTar: true

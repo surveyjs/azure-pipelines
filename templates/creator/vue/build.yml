@@ -29,17 +29,17 @@ steps:
   - template: ../../utils/artifact.yml
     parameters:
       artifacts: 
-        - $(ArtifactNameLibraryCore)-$(Build.BuildId)
-        - $(ArtifactNameLibraryVue)-$(Build.BuildId)
+        - $(ArtifactNameLibraryCore)
+        - $(ArtifactNameLibraryVue)
 
   - template: ../../utils/copy.yml
     parameters:
       items:
-        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)-$(Build.BuildId)
+        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)
           destination: $(Build.SourcesDirectory)/packages/survey-creator-core/node_modules/survey-core
-        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)-$(Build.BuildId)
+        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)
           destination: $(Build.SourcesDirectory)/packages/survey-creator-vue/node_modules/survey-core
-        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryVue)-$(Build.BuildId)
+        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryVue)
           destination: $(Build.SourcesDirectory)/packages/survey-creator-vue/node_modules/survey-vue3-ui
 
   - script: npm run build:all
@@ -54,6 +54,6 @@ steps:
     - task: PublishBuildArtifacts@1
       inputs:
         PathtoPublish: '$(Build.SourcesDirectory)/packages/survey-creator-vue/build/'
-        ArtifactName: $(ArtifactNameCreatorVue)-$(Build.BuildId)
+        ArtifactName: $(ArtifactNameCreatorVue)
         publishLocation: 'Container'
         StoreAsTar: true

@@ -32,6 +32,6 @@ steps:
     - task: PublishBuildArtifacts@1
       inputs:
         PathtoPublish: "$(Build.SourcesDirectory)/packages/survey-core/build"
-        ArtifactName: $(ArtifactNameLibraryCore)-$(Build.BuildId)
+        ArtifactName: $(ArtifactNameLibraryCore)
         StoreAsTar: true
       

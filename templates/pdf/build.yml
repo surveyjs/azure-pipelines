@@ -26,12 +26,12 @@ steps:
   - template: ../utils/artifact.yml
     parameters:
       artifacts:
-        - $(ArtifactNameLibraryCore)-$(Build.BuildId)
+        - $(ArtifactNameLibraryCore)
 
   - template: ../utils/copy.yml
     parameters:
       items:
-        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)-$(Build.BuildId)
+        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)
           destination: $(Build.SourcesDirectory)/node_modules/survey-core
 
   - script: npm run build:all
@@ -42,6 +42,6 @@ steps:
     - task: PublishBuildArtifacts@1
       inputs:
         PathtoPublish: '$(Build.SourcesDirectory)/build/'
-        ArtifactName: $(ArtifactNamePDF)-$(Build.BuildId)
+        ArtifactName: $(ArtifactNamePDF)
         publishLocation: 'Container'
         StoreAsTar: true
