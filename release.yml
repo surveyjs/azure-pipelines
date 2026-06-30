@@ -438,7 +438,7 @@ jobs:
 
       git add surveyjs.io/Web.config
       if (git status --porcelain) {
-          git commit -m "released $surveyJSVersion [azurepipelines skip]"
+          git commit -m "released $surveyJSVersion"
           git pull origin $branch -X ours --no-rebase
           git push origin $branch
       }
