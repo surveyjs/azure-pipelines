@@ -5,10 +5,6 @@
 
 variables:
   - template: templates/utils/variables.yml
-  - name: branch
-    value: $[coalesce(variables['System.PullRequest.TargetBranch'], variables['Build.SourceBranchName'])]
-  - name: isStage
-    value: ${{ and(ne(variables['Build.Reason'], 'PullRequest'), in(variables['Build.SourceBranchName'], 'master', 'main', 'V3', 'V2', 'pipeline-merging')) }}
 
 
 resources:
@@ -41,19 +37,16 @@ resources:
       type: github
       endpoint: github.com_surveyjsdeveloper
       name: surveyjs/service
-      # ref: $(branch)
 
     - repository: SiteData
       type: github
       endpoint: github.com_surveyjsdeveloper
       name: surveyjs/surveyjs-site-data
-      # ref: $(branch)
 
     - repository: Utils
       type: github
       endpoint: github.com_surveyjsdeveloper
       name: surveyjs/survey-utils
-      # ref: $(branch)
 
 stages:
   - stage: Lint
@@ -408,17 +401,17 @@ stages:
   ###############
   # Stage Phase #
   ###############
-  # - ${{ if eq(variables.isStage, 'True') }}:
-  #   - stage: Staging
-  #     displayName: "Staging"
-  #     dependsOn:
-  #       - LibraryCoreTest
-  #       - LibraryReactTest
-  #       - LibraryAngularTest
-  #       - LibraryVueTest
-  #       - LibraryJSTest
-  #     jobs:
-  #       - template: templates/library/staging.yml
+  - ${{ if eq(variables.isStage, 'True') }}:
+    - stage: Staging
+      displayName: "Staging"
+      dependsOn:
+        - LibraryCoreTest
+        - LibraryReactTest
+        - LibraryAngularTest
+        - LibraryVueTest
+        - LibraryJSTest
+      jobs:
+        - template: templates/library/staging.yml
 
 
 
