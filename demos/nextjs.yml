@@ -1,0 +1,28 @@
+name: Deploy nextjs demo
+
+trigger: none
+pr: none
+
+resources:
+  webhooks:
+    - webhook: sjsDemosPush
+      connection: sjs-demos-incoming-webhook
+      filters:
+        - path: repository.name
+          value: surveyjs-nextjs
+        - path: ref
+          value: refs/heads/main
+
+jobs:
+  - job: Deploy
+    timeoutInMinutes: 70
+    steps:
+      - checkout: none
+      - task: SSH@0
+        displayName: make up-nextjs
+        timeoutInMinutes: 60
+        inputs:
+          failOnStdErr: false
+          sshEndpoint: 'sjsdemo'
+          runOptions: commands
+          commands: make -C /survey/env up-nextjs

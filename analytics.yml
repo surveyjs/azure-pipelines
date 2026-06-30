@@ -36,7 +36,8 @@ stages:
       - job:
         steps:
           - checkout: self
-            timeoutInMinutes: 2
+            timeoutInMinutes: 5
+            retryCountOnTaskFailure: 5
             fetchDepth: 1
           
           - template: templates/utils/npm.yml
@@ -54,6 +55,10 @@ stages:
         displayName: "Parse PR title"
         steps:
           - template: templates/utils/pr_title_parser.yml
+      - job: Commit
+        displayName: "Commit message"
+        steps:
+          - template: templates/utils/commit_message_parser.yml
 
   - stage: LibraryCoreBuild
     displayName: "Library Core Build"
@@ -72,10 +77,14 @@ stages:
   - stage: Analytics
     displayName: "Analytics"
     dependsOn:
+      - Options
       - LibraryCoreBuild
+    variables:
+      SCR_UPDATE: $[ stageDependencies.Options.Commit.outputs['data.SCR_UPDATE'] ]
     jobs:
       - job:
         displayName: "Build"
+        condition: eq(variables['SCR_UPDATE'], '')
         steps:
           - template: templates/analytics/build.yml
             parameters:

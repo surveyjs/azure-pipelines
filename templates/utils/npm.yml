@@ -6,6 +6,19 @@ steps:
   - bash: |
       set -e
       export PLAYWRIGHT_SKIP_BROWSER_GC=1
+
+      PUP_CACHE="${PUPPETEER_CACHE_DIR:-$HOME/.cache/puppeteer}"
+      if [ -d "$PUP_CACHE" ]; then
+        for VER_DIR in "$PUP_CACHE"/*/*/; do
+          [ -d "$VER_DIR" ] || continue
+          BIN_NAME="$(basename "$(dirname "$VER_DIR")")"
+          if [ -z "$(find "$VER_DIR" -type f -name "$BIN_NAME" 2>/dev/null | head -n1)" ]; then
+            echo "[puppeteer] removing incomplete browser dir: $VER_DIR"
+            rm -rf "$VER_DIR"
+          fi
+        done
+      fi
+
       CACHE_DIR="/tmp"
       FLAGS="--no-audit --no-fund --no-update-notifier --no-package-lock"
       PIDS=()

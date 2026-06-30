@@ -1,7 +1,15 @@
 # SurveyJS release pipeline
 
+# Need to be configured in UI:
+# projectsBranch - branch to checkout repos and release from (e.g. "main" / "master" / "V3")
+# runReleaseArgs - arguments for the release script
+# npmPublishArgs - arguments for the npm publish script
+# azureBlobContainer - Azure Blob Storage container name
+# azureBlobSubscription - Azure subscription name for the Azure Blob Storage service connection
+
+# Projects list for npm publish stage (each usage)
 parameters:
-  - name: publishList
+  - name: pkgList
     type: object
     default:
       - survey-core
@@ -91,6 +99,7 @@ jobs:
 - job: Release
   timeoutInMinutes: 90
   steps:
+    
   # Verify the latest run of each upstream *Main pipeline succeeded
   - pwsh: |
       $ErrorActionPreference = 'Stop'
@@ -203,14 +212,20 @@ jobs:
 
 
 
-  # Bump versions and build
+  - script: |
+      git config --global user.email "surveyjs.org@gmail.com"
+      git config --global user.name "surveyjsdeveloper"
+    displayName: 'Set git config'
+
+
+
+  # Bump versions and build packages
   - script: |
       cd packages/survey-core       && npm run release -- $(runReleaseArgs) --skip.commit --skip.tag && npm run build:all && cd -
       cd packages/survey-react-ui   && npm run release -- $(runReleaseArgs) --skip.commit --skip.tag && npm run build && cd -
       cd packages/survey-angular-ui && npm run release -- $(runReleaseArgs) --skip.commit --skip.tag && npm run build && cd -
       cd packages/survey-vue3-ui    && npm run release -- $(runReleaseArgs) --skip.commit --skip.tag && npm run build && cd -
-      git add -A
-      cd packages/survey-js-ui      && npm run release -- $(runReleaseArgs) --commit-all && npm run build && cd -
+      cd packages/survey-js-ui      && npm run release -- $(runReleaseArgs) --skip.commit --skip.tag && npm run build && cd -
     workingDirectory: $(Build.SourcesDirectory)/survey-library
     displayName: 'Build survey-library'
 
@@ -219,32 +234,68 @@ jobs:
       cd packages/survey-creator-react   && npm run release -- $(runReleaseArgs) --skip.commit --skip.tag && npm run build && cd -
       cd packages/survey-creator-angular && npm run release -- $(runReleaseArgs) --skip.commit --skip.tag && npm run build && cd -
       cd packages/survey-creator-vue     && npm run release -- $(runReleaseArgs) --skip.commit --skip.tag && npm run build && cd -
-      git add -A
-      cd packages/survey-creator-js      && npm run release -- $(runReleaseArgs) --commit-all && npm run build && cd -
+      cd packages/survey-creator-js      && npm run release -- $(runReleaseArgs) --skip.commit --skip.tag && npm run build && cd -
     workingDirectory: $(Build.SourcesDirectory)/survey-creator
     displayName: 'Build survey-creator'
 
   - script: |
-      npm run release -- $(runReleaseArgs)
+      npm run release -- $(runReleaseArgs) --skip.commit --skip.tag
       npm run build
     workingDirectory: $(Build.SourcesDirectory)/survey-analytics
     displayName: 'Build survey-analytics'
 
   - script: |
-      npm run release -- $(runReleaseArgs)
+      npm run release -- $(runReleaseArgs) --skip.commit --skip.tag
       npm run build
     workingDirectory: $(Build.SourcesDirectory)/survey-pdf
     displayName: 'Build survey-pdf'
 
   - script: |
-      npm run release -- $(runReleaseArgs)
+      npm run release -- $(runReleaseArgs) --skip.commit --skip.tag
       npm run build
     workingDirectory: $(Build.SourcesDirectory)/custom-widgets
     displayName: 'Build custom-widgets'
 
 
 
-  #Copy builds to DevBuilds (just all builds in single folder)
+  # Commit and tag the release in each repo
+  - script: |
+      set -e
+
+      cd $(Build.SourcesDirectory)/survey-library
+      git add -A
+      VERSION=$(node -p "require('./packages/survey-core/package.json').version")
+      git commit -m "Release: $VERSION [azurepipelines skip]"
+      git tag -a "v$VERSION" -m "Release: $VERSION"
+
+      cd $(Build.SourcesDirectory)/survey-creator
+      git add -A
+      VERSION=$(node -p "require('./packages/survey-creator-core/package.json').version")
+      git commit -m "Release: $VERSION [azurepipelines skip]"
+      git tag -a "v$VERSION" -m "Release: $VERSION"
+
+      cd $(Build.SourcesDirectory)/survey-analytics
+      git add -A
+      VERSION=$(node -p "require('./package.json').version")
+      git commit -m "Release: $VERSION [azurepipelines skip]"
+      git tag -a "v$VERSION" -m "Release: $VERSION"
+
+      cd $(Build.SourcesDirectory)/survey-pdf
+      git add -A
+      VERSION=$(node -p "require('./package.json').version")
+      git commit -m "Release: $VERSION [azurepipelines skip]"
+      git tag -a "v$VERSION" -m "Release: $VERSION"
+
+      cd $(Build.SourcesDirectory)/custom-widgets
+      git add -A
+      VERSION=$(node -p "require('./package.json').version")
+      git commit -m "Release: $VERSION [azurepipelines skip]"
+      git tag -a "v$VERSION" -m "Release: $VERSION"
+    displayName: 'Commit and tag releases'
+
+
+
+  # Copy builds to DevBuilds (just all builds in a single folder)
   - pwsh: |
       $devBuilds = "$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds"
 
@@ -292,8 +343,33 @@ jobs:
 
 
 
+  # Upload to Azure Blobs
+  - task: AzureCLI@2
+    displayName: 'DevBuilds Upload to Azure Blobs'
+    inputs:
+      azureSubscription: '$(azureBlobSubscription)'
+      scriptType: pscore
+      scriptLocation: inlineScript
+      inlineScript: |
+        $ErrorActionPreference = 'Stop'
+
+        # CleanTargetBeforeCopy: remove existing blobs in the container first
+        az storage blob delete-batch `
+          --account-name surveyjsdocsstorage `
+          --source "$(azureBlobContainer)" `
+          --auth-mode login
+
+        az storage blob upload-batch `
+          --account-name surveyjsdocsstorage `
+          --destination "$(azureBlobContainer)" `
+          --source "$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/" `
+          --auth-mode login `
+          --overwrite true
+
+
+
   # Publish to npm
-  - ${{ each pkg in parameters.publishList }}:
+  - ${{ each pkg in parameters.pkgList }}:
     - task: Npm@1
       inputs:
         command: "custom"
@@ -332,20 +408,6 @@ jobs:
 
 
 
-  # Upload to Azure Blobs
-  - task: AzureFileCopy@6
-    displayName: 'DevBuilds Upload to Azure Blobs'
-    inputs:
-      SourcePath: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/'
-      azureSubscription: 'SurveyJS Azure V2'
-      Destination: 'AzureBlob'
-      storage: 'surveyjsdocsstorage'
-      ContainerName: $(azureBlobContainer)
-      BlobPrefix: '/'
-      CleanTargetBeforeCopy: true
-
-
-
   # Update Web.config
   - pwsh: |
       $branch = "$(projectsBranch)"
@@ -376,7 +438,7 @@ jobs:
 
       git add surveyjs.io/Web.config
       if (git status --porcelain) {
-          git commit -m "released $surveyJSVersion [azurepipelines skip]"
+          git commit -m "released $surveyJSVersion"
           git pull origin $branch -X ours --no-rebase
           git push origin $branch
       }

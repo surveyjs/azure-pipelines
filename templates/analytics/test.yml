@@ -6,6 +6,7 @@ parameters:
 jobs:
   - job:
     displayName: "Unit"
+    condition: eq(variables['SCR_UPDATE'], '')
     steps:
       - template: build.yml
         parameters:
@@ -23,6 +24,7 @@ jobs:
 
   - job:
     displayName: "E2E"
+    condition: eq(variables['SCR_UPDATE'], '')
     steps:
       - template: build.yml
         parameters:
@@ -53,4 +55,30 @@ jobs:
           testRunTitle: "Publish E2E test results"
         condition: succeededOrFailed()
 
+  - job:
+    displayName: "SCR Update"
+    condition: and(ne(variables['SCR_UPDATE'], ''), ne(variables['System.PullRequest.SourceBranch'], ''))
+    steps:
+      - template: build.yml
+        parameters:
+          checkout: ${{ parameters.checkout }}
+
+      - script: npm run pwinst
+        displayName: "Playwright install"
+
+      - script: npx playwright test --project chromium --update-snapshots
+        workingDirectory: $(Build.SourcesDirectory)
+        displayName: "Update SCR"
+
+      - powershell: |
+          $env:GIT_REDIRECT_STDERR = '2>&1'
+          git config --global user.email "surveyjs.org@gmail.com"
+          git config --global user.name "surveyjsdeveloper"
+          git add $(Build.SourcesDirectory)/e2e
+          $total = (git diff --cached --name-only | Measure-Object -Line).Lines
+          git commit --allow-empty -m "updated $total screenshots" --no-verify
+          git fetch origin "$(System.PullRequest.SourceBranch)"
+          git rebase --onto "origin/$(System.PullRequest.SourceBranch)" HEAD~1
+          git push --no-verify origin "HEAD:$(System.PullRequest.SourceBranch)"
+        displayName: "commit updated screenshots"
 

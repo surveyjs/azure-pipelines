@@ -1,0 +1,804 @@
+# AI fix pipeline for FLAKY Playwright tests (pilot: Library React).
+# Reactive: runs after a Library pipeline build, inspects that run's test-results for flaky tests,
+# and only builds + fixes when flaky tests are present. This pipeline runs in the azure-pipelines
+# repo (so `self` is azure-pipelines); it checks out survey-library explicitly via the LibraryRepo
+# resource and operates on it.
+# Requires variable group `ai-fix-secrets` (ANTHROPIC_API_KEY, GITHUB_TOKEN). Self-contained.
+
+trigger: none
+pr: none
+
+resources:
+  pipelines:
+    - pipeline: Library
+      source: Library Main
+      trigger:
+        branches:
+          include:
+            - '*'
+  repositories:
+    # This pipeline runs in the azure-pipelines repo, so `self` is NOT survey-library.
+    # Declare survey-library explicitly so the Fix job can check it out and operate on it.
+    - repository: LibraryRepo
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/survey-library
+
+parameters:
+  - name: dryRun            # true = produce report only, do not open a PR
+    type: boolean
+    default: false
+
+variables:
+  - group: ai-fix-secrets
+  - template: templates/utils/variables.yml
+  # `LibraryBuildId` is a QUEUE-TIME variable defined in the pipeline UI
+  # (Edit → Variables → add `LibraryBuildId`, check "Settable at queue time", default empty) —
+  # NOT here, because a YAML-defined variable cannot be overridden at queue time. Leave it blank to
+  # use the triggering/latest Library run, or enter a specific Library build id when running manually.
+  # It is resolved into the effective build id by the "Resolve effective Library build id" step below.
+
+stages:
+  - stage: AIFixFlaky
+    displayName: "AI fix flaky tests"
+    jobs:
+      - job: Inspect
+        displayName: "Inspect triggering build for flaky tests"
+        timeoutInMinutes: 15
+        steps:
+          - checkout: none
+
+          # Resolve the effective Library build id: use the queue-time `LibraryBuildId` variable when it
+          # holds a real (positive integer) build id, otherwise fall back to the triggering/latest run.
+          # Passed via env so an unset/blank UI variable is just an empty string (no command-substitution).
+          - bash: |
+              set -euo pipefail
+              BID="${LIBRARY_BUILD_ID:-}"
+              if ! printf '%s' "$BID" | grep -Eq '^[1-9][0-9]*$'; then
+                echo "No explicit LibraryBuildId ('$BID'); using triggering/latest Library run."
+                BID="$RUN_ID"
+              fi
+              echo "Effective Library build id: $BID"
+              echo "##vso[task.setvariable variable=BuildId;isOutput=true]$BID"
+            name: resolve
+            displayName: "Resolve effective Library build id"
+            env:
+              LIBRARY_BUILD_ID: $(LibraryBuildId)
+              RUN_ID: $(resources.pipeline.Library.runID)
+
+          # Download the triggering run's test-results (Container artifacts). continueOnError so a
+          # missing artifact just yields "no flaky" instead of failing the job.
+          - task: DownloadBuildArtifacts@1
+            displayName: "Download test-results from triggering run"
+            inputs:
+              buildType: specific
+              project: $(System.TeamProjectId)
+              definition: $(resources.pipeline.Library.pipelineID)
+              buildVersionToDownload: specific
+              buildId: $(resolve.BuildId)
+              downloadType: specific
+              itemPattern: "Library_React_*/**"
+              downloadPath: $(Agent.TempDirectory)
+            continueOnError: true
+
+          # Parse results.json from each downloaded report -> HAS_FLAKY + EXTRACTED_FLAKY_TESTS.
+          - bash: |
+              set -uo pipefail
+              shopt -s nullglob
+              FILES=( "$(Agent.TempDirectory)"/Library_React_*/results.json )
+              if [ ${#FILES[@]} -eq 0 ]; then
+                echo "No results.json downloaded — no flaky tests."
+                echo "##vso[task.setvariable variable=HAS_FLAKY;isOutput=true]false"
+                echo "##vso[task.setvariable variable=EXTRACTED_FLAKY_TESTS;isOutput=true]"
+                exit 0
+              fi
+
+              # For each Playwright JSON report, jq walks the suite tree building the FULL test title
+              # (describe chain + test, excluding the file-level suite) so the gate can target one
+              # framework variant precisely, and emits one "<relPath>::<title>::<project>" line per
+              # flaky test. ';' and '::' are stripped from titles so they can't corrupt the list.
+              FLAKY="$(
+                for f in "${FILES[@]}"; do
+                  jq -r '
+                    def clean: gsub(";";" ") | gsub("::";": ") | gsub("^\\s+|\\s+$";"");
+                    def walk($p):
+                      . as $suite
+                      | ($suite.title // "") as $t
+                      | (if ($t|test("\\.spec\\.ts$")) or $t=="" then $p
+                         elif $p=="" then $t else $p+" › "+$t end) as $pfx
+                      | ( $suite.specs[]? as $s
+                          | $s.tests[]? | select(.status=="flaky")
+                          | (($s.file // $suite.file // "")
+                             | [match("(?:e2e|screenshots)/.*\\.spec\\.ts$")][0].string?) as $rel
+                          | select($rel != null)
+                          | $rel + "::"
+                            + (($pfx + (if $pfx=="" then "" else " › " end) + ($s.title // "")) | clean)
+                            + "::" + .projectName ),
+                        ( $suite.suites[]? | walk($pfx) );
+                    .suites[]? | walk("")
+                  ' "$f" 2>/dev/null || echo "skip $f" >&2
+                done | sort -u | paste -sd ';' -
+              )"
+
+              if [ -z "$FLAKY" ]; then
+                echo "No flaky tests in downloaded report(s)."
+                echo "##vso[task.setvariable variable=HAS_FLAKY;isOutput=true]false"
+                echo "##vso[task.setvariable variable=EXTRACTED_FLAKY_TESTS;isOutput=true]"
+              else
+                echo "Detected flaky test(s):"; echo "$FLAKY" | tr ';' '\n' | sed 's/^/  /'
+                echo "##vso[task.setvariable variable=HAS_FLAKY;isOutput=true]true"
+                echo "##vso[task.setvariable variable=EXTRACTED_FLAKY_TESTS;isOutput=true]$FLAKY"
+              fi
+            name: extract
+            displayName: "Extract flaky tests from report(s)"
+            condition: always()
+
+          # Resolve the PR base branch and dedup BEFORE the expensive Fix job runs — if an open
+          # ai-flaky-fix PR for this base already exists, skip the whole build + AI step.
+          - bash: |
+              set -uo pipefail
+
+              # Resolve the survey-library base branch the fix PR should target.
+              # Derive sourceBranch from the build we actually inspect ($(resolve.BuildId)) via the
+              # Builds REST API, so a manually-supplied build id checks out THAT build's branch — not
+              # the triggering run's. Fall back to the resource's sourceBranch if the API is unavailable.
+              BID="$(resolve.BuildId)"
+              SRC=""
+              # projectID is a GUID (URL-safe). Query the project the Library build actually lives in
+              # (the resource's project), NOT this pipeline's — else the build-id lookup 404s cross-project.
+              URL="$(System.TeamFoundationCollectionUri)$(resources.pipeline.Library.projectID)/_apis/build/builds/${BID}?api-version=7.0"
+              echo "GET $URL"
+              RESP="$(curl -sf -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" "$URL" || true)"
+              if [ -n "$RESP" ]; then
+                PARSED="$(printf '%s' "$RESP" | jq -r '[.sourceBranch // "", .sourceVersion // ""] | @tsv' 2>/dev/null || true)"
+                SRC="${PARSED%%$'\t'*}"
+                COMMIT="${PARSED#*$'\t'}"
+                echo "Resolved sourceBranch for build $BID : $SRC (commit $COMMIT)"
+              else
+                echo "Could not resolve sourceBranch for build $BID via API (empty/failed response)."
+              fi
+              if [ -z "$SRC" ]; then
+                SRC="$(resources.pipeline.Library.sourceBranch)"
+                echo "Falling back to triggering run sourceBranch: $SRC"
+              fi
+              # Export immediately (before the early-exit branches below) so the Fix job always sees it.
+              echo "##vso[task.setvariable variable=SOURCE_BRANCH;isOutput=true]$SRC"
+
+              # PR validation build — sourceBranch is refs/pull/<N>/merge; resolve the PR's head branch
+              # so the fix merges into that same PR. For a branch build, strip refs/heads/.
+              case "$SRC" in
+                refs/pull/*)
+                  PR_NUM="$(printf '%s' "$SRC" | sed -E 's#^refs/pull/([0-9]+)/.*#\1#')"
+                  BASE="$(gh pr view "$PR_NUM" --repo surveyjs/survey-library --json headRefName -q .headRefName | tr -d '[:space:]')"
+                  if [ -z "$BASE" ]; then
+                    echo "Could not resolve head branch for PR #$PR_NUM; skipping fix."
+                    echo "##vso[task.setvariable variable=PR_BASE;isOutput=true]"
+                    echo "##vso[task.setvariable variable=MATRIX;isOutput=true]{}"
+                    echo "##vso[task.setvariable variable=SHOULD_FIX;isOutput=true]false"
+                    exit 0
+                  fi
+                  echo "PR build: fix PR will target PR #$PR_NUM head branch '$BASE'."
+                  ;;
+                *)
+                  BASE="${SRC#refs/heads/}"
+                  ;;
+              esac
+
+              # Ensure the label exists (idempotent) so the dedup query below can filter by it.
+              gh label create ai-flaky-fix --repo surveyjs/survey-library --color FBCA04 --description "Automated flaky-test stabilization" 2>/dev/null || true
+
+              # One open-PR query for this base, reused for every test's dedup check below.
+              OPEN_BRANCHES="$(gh pr list --repo surveyjs/survey-library --state open --base "$BASE" --label ai-flaky-fix --json headRefName -q '.[].headRefName' 2>/dev/null || true)"
+
+              # Build the fan-out matrix: ONE leg per flaky test that still needs a fix. For each
+              # entry "<file>::<title>::<project>" compute a STABLE slug (basename + sha8 of the full
+              # identity — independent of list position, so the same test always maps to the same
+              # branch across runs/commits), dedup against the open PRs above, and add survivors to a
+              # JSON object the Fix job consumes as `strategy: matrix`.
+              trim() { sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'; }
+              MATRIX="{}"
+              OLD_IFS="$IFS"; IFS=';' read -ra ENTRIES <<< "${FLAKY_TESTS:-}" || true; IFS="$OLD_IFS"
+              for E in "${ENTRIES[@]:-}"; do
+                E="$(printf '%s' "$E" | trim)"; [ -z "$E" ] && continue
+                IFS=$'\t' read -r FILE _TITLE _PROJECT _ <<< "${E//::/$'\t'}"
+                FILE="$(printf '%s' "${FILE:-}" | trim)"
+                case "$FILE" in *.spec.ts) ;; *) echo "Skipping unparseable entry: $E"; continue ;; esac
+
+                BASENAME="$(basename "$FILE" .spec.ts | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g' | cut -c1-30)"
+                SHA8="$(printf '%s' "$E" | sha256sum | cut -c1-8)"
+                SLUG="${BASENAME}-${SHA8}"
+                BRANCH="ai-flaky-fix/${BASE}-${SLUG}"
+
+                # Per-test dedup: skip when an open ai-flaky-fix PR already targets this exact branch.
+                if printf '%s\n' "$OPEN_BRANCHES" | grep -Fxq "$BRANCH"; then
+                  echo "Open PR already exists for '$BRANCH'; skipping this test."
+                  continue
+                fi
+
+                echo "Queueing fix leg: slug=$SLUG  ($E)"
+                MATRIX="$(printf '%s' "$MATRIX" | jq -c --arg k "t_${SHA8}" --arg entry "$E" --arg slug "$SLUG" '. + {($k): {FLAKY_ENTRY: $entry, SLUG: $slug}}')"
+              done
+
+              NLEGS="$(printf '%s' "$MATRIX" | jq 'length')"
+              echo "PR base = '$BASE'; fix legs queued: $NLEGS"
+              echo "Matrix: $MATRIX"
+              echo "##vso[task.setvariable variable=PR_BASE;isOutput=true]$BASE"
+              echo "##vso[task.setvariable variable=MATRIX;isOutput=true]$MATRIX"
+              if [ "$NLEGS" -gt 0 ]; then
+                echo "##vso[task.setvariable variable=SHOULD_FIX;isOutput=true]true"
+              else
+                echo "Nothing to fix (all flaky tests already have an open PR, or none parseable)."
+                echo "##vso[task.setvariable variable=SHOULD_FIX;isOutput=true]false"
+              fi
+            name: gate
+            displayName: "Resolve PR base, build matrix & dedup"
+            env:
+              GH_TOKEN: $(GITHUB_TOKEN)
+              GITHUB_TOKEN: $(GITHUB_TOKEN)
+              SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+              FLAKY_TESTS: $(extract.EXTRACTED_FLAKY_TESTS)
+
+      # ── Job 2: the expensive build + AI fix. Runs only when Inspect found flaky tests AND no
+      # open ai-flaky-fix PR already exists for the target base (dedup decided in Inspect).
+      - job: Fix
+        displayName: "Stabilize flaky react test"
+        dependsOn: Inspect
+        timeoutInMinutes: 120
+        condition: eq(dependencies.Inspect.outputs['gate.SHOULD_FIX'], 'true')
+        # Fan out one parallel leg per flaky test. The matrix is built at runtime by the Inspect
+        # `gate` step (one entry per test that still needs a fix); each leg gets its own
+        # $(FLAKY_ENTRY) + $(SLUG) and fixes/opens a PR for ONLY that test. The condition above keeps
+        # an empty `{}` matrix from expanding (job is skipped when no test needs fixing).
+        strategy:
+          maxParallel: 5
+          matrix: $[ dependencies.Inspect.outputs['gate.MATRIX'] ]
+        variables:
+          PR_BASE: $[ dependencies.Inspect.outputs['gate.PR_BASE'] ]
+          SOURCE_BRANCH: $[ dependencies.Inspect.outputs['gate.SOURCE_BRANCH'] ]
+          # Effective build id resolved in Inspect — use this (NOT the raw queue-time LibraryBuildId).
+          EffectiveBuildId: $[ dependencies.Inspect.outputs['resolve.BuildId'] ]
+          LibDir: $(Build.SourcesDirectory)/survey-library
+          PromptFile: $(Build.SourcesDirectory)/azure-pipelines/prompts/flaky-fix.md
+        steps:
+          # Check out THIS repo (self = azure-pipelines) to read the AI prompt file under prompts/.
+          # No `path:` — with multiple checkouts Azure puts each repo in its default
+          # $(Build.SourcesDirectory)/<repo>, here .../azure-pipelines.
+          - checkout: self
+            fetchDepth: 1
+            displayName: "Checkout azure-pipelines (AI prompts)"
+
+          # Default checkout location → $(Build.SourcesDirectory)/survey-library. The repo working
+          # tree stays under s/, while ai-fix-out lives outside s/, so `git add -A` here is safe.
+          - checkout: LibraryRepo
+            persistCredentials: true
+            displayName: "Checkout survey-library"
+            timeoutInMinutes: 5
+            retryCountOnTaskFailure: 5
+            fetchDepth: 1
+
+          - bash: |
+              set -euo pipefail
+              SRC="$(SOURCE_BRANCH)"
+              echo "Triggering Library build ran on: $SRC"
+              SD="$(LibDir)"
+              case "$SRC" in
+                # PR validation build — sourceBranch is refs/pull/<N>/merge|head. The /merge ref is
+                # transient; fetch the stable /head (the PR branch tip), matching build.yml's convention.
+                refs/pull/*)
+                  PR_NUM="$(echo "$SRC" | sed -E 's#^refs/pull/([0-9]+)/.*#\1#')"
+                  echo "PR build detected (PR #$PR_NUM); fetching pull/$PR_NUM/head"
+                  git -C "$SD" fetch --depth 1 origin "pull/$PR_NUM/head"
+                  ;;
+                *)
+                  BRANCH="$(echo "$SRC" | sed 's#^refs/heads/##')"
+                  echo "Branch build; fetching $BRANCH"
+                  git -C "$SD" fetch --depth 1 origin "$BRANCH"
+                  ;;
+              esac
+              git -C "$SD" checkout FETCH_HEAD
+            displayName: "Switch survey-library to triggering branch"
+
+          - template: templates/utils/npm.yml
+            parameters:
+              directories:
+                - $(LibDir)
+                - $(LibDir)/packages/survey-core
+                - $(LibDir)/packages/survey-react-ui
+                # - $(LibDir)/packages/survey-angular-ui
+                # - $(LibDir)/packages/survey-angular-ui/example
+                # - $(LibDir)/packages/survey-vue3-ui
+                # - $(LibDir)/packages/survey-vue3-ui/example
+                # - $(LibDir)/packages/survey-js-ui
+
+          - bash: npm run build:all
+            workingDirectory: $(LibDir)/packages/survey-core
+            displayName: "Build Core"
+
+          - bash: npm run build
+            workingDirectory: $(LibDir)/packages/survey-react-ui
+            displayName: "Build React"
+
+          # - script: npm run build
+          #   workingDirectory: $(LibDir)/packages/survey-angular-ui
+          #   displayName: "Build Angular"
+
+          # - script: npm run build:example:prod
+          #   workingDirectory: $(LibDir)/packages/survey-angular-ui
+          #   displayName: "Build Angular Example"
+
+          # - script: npm run build
+          #   workingDirectory: $(LibDir)/packages/survey-vue3-ui
+          #   displayName: "Build Vue3"
+
+          # - script: npm run build:example:prod
+          #   workingDirectory: $(LibDir)/packages/survey-vue3-ui
+          #   displayName: "Build Vue3 Example"
+
+          # - script: npm run build
+          #   workingDirectory: $(LibDir)/packages/survey-js-ui
+          #   displayName: "Build JS"
+
+          # re-download the originals (evidence doesn't survive across jobs) and stage them for the agent
+          - task: DownloadBuildArtifacts@1
+            displayName: "Download original flake evidence"
+            inputs:
+              buildType: specific
+              project: $(System.TeamProjectId)
+              definition: $(resources.pipeline.Library.pipelineID)
+              buildVersionToDownload: specific
+              buildId: $(EffectiveBuildId)
+              downloadType: specific
+              itemPattern: "Library_React_*/**"
+              downloadPath: $(Agent.TempDirectory)
+            continueOnError: true
+
+          - bash: |
+              set -uo pipefail
+              DEST="$(Pipeline.Workspace)/ai-fix-out/original-flake-evidence"
+              mkdir -p "$DEST"
+              for SRC in "$(Agent.TempDirectory)"/Library_React_*; do
+                [ -d "$SRC" ] && cp -r "$SRC" "$DEST/"
+              done
+              echo "Original flake evidence staged under $DEST. Files (recursive):"
+              find "$DEST" -type f 2>/dev/null | sort || true
+              echo "Total evidence files: $(find "$DEST" -type f 2>/dev/null | wc -l | tr -d ' ')"
+            displayName: "Stage original flake evidence for the agent"
+            condition: always()
+
+          # Reproduce the flaky test with retries disabled to seed FRESH evidence for the agent and,
+          # crucially, to PROVE the flake is reproducible here — if it isn't, the leg is skipped (no
+          # blind fix, no PR). A rare flake rarely surfaces in a single repeat-each=5 run, so we loop
+          # in escalating rounds (repeat-each 5→10→20→40), stopping early on the FIRST failure, and
+          # bound the work by both a round cap and a wall-clock budget.
+          - bash: |
+              set -uo pipefail
+              cd "$(LibDir)/packages/survey-react-ui"
+              AI_OUT="$(Pipeline.Workspace)/ai-fix-out"; mkdir -p "$AI_OUT"
+
+              # Tunables (inline, minimal — per repo convention; no extra pipeline parameters).
+              INITIAL_REPEAT=5     # --repeat-each for round 1 (doubles each round: 5,10,20,40)
+              MAX_ROUNDS=4         # hard cap on escalating rounds
+              TIME_BUDGET=900      # seconds per leg — stop starting new rounds past this
+
+              # Target the flaky test precisely (file + project + full-title grep) so we reproduce
+              # ONLY the flaky variant, not every framework in the spec file.
+              trim() { sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'; }
+              # Escape regex metacharacters . * + ? ^ $ { } ( ) | [ ] \ (same set the old JS escaped).
+              # Backslash first, then the rest, then ']' — separate sed commands so we never build a
+              # bracket expression containing '\' or '[.' (which sed parses as a collating symbol).
+              esc() { sed -e 's/\\/\\\\/g' -e 's/[.[*+?^${}()|]/\\&/g' -e 's/\]/\\]/g'; }
+              # FLAKY_TESTS = "<file>::<title>::<project>;...". Build one TAB-separated target line
+              # "<file>\t<project>\t<grep-regex>" per test; the regex is the full title split on
+              # " › ", each segment escaped and joined by ".*", so only THAT variant runs.
+              TARGETS=""
+              OLD_IFS="$IFS"; IFS=';' read -ra ENTRIES <<< "${FLAKY_TESTS:-}" || true; IFS="$OLD_IFS"
+              for E in "${ENTRIES[@]:-}"; do
+                E="$(printf '%s' "$E" | trim)"; [ -z "$E" ] && continue
+                IFS=$'\t' read -r FILE TITLE PROJECT _ <<< "${E//::/$'\t'}"
+                FILE="$(printf '%s' "${FILE:-}" | trim)"
+                TITLE="$(printf '%s' "${TITLE:-}" | trim)"
+                PROJECT="$(printf '%s' "${PROJECT:-}" | trim)"
+                case "$FILE" in *.spec.ts) ;; *) continue ;; esac
+                [ -z "$TITLE" ] && continue
+                [ -z "$PROJECT" ] && continue
+                RE=""
+                while IFS= read -r SEG; do
+                  SEG="$(printf '%s' "$SEG" | trim)"; [ -z "$SEG" ] && continue
+                  RE="${RE:+$RE.*}$(printf '%s' "$SEG" | esc)"
+                done <<< "$(printf '%s' "$TITLE" | sed 's/ › /\n/g')"
+                TARGETS="${TARGETS:+$TARGETS$'\n'}${FILE}"$'\t'"${PROJECT}"$'\t'"${RE}"
+              done
+
+              REPRODUCED=false
+              STATUS="NOT_REPRODUCED"
+              START="$(date +%s)"
+
+              while IFS=$'\t' read -r FILE PROJECT TITLE_RE; do
+                [ -z "$FILE" ] && continue
+
+                # 0) Targeting pre-check: confirm the -g regex actually matches ≥1 test. Playwright
+                #    also exits non-zero on "No tests found", so without this a targeting miss would
+                #    be FALSELY counted as a reproduced failure. --list ignores --repeat-each.
+                MATCHED="$(npx playwright test "$FILE" --project "$PROJECT" -g "$TITLE_RE" --list 2>/dev/null \
+                          | grep -cE '\.spec\.ts' || true)"
+                if [ "${MATCHED:-0}" -eq 0 ]; then
+                  echo "##vso[task.logissue type=error]Repro targeting miss: -g /$TITLE_RE/ matched 0 tests for $FILE [$PROJECT]. This is a targeting problem, not flakiness."
+                  STATUS="NO_MATCH"
+                  break
+                fi
+                echo "Targeting OK: -g /$TITLE_RE/ matches $MATCHED test(s) in $FILE [$PROJECT]."
+
+                REPEAT="$INITIAL_REPEAT"
+                for ROUND in $(seq 1 "$MAX_ROUNDS"); do
+                  NOW="$(date +%s)"; ELAPSED=$((NOW - START))
+                  if [ "$ELAPSED" -ge "$TIME_BUDGET" ]; then
+                    echo "Time budget ${TIME_BUDGET}s exhausted after round $((ROUND - 1)); stopping."
+                    break
+                  fi
+                  echo "── Repro round $ROUND/$MAX_ROUNDS [$PROJECT] $FILE  -g /$TITLE_RE/  --repeat-each=$REPEAT (elapsed ${ELAPSED}s)"
+                  if npx playwright test "$FILE" --project "$PROJECT" -g "$TITLE_RE" --retries=0 --repeat-each="$REPEAT"; then
+                    echo "Round $ROUND: all $REPEAT runs passed — not reproduced yet."
+                    REPEAT=$((REPEAT * 2))
+                  else
+                    echo "Round $ROUND: a run FAILED — flake reproduced. Fresh evidence seeded in test-results/."
+                    REPRODUCED=true
+                    STATUS="REPRODUCED"
+                    break
+                  fi
+                done
+                [ "$REPRODUCED" = "true" ] && break
+              done <<< "$TARGETS"
+
+              echo "Reproduce status: $STATUS"
+              if [ "$REPRODUCED" = "true" ]; then
+                echo "##vso[task.setvariable variable=REPRODUCED]true"
+              else
+                echo "##vso[task.logissue type=warning]Flaky test NOT reproduced ($STATUS) — skipping AI fix + PR for this leg."
+                echo "##vso[task.setvariable variable=REPRODUCED]false"
+                printf 'AI fix skipped: flaky test could not be reproduced on this agent.\nStatus: %s\nTarget: %s\n' \
+                  "$STATUS" "${FLAKY_TESTS:-(unknown)}" > "$AI_OUT/ai-fix-report.txt"
+              fi
+            displayName: "Reproduce flaky tests (retries=0)"
+            continueOnError: true
+            env:
+              FLAKY_TESTS: $(FLAKY_ENTRY)
+
+          # Claude Code: diagnose + fix ONLY test code; writes report to ai-fix-out/
+          - bash: |
+              set -uo pipefail
+              # Write AI artifacts OUTSIDE test-results: the agent runs `npx playwright test`,
+              # and Playwright wipes its outputDir (test-results/) at the start of EVERY run —
+              # that would unlink these files mid-write (-> ENOENT in the parser below) and also
+              # destroy the staged original-flake-evidence.
+              AI_OUT="$(Pipeline.Workspace)/ai-fix-out"
+              mkdir -p "$AI_OUT"
+              cd "$(LibDir)"   # agent cwd = repo root (test code lives here)
+
+              # AI instructions live in the azure-pipelines repo (checked out above as `self`).
+              STATIC_PROMPT="$(cat "$(PromptFile)")"
+              echo "Loaded AI prompt from $(PromptFile) (${#STATIC_PROMPT} chars)"
+
+              # The flake evidence lives OUTSIDE the agent's cwd and is nested under per-job
+              # Library_React_* folders. List the exact absolute file paths and inject them into the
+              # prompt so the agent Reads them directly — instead of burning turns guessing paths or
+              # hitting denied `ls`/`find` on an out-of-cwd directory (Read works on absolute paths).
+              EVIDENCE_DIR="$AI_OUT/original-flake-evidence"
+              EVIDENCE_FILES="$(find "$EVIDENCE_DIR" -type f 2>/dev/null | sort)"
+              echo "Evidence files available to the agent: $(printf '%s\n' "$EVIDENCE_FILES" | grep -c . || true)"
+
+              # Build the exact, ready-to-run reproduce command for THIS target test, reusing the same
+              # regex construction as the Reproduce / Re-run-gate steps: `-g` is a JS regex over the
+              # SPACE-joined full title, so the " › " separators in <title> (a reporter-only glyph,
+              # absent from the real title) must become ".*" with metacharacters escaped. The agent is
+              # given this verbatim so it never translates " › " itself — a literal "›" in -g matches
+              # nothing ("No tests found").
+              trim() { sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'; }
+              esc() { sed -e 's/\\/\\\\/g' -e 's/[.[*+?^${}()|]/\\&/g' -e 's/\]/\\]/g'; }
+              REPRO_CMD=""
+              ENTRY="$(printf '%s' "${FLAKY_TESTS:-}" | trim)"
+              if [ -n "$ENTRY" ]; then
+                IFS=$'\t' read -r RFILE RTITLE RPROJECT _ <<< "${ENTRY//::/$'\t'}"
+                RFILE="$(printf '%s' "${RFILE:-}" | trim)"
+                RTITLE="$(printf '%s' "${RTITLE:-}" | trim)"
+                RPROJECT="$(printf '%s' "${RPROJECT:-}" | trim)"
+                RE=""
+                while IFS= read -r SEG; do
+                  SEG="$(printf '%s' "$SEG" | trim)"; [ -z "$SEG" ] && continue
+                  RE="${RE:+$RE.*}$(printf '%s' "$SEG" | esc)"
+                done <<< "$(printf '%s' "$RTITLE" | sed 's/ › /\n/g')"
+                # Pilot is React-only: every project maps to the survey-react-ui package.
+                if [ -n "$RFILE" ] && [ -n "$RPROJECT" ] && [ -n "$RE" ]; then
+                  REPRO_CMD="cd packages/survey-react-ui && npx playwright test $RFILE --project $RPROJECT -g '$RE' --retries=0 --repeat-each=5"
+                  echo "Ready-to-run reproduce command for the agent: $REPRO_CMD"
+                fi
+              fi
+
+              FULL_PROMPT="$STATIC_PROMPT
+
+              Target flaky test to fix (exactly ONE; format <relPath>::<title>::<project>):
+              ${FLAKY_TESTS:-}
+
+              To RE-RUN this exact test, use this command VERBATIM from the repo root (the -g value is
+              a regex over the SPACE-joined full title — do NOT retype the title with \" › \"):
+              ${REPRO_CMD:-cd packages/survey-react-ui && npx playwright test <file> --project <project> -g '<regex>' --retries=0 --repeat-each=5}
+
+              Original flake evidence directory (absolute): $EVIDENCE_DIR
+              Evidence files (absolute paths — Read these directly; they may be nested under per-job subfolders):
+              ${EVIDENCE_FILES:-(none downloaded — rely on packages/survey-react-ui/test-results/ from the reproduce run instead)}
+
+              Fix ONLY this single target test."
+
+              # Compact formatter: render each stream-json event as one readable log line, so the CI
+              # log shows turn-by-turn what the agent called and what it got back. Non-JSON lines are
+              # skipped (fromjson?). The full raw transcript is tee'd to ai-fix-stream.jsonl.
+              # Single-quoted so $e/$turn/$i stay jq variables (not bash); \\s -> jq regex \s.
+              STREAM_FMT='
+                def trunc($s; $n):
+                  ($s | if . == null then "" else tostring end | gsub("\\s+"; " ") | gsub("^\\s+|\\s+$"; "")) as $t
+                  | if ($t | length) > $n then $t[:$n] + " …[+" + (($t | length) - $n | tostring) + " chars]" else $t end;
+                foreach (inputs | fromjson?) as $e (
+                  0;
+                  . + (if ($e.type == "assistant" and ($e.message | type) == "object") then 1 else 0 end);
+                  . as $turn
+                  | if ($e.type == "system" and $e.subtype == "init") then
+                      "[init] model=" + ($e.model // "?") + " cwd=" + ($e.cwd // "?") + " tools=" + (($e.tools // [] | length) | tostring)
+                    elif ($e.type == "assistant" and ($e.message | type) == "object") then
+                      ($e.message.content // [])[]
+                      | if (.type == "text" and ((.text // "") | gsub("^\\s+|\\s+$"; "")) != "") then
+                          "\n[turn " + ($turn | tostring) + "] 🤖 " + trunc(.text; 1000)
+                        elif (.type == "tool_use") then
+                          (if (.input | type) == "object" then .input else {} end) as $i
+                          | (([$i.command, $i.file_path, $i.path, $i.pattern, $i.description]
+                              | map(select(type == "string" and . != "")) | .[0]) // ($i | tojson)) as $arg
+                          | "[turn " + ($turn | tostring) + "] 🔧 " + (.name // "") + ": " + trunc($arg; 400)
+                        else empty end
+                    elif ($e.type == "user" and ($e.message | type) == "object") then
+                      ($e.message.content // [])[]
+                      | if (.type == "tool_result") then
+                          (if (.content | type) == "array" then (.content | map(.text // "") | join("")) else .content end) as $c
+                          | "          ↩ " + (if .is_error then "[ERROR] " else "" end) + trunc($c; 1000)
+                        else empty end
+                    elif ($e.type == "result") then
+                      "\n[result] subtype=" + ($e.subtype | tostring) + " is_error=" + ($e.is_error | tostring) + " num_turns=" + ($e.num_turns | tostring) + " cost_usd=" + ($e.total_cost_usd | tostring) + " duration_ms=" + ($e.duration_ms | tostring)
+                    else empty end
+                )'
+
+              echo "Running Claude Code (model=claude-sonnet-4-6, max-turns=80, stream-json)..."
+              # stream-json (requires --verbose) emits one JSON event per line. tee keeps the raw
+              # transcript for the parser/artifact while the formatter renders it live to the log.
+              # pipefail + `|| echo` swallows a non-zero exit (e.g. max-turns) so guard/gate still run.
+              claude -p "$FULL_PROMPT" \
+                --bare \
+                --output-format stream-json \
+                --verbose \
+                --model "claude-sonnet-4-6" \
+                --max-turns 80 \
+                --permission-mode dontAsk \
+                --allowedTools "Read,Grep,Glob,Edit,Bash(cd *),Bash(ls *),Bash(cat *),Bash(find *),Bash(head *),Bash(tail *),Bash(grep *),Bash(npx playwright test *),Bash(git diff *),Bash(git status *),Bash(git log *)" \
+                --disallowedTools "Bash(git push *),Bash(git commit *),Bash(git reset *),Bash(git checkout *),Bash(rm *),WebFetch,WebSearch" \
+                2> "$AI_OUT/ai-fix-claude-stderr.txt" \
+                | tee "$AI_OUT/ai-fix-stream.jsonl" \
+                | jq -rRn "$STREAM_FMT" \
+                || echo "claude pipeline exited non-zero (continuing to report/guard step)"
+
+              # Surface stderr (warnings / fatal errors) — previously captured to a file but never shown.
+              if [ -s "$AI_OUT/ai-fix-claude-stderr.txt" ]; then
+                echo "===== claude stderr ====="
+                cat "$AI_OUT/ai-fix-claude-stderr.txt"
+                echo "========================="
+              fi
+
+              # Parse the final `result` event (last such line) from the stream into a report.
+              MODEL="claude-sonnet-4-6"
+              STREAM="$AI_OUT/ai-fix-stream.jsonl"
+              [ -f "$STREAM" ] || echo "Could not read stream transcript ($STREAM not found)."
+              # fromjson? skips non-JSON lines; tail -n1 keeps the final result event (empty if none).
+              RESULT="$(jq -c -R 'fromjson? | select(.type == "result")' "$STREAM" 2>/dev/null | tail -n1 || true)"
+              if [ -z "$RESULT" ]; then
+                echo "No result event in stream output (see transcript above / ai-fix-stream.jsonl)."
+              else
+                # Build the report. s() prints "n/a" only for MISSING (null) fields — not for
+                # is_error=false. The result text falls back like JS `||` (null or empty -> default).
+                REPORT="$(printf '%s' "$RESULT" | jq -r --arg model "$MODEL" '
+                  def s($v): if $v == null then "n/a" else ($v | tostring) end;
+                  [ "=== AI FIX REPORT ===",
+                    "model: " + $model,
+                    "subtype: " + s(.subtype),
+                    "is_error: " + s(.is_error),
+                    "num_turns: " + s(.num_turns),
+                    "duration_ms: " + s(.duration_ms),
+                    "cost_usd: " + s(.total_cost_usd),
+                    "",
+                    (if .subtype == "error_max_turns"
+                       then "⚠ Agent stopped: it reached the --max-turns limit before finishing. The fix may be\n  partial or absent. Raise --max-turns or narrow the target set, then re-run.\n"
+                       else empty end),
+                    (if (.result // "") == "" then "(no result text — agent did not return a final summary; see transcript above)" else .result end)
+                  ] | join("\n")
+                ')"
+                printf '%s' "$REPORT" > "$AI_OUT/ai-fix-report.txt"
+                printf '%s\n' "$REPORT"
+                if [ "$(printf '%s' "$RESULT" | jq -r '.subtype // ""')" = "error_max_turns" ]; then
+                  echo "##vso[task.logissue type=warning]AI agent hit --max-turns; the flaky-test fix may be incomplete."
+                fi
+              fi
+            displayName: "Claude: diagnose & fix flaky tests"
+            timeoutInMinutes: 30
+            # Only run the (expensive) AI fix when the flake actually reproduced here — otherwise the
+            # leg is skipped (no blind fix, no PR). REPRODUCED is set by the Reproduce step above.
+            condition: and(succeeded(), eq(variables['REPRODUCED'], 'true'))
+            env:
+              ANTHROPIC_API_KEY: $(ANTHROPIC_API_KEY)
+              CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+              FLAKY_TESTS: $(FLAKY_ENTRY)
+
+          # Surface the agent's raw changes in the CI log (before the guard reverts anything).
+          # `git add -N` lets the diff include any NEW untracked files too; it's undone right after
+          # so the guard/PR steps see an unmodified index.
+          - bash: |
+              set -uo pipefail
+              cd "$(LibDir)"
+              git add -N -- e2e screenshots 2>/dev/null || true
+              echo "===== Summary (git diff --stat) ====="
+              git diff --stat || true
+              echo
+              echo "===== Full diff (git diff) ====="
+              git --no-pager diff || true
+              git reset -q -- e2e screenshots 2>/dev/null || true
+            displayName: "Show agent's changes (diff)"
+            condition: always()
+
+          # Guard: revert everything unless ONLY test code (e2e/**, screenshots/**/*.spec.ts) changed
+          - bash: |
+              set -uo pipefail
+              cd "$(LibDir)"
+              CHANGED="$(git diff --name-only)"
+              echo "Files changed by agent:"
+              echo "${CHANGED:-<none>}"
+
+              if [ -z "$CHANGED" ]; then
+                echo "##vso[task.logissue type=warning]Agent produced no changes (likely a product bug or non-reproducible flake)."
+                echo "##vso[task.setvariable variable=AI_HAS_FIX]false"
+                exit 0
+              fi
+
+              VIOLATION=0
+              while IFS= read -r f; do
+                [ -z "$f" ] && continue
+                case "$f" in
+                  *-snapshots/*)                         echo "FORBIDDEN (baseline snapshot): $f"; VIOLATION=1 ;;
+                  src/*|packages/*/src/*)                echo "FORBIDDEN (product source): $f";   VIOLATION=1 ;;
+                  e2e/*.ts|e2e/*/*.ts|e2e/*/*/*.ts)      : ;;
+                  screenshots/*.spec.ts|screenshots/*/*.spec.ts) : ;;
+                  *)                                     echo "FORBIDDEN (outside test allow-list): $f"; VIOLATION=1 ;;
+                esac
+              done <<< "$CHANGED"
+
+              if [ "$VIOLATION" -ne 0 ]; then
+                echo "##vso[task.logissue type=error]Agent touched forbidden paths — reverting ALL changes, no fix will be committed."
+                git checkout -- .
+                echo "##vso[task.setvariable variable=AI_HAS_FIX]false"
+                exit 0
+              fi
+
+              echo "All changes are within the test-code allow-list."
+              echo "##vso[task.setvariable variable=AI_HAS_FIX]true"
+            displayName: "Guard: only test code may change"
+            # Skipped when the flake didn't reproduce (AI step skipped). With the guard skipped,
+            # AI_HAS_FIX is never set → re-run gate + Prepare PR (gated on AI_HAS_FIX) are skipped and
+            # pr-create.yml bails on "nothing to commit" — so the leg opens no PR.
+            condition: and(succeeded(), eq(variables['REPRODUCED'], 'true'))
+
+          # Re-run gate: the fixed tests must pass reliably (retries=0, repeat-each) before we PR
+          - bash: |
+              set -euo pipefail
+              cd "$(LibDir)/packages/survey-react-ui"
+
+              # Turn each flaky entry "<relPath>::<title>::<project>" into a precise target:
+              # one line per test = "<file>\t<project>\t<grep-regex>". The grep regex matches the
+              # full title path (describe chain + test) so only THAT framework variant runs —
+              # never the whole spec file across angular/react/vue.
+              trim() { sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'; }
+              # Escape regex metacharacters . * + ? ^ $ { } ( ) | [ ] \ (same set the old JS escaped).
+              # Backslash first, then the rest, then ']' — separate sed commands so we never build a
+              # bracket expression containing '\' or '[.' (which sed parses as a collating symbol).
+              esc() { sed -e 's/\\/\\\\/g' -e 's/[.[*+?^${}()|]/\\&/g' -e 's/\]/\\]/g'; }
+              TARGETS=""
+              OLD_IFS="$IFS"; IFS=';' read -ra ENTRIES <<< "${FLAKY_TESTS:-}" || true; IFS="$OLD_IFS"
+              for E in "${ENTRIES[@]:-}"; do
+                E="$(printf '%s' "$E" | trim)"; [ -z "$E" ] && continue
+                IFS=$'\t' read -r FILE TITLE PROJECT _ <<< "${E//::/$'\t'}"
+                FILE="$(printf '%s' "${FILE:-}" | trim)"
+                TITLE="$(printf '%s' "${TITLE:-}" | trim)"
+                PROJECT="$(printf '%s' "${PROJECT:-}" | trim)"
+                case "$FILE" in *.spec.ts) ;; *) continue ;; esac
+                [ -z "$TITLE" ] && continue
+                [ -z "$PROJECT" ] && continue
+                RE=""
+                while IFS= read -r SEG; do
+                  SEG="$(printf '%s' "$SEG" | trim)"; [ -z "$SEG" ] && continue
+                  RE="${RE:+$RE.*}$(printf '%s' "$SEG" | esc)"
+                done <<< "$(printf '%s' "$TITLE" | sed 's/ › /\n/g')"
+                TARGETS="${TARGETS:+$TARGETS$'\n'}${FILE}"$'\t'"${PROJECT}"$'\t'"${RE}"
+              done
+
+              if [ -z "$TARGETS" ]; then
+                echo "##vso[task.logissue type=warning]No flaky test targets identified to gate — skipping PR."
+                echo "##vso[task.setvariable variable=AI_HAS_FIX]false"
+                exit 0
+              fi
+
+              echo "Gate targets:"; echo "$TARGETS" | sed 's/^/  /'
+
+              # Match the reproduce loop's strongest base so a green gate actually proves the fix
+              # holds for a rare flake (repeat-each=5 passed too easily to validate anything).
+              REPEAT="20"
+              while IFS=$'\t' read -r FILE PROJECT TITLE_RE; do
+                [ -z "$FILE" ] && continue
+                echo "── Gating [$PROJECT] $FILE  -g /$TITLE_RE/"
+                npx playwright test "$FILE" --project "$PROJECT" -g "$TITLE_RE" --retries=0 --repeat-each="$REPEAT"
+              done <<< "$TARGETS"
+
+              echo "Re-run gate passed: fixed tests are stable."
+            displayName: "Re-run gate (retries=0, repeat-each) — green required before commit"
+            condition: eq(variables['AI_HAS_FIX'], 'true')
+            env:
+              FLAKY_TESTS: $(FLAKY_ENTRY)
+
+          # Build the PR body from the AI report (base resolution + dedup already happened in Inspect).
+          - bash: |
+              set -uo pipefail
+              BASE="$(PR_BASE)"
+              REPORT_FILE="$(Pipeline.Workspace)/ai-fix-out/ai-fix-report.txt"
+              if [ -f "$REPORT_FILE" ]; then REPORT="$(cat "$REPORT_FILE")"; else REPORT="AI-stabilized flaky tests."; fi
+              BODY_FILE="$(Pipeline.Workspace)/ai-fix-out/pr-body.txt"
+              {
+                printf 'Automated flaky-test stabilization by Claude Code (headless).\n\n'
+                printf 'Branch: %s\n' "$BASE"
+                printf 'Target test: %s\n\n---\n\n' "${FLAKY_TESTS:-(unknown)}"
+                printf '%s\n' "$REPORT"
+              } > "$BODY_FILE"
+              echo "Wrote PR body to $BODY_FILE"
+
+              # Derive a human-readable PR title from this leg's "<file>::<title>::<project>" entry.
+              # TEST_FILE = basename; TEST_NAME = leaf test name (last " › " segment). Both feed the
+              # prTitle macro in pr-create — sanitize chars that would break the value once Azure
+              # inlines it as raw text into pr-create's double-quoted PowerShell string (" ` $) and
+              # flatten whitespace/newlines.
+              trim() { sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'; }
+              sanitize() { tr -d '"`$' | tr '\n\t' '  ' | sed -E 's/[[:space:]]+/ /g' | trim; }
+              ENTRY="$(printf '%s' "${FLAKY_TESTS:-}" | trim)"
+              IFS=$'\t' read -r TFILE TTITLE _ <<< "${ENTRY//::/$'\t'}"
+              TEST_FILE="$(basename "$(printf '%s' "${TFILE:-}" | trim)" | sanitize)"
+              TEST_NAME="$(printf '%s' "${TTITLE:-}" | trim)"; TEST_NAME="$(printf '%s' "${TEST_NAME##* › }" | sanitize)"
+              echo "PR title parts: TEST_NAME='$TEST_NAME' TEST_FILE='$TEST_FILE' branch='$BASE'"
+              echo "##vso[task.setvariable variable=TEST_NAME]$TEST_NAME"
+              echo "##vso[task.setvariable variable=TEST_FILE]$TEST_FILE"
+            displayName: "Prepare PR body"
+            condition: and(succeeded(), eq(variables['AI_HAS_FIX'], 'true'))
+            env:
+              FLAKY_TESTS: $(FLAKY_ENTRY)
+
+          # commit test-code fix to a NEW branch and open a NEW PR (skipped on dryRun).
+          # Reuses the shared pr-create template: commit `git add -A` + push + `gh pr create`.
+          # `git add -A` is safe here — ai-fix-out lives outside $(LibDir), and the guard step
+          # already reverted anything outside the test-code allow-list.
+          - ${{ if eq(parameters.dryRun, false) }}:
+              - template: templates/utils/pr-create.yml
+                parameters:
+                  src: surveyjs/survey-library
+                  srcBranch: $(PR_BASE)
+                  targetBranch: ai-flaky-fix/$(PR_BASE)-$(SLUG)
+                  workingDir: $(LibDir)
+                  label: ai-flaky-fix
+                  commitMessage: "[ai_fix] stabilize flaky test $(SLUG) on $(PR_BASE)"
+                  prTitle: "Stabilize flaky test '$(TEST_NAME)' from '$(TEST_FILE)' on branch '$(PR_BASE)'"
+                  prBodyFile: $(Pipeline.Workspace)/ai-fix-out/pr-body.txt
+
+          # always publish the AI report / Claude output for inspection
+          - task: PublishBuildArtifacts@1
+            displayName: "Publish AI fix report"
+            inputs:
+              PathtoPublish: "$(Pipeline.Workspace)/ai-fix-out"
+              ArtifactName: "AIFix_Report_$(SLUG)"
+              publishLocation: "Container"
+            condition: always()
