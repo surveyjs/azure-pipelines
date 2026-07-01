@@ -246,7 +246,7 @@ jobs:
 
   - script: |
       npm run release -- $(runReleaseArgs) --skip.commit --skip.tag
-      npm run build
+      npm run build:all
     workingDirectory: $(Build.SourcesDirectory)/survey-pdf
     displayName: 'Build survey-pdf'
 
