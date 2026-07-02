@@ -38,5 +38,5 @@ steps:
     - task: PublishBuildArtifacts@1
       inputs:
         PathtoPublish: "$(Build.SourcesDirectory)/packages/survey-vue3-ui/build"
-        ArtifactName: "$(ArtifactNameLibraryVue)"
+        ArtifactName: $(ArtifactNameLibraryVue)
         StoreAsTar: true

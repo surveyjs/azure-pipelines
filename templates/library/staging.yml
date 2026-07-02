@@ -1,0 +1,86 @@
+jobs:
+  - job:
+    steps:
+      - checkout: self
+        persistCredentials: true
+        displayName: "Checkout survey-library"
+        timeoutInMinutes: 5
+
+      - checkout: Utils
+        displayName: "Checkout survey-utils"
+        timeoutInMinutes: 5
+
+      - checkout: SiteData
+        persistCredentials: true
+        displayName: "Checkout survey-site-data"
+        timeoutInMinutes: 5
+
+      - template: ../utils/npm.yml
+        parameters:
+          directories:
+            - $(Build.SourcesDirectory)/survey-library
+            - $(Build.SourcesDirectory)/survey-library/packages/survey-core
+
+      - pwsh: |
+          Set-Location $(Build.SourcesDirectory)/survey-utils
+          npm install
+          npm run build
+          node ./dist/translateLibrary.js
+
+          Set-Location $(Build.SourcesDirectory)/survey-library
+          $branch = "$(Build.SourceBranchName)"
+          $env:GIT_REDIRECT_STDERR = '2>&1'
+          git config user.email "surveyjs.org@gmail.com"
+          git config user.name "surveyjsdeveloper"
+
+          git fetch origin $branch
+          git checkout -B $branch origin/$branch
+
+          git add packages/survey-core/src/localization
+          if (git status --porcelain) {
+              echo "There are changes in translations. Committing and pushing to GitHub..."
+              git diff --cached --stat
+              git commit -m "updated survey-library translation for $branch [azurepipelines skip]"
+              git push origin $branch
+          }
+          else {
+              echo "No changes in translations. Skipping commit and push."
+          }
+        displayName: "l10n for $(Build.SourceBranchName)"
+        
+      - script: |
+          npm run release -- --skip.tag
+          npm run build:all
+        workingDirectory: $(Build.SourcesDirectory)/survey-library/packages/survey-core
+        displayName: "Build"
+
+      - pwsh: |
+          Set-Location $(Build.SourcesDirectory)/survey-library/packages/survey-core
+          npm run doc_gen        
+          Copy-Item -Force "docs/surveyjs_definition.json" "build/surveyjs_definition.json"
+
+          Set-Location $(Build.SourcesDirectory)/surveyjs-site-data
+          $branch = "$(Build.SourceBranchName)"
+          $env:GIT_REDIRECT_STDERR = '2>&1'
+          git config user.email "surveyjs.org@gmail.com"
+          git config user.name "surveyjsdeveloper"
+
+          git fetch origin $branch
+          git checkout -B $branch origin/$branch
+          git reset --hard origin/$branch
+
+          Copy-Item -Force "$(Build.SourcesDirectory)/survey-library/packages/survey-core/docs/classes.json" "DocsLibrary/"
+          Copy-Item -Force "$(Build.SourcesDirectory)/survey-library/packages/survey-core/docs/pmes.json" "DocsLibrary/"
+          Copy-Item -Force "$(Build.SourcesDirectory)/survey-library/packages/survey-core/docs/surveyjs_definition.json" "DocsLibrary/"
+
+          git add DocsLibrary
+          if (git status --porcelain) {
+              echo "There are changes in docs. Committing and pushing to GitHub..."
+              git diff --cached --stat
+              git commit -m "updated survey-library docs for $branch [azurepipelines skip]"
+              git push origin $branch
+          }
+          else {
+              echo "No changes in docs. Skipping commit and push."
+          }
+        displayName: "Docs for $(Build.SourceBranchName)"

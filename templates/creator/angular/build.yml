@@ -54,6 +54,6 @@ steps:
     - task: PublishBuildArtifacts@1
       inputs:
         PathtoPublish: '$(Build.SourcesDirectory)/packages/survey-creator-angular/build/'
-        ArtifactName: $(ArtifactNameCreatorAngular) 
+        ArtifactName: $(ArtifactNameCreatorAngular)
         publishLocation: 'Container'
         StoreAsTar: true
