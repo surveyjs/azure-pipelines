@@ -69,7 +69,6 @@ steps:
       Set-Location $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core
       New-Item -ItemType Directory -Force -Path docs | Out-Null
       npm run doc_gen
-      Copy-Item -Force "docs/surveyjs_definition.json" "build/surveyjs_definition.json"
 
       Set-Location $(Build.SourcesDirectory)/surveyjs-site-data
       $branch = "$(Build.SourceBranchName)"
@@ -83,7 +82,6 @@ steps:
 
       Copy-Item -Force "$(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core/docs/classes.json" "DocsEditor/"
       Copy-Item -Force "$(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core/docs/pmes.json" "DocsEditor/"
-      Copy-Item -Force "$(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core/docs/surveyjs_definition.json" "DocsEditor/"
 
       git add DocsEditor
       if (git status --porcelain) {

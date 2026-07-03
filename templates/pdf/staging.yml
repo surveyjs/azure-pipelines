@@ -33,7 +33,6 @@ steps:
   - pwsh: |
       Set-Location $(Build.SourcesDirectory)/survey-pdf
       npm run doc_gen
-      Copy-Item -Force "docs/surveyjs_definition.json" "build/surveyjs_definition.json"
 
       Set-Location $(Build.SourcesDirectory)/surveyjs-site-data
       $branch = "$(Build.SourceBranchName)"
@@ -47,7 +46,6 @@ steps:
 
       Copy-Item -Force "$(Build.SourcesDirectory)/survey-pdf/docs/classes.json" "DocsPdf/"
       Copy-Item -Force "$(Build.SourcesDirectory)/survey-pdf/docs/pmes.json" "DocsPdf/"
-      Copy-Item -Force "$(Build.SourcesDirectory)/survey-pdf/docs/surveyjs_definition.json" "DocsPdf/"
 
       git add DocsPdf
       if (git status --porcelain) {

@@ -65,7 +65,6 @@ steps:
   - pwsh: |
       Set-Location $(Build.SourcesDirectory)/survey-analytics
       npm run doc:gen
-      Copy-Item -Force "docs/surveyjs_definition.json" "build/surveyjs_definition.json"
 
       Set-Location $(Build.SourcesDirectory)/surveyjs-site-data
       $branch = "$(Build.SourceBranchName)"
@@ -79,7 +78,6 @@ steps:
 
       Copy-Item -Force "$(Build.SourcesDirectory)/survey-analytics/docs/classes.json" "DocsAnalytics/"
       Copy-Item -Force "$(Build.SourcesDirectory)/survey-analytics/docs/pmes.json" "DocsAnalytics/"
-      Copy-Item -Force "$(Build.SourcesDirectory)/survey-analytics/docs/surveyjs_definition.json" "DocsAnalytics/"
 
       git add DocsAnalytics
       if (git status --porcelain) {
