@@ -30,23 +30,23 @@ resources:
   pipelines:
 
     - pipeline: LibraryMain
-      source: Library Main
+      source: Library
       trigger: none
 
     - pipeline: CreatorMain
-      source: Creator Main
+      source: Creator
       trigger: none
 
     - pipeline: CustomWidgetsMain
-      source: Custom Widgets Main
+      source: Custom Widgets
       trigger: none
       
     - pipeline: AnalyticsMain
-      source: Analytics Main
+      source: Analytics
       trigger: none
 
     - pipeline: PDFMain
-      source: PDF Main
+      source: PDF
       trigger: none
 
   repositories:
