@@ -29,23 +29,23 @@ resources:
 
   pipelines:
 
-    - pipeline: LibraryMain
+    - pipeline: Library
       source: Library
       trigger: none
 
-    - pipeline: CreatorMain
+    - pipeline: Creator
       source: Creator
       trigger: none
 
-    - pipeline: CustomWidgetsMain
+    - pipeline: CustomWidgets
       source: Custom Widgets
       trigger: none
       
-    - pipeline: AnalyticsMain
+    - pipeline: Analytics
       source: Analytics
       trigger: none
 
-    - pipeline: PDFMain
+    - pipeline: PDF
       source: PDF
       trigger: none
 
@@ -115,11 +115,11 @@ jobs:
       $headers = @{ Authorization = "Bearer $token" }
 
       $pipelines = @(
-        @{ Alias = 'LibraryMain';        Id = "$(resources.pipeline.LibraryMain.pipelineID)" },
-        @{ Alias = 'CreatorMain';        Id = "$(resources.pipeline.CreatorMain.pipelineID)" },
-        @{ Alias = 'CustomWidgetsMain';  Id = "$(resources.pipeline.CustomWidgetsMain.pipelineID)" },
-        @{ Alias = 'AnalyticsMain';      Id = "$(resources.pipeline.AnalyticsMain.pipelineID)" },
-        @{ Alias = 'PDFMain';            Id = "$(resources.pipeline.PDFMain.pipelineID)" }
+        @{ Alias = 'Library';        Id = "$(resources.pipeline.Library.pipelineID)" },
+        @{ Alias = 'Creator';        Id = "$(resources.pipeline.Creator.pipelineID)" },
+        @{ Alias = 'CustomWidgets';  Id = "$(resources.pipeline.CustomWidgets.pipelineID)" },
+        @{ Alias = 'Analytics';      Id = "$(resources.pipeline.Analytics.pipelineID)" },
+        @{ Alias = 'PDF';            Id = "$(resources.pipeline.PDF.pipelineID)" }
       )
 
       $failed = @()
