@@ -55,6 +55,7 @@ stages:
     jobs:
       - job: PRTitle
         displayName: "Parse PR title"
+        condition: eq(variables.isStage, 'False')
         steps:
           - template: templates/utils/pr_title_parser.yml
 

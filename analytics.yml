@@ -55,10 +55,12 @@ stages:
     jobs:
       - job: PRTitle
         displayName: "Parse PR title"
+        condition: eq(variables.isStage, 'False')
         steps:
           - template: templates/utils/pr_title_parser.yml
       - job: Commit
         displayName: "Commit message"
+        condition: eq(variables.isStage, 'False')
         steps:
           - template: templates/utils/commit_message_parser.yml
 
