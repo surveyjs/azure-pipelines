@@ -58,7 +58,7 @@ steps:
       Copy-Item -Force "docs/surveyjs_definition.json" "build/surveyjs_definition.json"
 
       Set-Location $(Build.SourcesDirectory)/surveyjs-site-data
-      $branch = "$(Build.SourceBranchName)"
+      $branch = "$(siteDataRef)"
       $env:GIT_REDIRECT_STDERR = '2>&1'
       git config user.email "surveyjs.org@gmail.com"
       git config user.name "surveyjsdeveloper"
