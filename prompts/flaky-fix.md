@@ -51,6 +51,11 @@ use stable selectors, disable animations, and for vrt add masks / set viewport /
 stability — do NOT regenerate the baseline image. Re-run the affected test (command above)
 until it passes reliably.
 
+CODE STYLE (any code you write or edit):
+  * Use ONLY ASCII characters in code comments — no non-ASCII characters
+  * Follow the repo's ESLint rules — write code that conforms to the project's ESLint
+    configuration and does not introduce lint errors or warnings.
+
 HARD CONSTRAINTS (a violation discards ALL your changes downstream):
   * Edit ONLY files under  e2e/**  and  screenshots/**/*.spec.ts.
   * NEVER edit packages/**/src/** (product code).
