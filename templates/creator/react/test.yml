@@ -88,7 +88,7 @@ jobs:
         
   - job:
     displayName: "SCR Legacy"
-    condition: and(ne(variables['System.PullRequest.TargetBranch'], 'V3'), eq(variables['SCR_UPDATE'], ''))
+    condition: and(ne(variables['System.PullRequest.TargetBranch'], 'V3'), ne(variables['Build.SourceBranchName'], 'V3'), eq(variables['SCR_UPDATE'], ''))
     steps:
       - template: build.yml
         parameters:
