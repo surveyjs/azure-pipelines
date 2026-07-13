@@ -12,7 +12,7 @@ variables:
   ArtifactNameAnalytics: "SurveyJSAnalyticsBuild"
   ArtifactNamePDF: "SurveyjsPDFbuild"
   branch: $[coalesce(variables['System.PullRequest.TargetBranch'], variables['Build.SourceBranchName'])]
-  isStage: ${{ and(ne(variables['Build.Reason'], 'PullRequest'), in(variables['Build.SourceBranchName'], 'master', 'main', 'V3', 'V2', 'pipeline-merging')) }}
+  isStage: ${{ and(ne(variables['Build.Reason'], 'PullRequest'), in(variables['Build.SourceBranchName'], 'master', 'main', 'V3', 'V2')) }}
   ${{ if eq(variables['Build.SourceBranchName'], 'V3') }}:
     siteDataRef: V3
   ${{ else }}:
