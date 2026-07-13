@@ -4,6 +4,7 @@
 # https://docs.microsoft.com/azure/devops/pipelines/languages/javascript
 
 variables:
+  - group: pipeline-secrets
   - template: templates/utils/variables.yml
 
 resources:

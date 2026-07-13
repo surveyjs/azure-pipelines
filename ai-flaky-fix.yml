@@ -30,7 +30,7 @@ parameters:
     default: false
 
 variables:
-  - group: ai-fix-secrets
+  - group: pipeline-secrets
   - template: templates/utils/variables.yml
   # `LibraryBuildId` is a QUEUE-TIME variable defined in the pipeline UI
   # (Edit → Variables → add `LibraryBuildId`, check "Settable at queue time", default empty) —

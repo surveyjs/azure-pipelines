@@ -45,6 +45,8 @@ steps:
           echo "No changes in translations. Skipping commit and push."
       }
     displayName: "l10n for $(Build.SourceBranchName)"
+    env:
+      TRANSLATION_API_KEY: $(TRANSLATION_API_KEY)
 
   - script: |
       npm run release -- --skip.tag
