@@ -20,10 +20,8 @@ steps:
         - $(Build.SourcesDirectory)/survey-library/packages/survey-core
 
   - pwsh: |
-      Set-Location $(Build.SourcesDirectory)/survey-utils
-      npm install
-      npm run build
-      node ./dist/translateLibrary.js
+      Set-Location $(Build.SourcesDirectory)/survey-library/packages/survey-core
+      npm run build:translate
 
       Set-Location $(Build.SourcesDirectory)/survey-library
       $branch = "$(Build.SourceBranchName)"
@@ -56,7 +54,7 @@ steps:
 
   - pwsh: |
       Set-Location $(Build.SourcesDirectory)/survey-library/packages/survey-core
-      npm run doc_gen
+      npm run build:doc
       Copy-Item -Force "docs/surveyjs_definition.json" "build/surveyjs_definition.json"
 
       Set-Location $(Build.SourcesDirectory)/surveyjs-site-data
