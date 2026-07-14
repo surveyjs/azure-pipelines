@@ -19,6 +19,10 @@ steps:
         - $(Build.SourcesDirectory)/survey-library
         - $(Build.SourcesDirectory)/survey-library/packages/survey-core
 
+  - script: npm update survey-utils
+    workingDirectory: $(Build.SourcesDirectory)/survey-library/packages/survey-core
+    displayName: "Update survey-utils dependency"
+
   - pwsh: |
       Set-Location $(Build.SourcesDirectory)/survey-library/packages/survey-core
       npm run build:translate
@@ -55,7 +59,6 @@ steps:
   - pwsh: |
       Set-Location $(Build.SourcesDirectory)/survey-library/packages/survey-core
       npm run build:doc
-      Copy-Item -Force "docs/surveyjs_definition.json" "build/surveyjs_definition.json"
 
       Set-Location $(Build.SourcesDirectory)/surveyjs-site-data
       $branch = "$(siteDataRef)"
