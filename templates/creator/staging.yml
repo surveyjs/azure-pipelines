@@ -85,6 +85,11 @@ steps:
       Copy-Item -Force "$(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core/docs/classes.json" "DocsEditor/"
       Copy-Item -Force "$(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core/docs/pmes.json" "DocsEditor/"
 
+      Remove-Item -Recurse -Force "DocsEditor/api-reference" -ErrorAction SilentlyContinue
+      node $(Build.SourcesDirectory)/survey-utils/dist/cli.js generate-doc creator --md `
+        --path $(Build.SourcesDirectory)/survey-creator `
+        --md-out $(Build.SourcesDirectory)/surveyjs-site-data/DocsEditor/api-reference
+
       git add DocsEditor
       if (git status --porcelain) {
           echo "There are changes in docs. Committing and pushing to GitHub..."

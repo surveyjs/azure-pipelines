@@ -8,6 +8,10 @@ steps:
     displayName: "Checkout survey-site-data"
     timeoutInMinutes: 5
 
+  - checkout: Utils
+    displayName: "Checkout survey-utils"
+    timeoutInMinutes: 5
+
   - template: ../utils/npm.yml
     parameters:
       directories:
@@ -31,6 +35,10 @@ steps:
     displayName: "Build"
 
   - pwsh: |
+      Set-Location $(Build.SourcesDirectory)/survey-utils
+      npm install
+      npm run build
+
       Set-Location $(Build.SourcesDirectory)/survey-pdf
       npm run doc_gen
 
@@ -46,6 +54,11 @@ steps:
 
       Copy-Item -Force "$(Build.SourcesDirectory)/survey-pdf/docs/classes.json" "DocsPdf/"
       Copy-Item -Force "$(Build.SourcesDirectory)/survey-pdf/docs/pmes.json" "DocsPdf/"
+
+      Remove-Item -Recurse -Force "DocsPdf/api-reference" -ErrorAction SilentlyContinue
+      node $(Build.SourcesDirectory)/survey-utils/dist/cli.js generate-doc pdf --md `
+        --path $(Build.SourcesDirectory)/survey-pdf `
+        --md-out $(Build.SourcesDirectory)/surveyjs-site-data/DocsPdf/api-reference
 
       git add DocsPdf
       if (git status --porcelain) {
