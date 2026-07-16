@@ -57,10 +57,6 @@ steps:
     displayName: "Build"
 
   - pwsh: |
-      Set-Location $(Build.SourcesDirectory)/survey-utils
-      npm install
-      npm run build
-
       Set-Location $(Build.SourcesDirectory)/survey-library/packages/survey-core
       npm run build:doc
 
@@ -79,10 +75,12 @@ steps:
       Copy-Item -Force "$(Build.SourcesDirectory)/survey-library/packages/survey-core/docs/surveyjs_definition.json" "DocsLibrary/"
 
       Remove-Item -Recurse -Force "DocsLibrary/api-reference" -ErrorAction SilentlyContinue
-      node $(Build.SourcesDirectory)/survey-utils/dist/cli.js generate-doc library --md `
-        --path $(Build.SourcesDirectory)/survey-library `
+      Set-Location $(Build.SourcesDirectory)/survey-library/packages/survey-core
+      npx survey-utils generate-doc library --md `
+        --path $(Build.SourcesDirectory)/survey-library/packages/survey-core `
         --md-out $(Build.SourcesDirectory)/surveyjs-site-data/DocsLibrary/api-reference
 
+      Set-Location $(Build.SourcesDirectory)/surveyjs-site-data
       git add DocsLibrary
       if (git status --porcelain) {
           echo "There are changes in docs. Committing and pushing to GitHub..."
