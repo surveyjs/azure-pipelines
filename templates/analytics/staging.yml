@@ -81,6 +81,11 @@ steps:
       Copy-Item -Force "$(Build.SourcesDirectory)/survey-analytics/docs/classes.json" "DocsAnalytics/"
       Copy-Item -Force "$(Build.SourcesDirectory)/survey-analytics/docs/pmes.json" "DocsAnalytics/"
 
+      Remove-Item -Recurse -Force "DocsAnalytics/api-reference" -ErrorAction SilentlyContinue
+      node $(Build.SourcesDirectory)/survey-utils/dist/cli.js generate-doc analytics --md `
+        --path $(Build.SourcesDirectory)/survey-analytics `
+        --md-out $(Build.SourcesDirectory)/surveyjs-site-data/DocsAnalytics/api-reference
+
       git add DocsAnalytics
       if (git status --porcelain) {
           echo "There are changes in docs. Committing and pushing to GitHub..."

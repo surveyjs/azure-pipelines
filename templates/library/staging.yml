@@ -58,7 +58,7 @@ steps:
 
   - pwsh: |
       Set-Location $(Build.SourcesDirectory)/survey-library/packages/survey-core
-      npm run build:doc
+      npm run build:doc -- --md
 
       Set-Location $(Build.SourcesDirectory)/surveyjs-site-data
       $branch = "$(siteDataRef)"
@@ -73,6 +73,9 @@ steps:
       Copy-Item -Force "$(Build.SourcesDirectory)/survey-library/packages/survey-core/docs/classes.json" "DocsLibrary/"
       Copy-Item -Force "$(Build.SourcesDirectory)/survey-library/packages/survey-core/docs/pmes.json" "DocsLibrary/"
       Copy-Item -Force "$(Build.SourcesDirectory)/survey-library/packages/survey-core/docs/surveyjs_definition.json" "DocsLibrary/"
+
+      Remove-Item -Recurse -Force "DocsLibrary/api-reference" -ErrorAction SilentlyContinue
+      Copy-Item -Recurse -Force "$(Build.SourcesDirectory)/survey-library/packages/survey-core/docs/api" "DocsLibrary/api-reference"
 
       git add DocsLibrary
       if (git status --porcelain) {
