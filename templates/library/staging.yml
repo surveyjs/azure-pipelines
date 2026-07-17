@@ -57,9 +57,6 @@ steps:
     displayName: "Build"
 
   - pwsh: |
-      Set-Location $(Build.SourcesDirectory)/survey-library/packages/survey-core
-      npm run build:doc -- --md
-
       Set-Location $(Build.SourcesDirectory)/surveyjs-site-data
       $branch = "$(siteDataRef)"
       $env:GIT_REDIRECT_STDERR = '2>&1'
