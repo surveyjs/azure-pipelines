@@ -4,10 +4,6 @@ steps:
     displayName: "Checkout survey-library"
     timeoutInMinutes: 5
 
-  - checkout: Utils
-    displayName: "Checkout survey-utils"
-    timeoutInMinutes: 5
-
   - checkout: SiteData
     persistCredentials: true
     displayName: "Checkout survey-site-data"

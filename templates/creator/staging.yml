@@ -4,10 +4,6 @@ steps:
     displayName: "Checkout survey-creator"
     timeoutInMinutes: 5
 
-  - checkout: Utils
-    displayName: "Checkout survey-utils"
-    timeoutInMinutes: 5
-
   - checkout: SiteData
     persistCredentials: true
     displayName: "Checkout survey-site-data"
@@ -30,12 +26,13 @@ steps:
         - $(Build.SourcesDirectory)/survey-creator
         - $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core
 
+  - script: npm update survey-utils
+    workingDirectory: $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core
+    displayName: "Update survey-utils dependency"
+    
   - pwsh: |
-      Set-Location $(Build.SourcesDirectory)/survey-utils
-      npm install
-      npm run build
-      node ./dist/translateCreator.js
-      node ./dist/translateCreatorPresets.js
+      Set-Location $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core
+      npm run build:translate
 
       Set-Location $(Build.SourcesDirectory)/survey-creator
       $branch = "$(Build.SourceBranchName)"
@@ -67,11 +64,12 @@ steps:
     workingDirectory: $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core
     displayName: "Build"
 
-  - pwsh: |
-      Set-Location $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core
-      New-Item -ItemType Directory -Force -Path docs | Out-Null
-      npm run doc_gen
+  - script: |
+      npx survey-utils generate-doc creator-site --path $(Build.SourcesDirectory)/survey-creator --out $(Build.SourcesDirectory)/surveyjs-site-data/DocsEditor
+    workingDirectory: $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core
+    displayName: "Generate Site docs"
 
+  - pwsh: |
       Set-Location $(Build.SourcesDirectory)/surveyjs-site-data
       $branch = "$(siteDataRef)"
       $env:GIT_REDIRECT_STDERR = '2>&1'
@@ -81,14 +79,6 @@ steps:
       git fetch origin $branch
       git checkout -B $branch origin/$branch
       git reset --hard origin/$branch
-
-      Copy-Item -Force "$(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core/docs/classes.json" "DocsEditor/"
-      Copy-Item -Force "$(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core/docs/pmes.json" "DocsEditor/"
-
-      Remove-Item -Recurse -Force "DocsEditor/api-reference" -ErrorAction SilentlyContinue
-      node $(Build.SourcesDirectory)/survey-utils/dist/cli.js generate-doc creator --md `
-        --path $(Build.SourcesDirectory)/survey-creator `
-        --md-out $(Build.SourcesDirectory)/surveyjs-site-data/DocsEditor/api-reference
 
       git add DocsEditor
       if (git status --porcelain) {
