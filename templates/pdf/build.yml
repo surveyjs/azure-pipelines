@@ -23,32 +23,32 @@ steps:
     displayName: "Switch to PR $(PR)"
 
   - checkout: ${{ parameters.libraryCheckout }}
-    path: survey-library
+    path: s/survey-library
     displayName: "Checkout survey-library"
     timeoutInMinutes: 5
     retryCountOnTaskFailure: 5
     fetchDepth: 1
 
   - script: git fetch origin pull/$(LIBRARY_PR)/head && git checkout FETCH_HEAD
-    workingDirectory: $(Agent.BuildDirectory)/survey-library
+    workingDirectory: $(Build.SourcesDirectory)/survey-library
     condition: ne(variables['LIBRARY_PR'], '')
     displayName: "Switch library to PR $(LIBRARY_PR)"
 
   - template: ../utils/npm.yml
     parameters:
       directories:
-        - $(Agent.BuildDirectory)/survey-library
-        - $(Agent.BuildDirectory)/survey-library/packages/survey-core
+        - $(Build.SourcesDirectory)/survey-library
+        - $(Build.SourcesDirectory)/survey-library/packages/survey-core
         - $(Build.SourcesDirectory)
 
   - script: npm run build:all
-    workingDirectory: $(Agent.BuildDirectory)/survey-library/packages/survey-core
+    workingDirectory: $(Build.SourcesDirectory)/survey-library/packages/survey-core
     displayName: "Build survey-core"
 
   - template: ../utils/copy.yml
     parameters:
       items:
-        - source: $(Agent.BuildDirectory)/survey-library/packages/survey-core/build
+        - source: $(Build.SourcesDirectory)/survey-library/packages/survey-core/build
           destination: $(Build.SourcesDirectory)/node_modules/survey-core
 
   - script: npm run build:all
