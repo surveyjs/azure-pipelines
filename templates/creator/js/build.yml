@@ -2,12 +2,16 @@ parameters:
   - name: checkout
     type: string
     default: self
+  - name: libraryCheckout
+    type: string
+    default: Library
   - name: store
     type: boolean
     default: false
 
 steps:
   - checkout: ${{ parameters.checkout }}
+    path: s
     displayName: "Checkout ${{ parameters.checkout }}"
     timeoutInMinutes: 5
     retryCountOnTaskFailure: 5
@@ -18,28 +22,45 @@ steps:
     condition: ne(variables['PR'], '')
     displayName: "Switch to PR $(PR)"
 
+  - checkout: ${{ parameters.libraryCheckout }}
+    path: survey-library
+    displayName: "Checkout survey-library"
+    timeoutInMinutes: 5
+    retryCountOnTaskFailure: 5
+    fetchDepth: 1
+
+  - script: git fetch origin pull/$(LIBRARY_PR)/head && git checkout FETCH_HEAD
+    workingDirectory: $(Agent.BuildDirectory)/survey-library
+    condition: ne(variables['LIBRARY_PR'], '')
+    displayName: "Switch library to PR $(LIBRARY_PR)"
+
   - template: ../../utils/npm.yml
     parameters:
       directories:
+        - $(Agent.BuildDirectory)/survey-library
+        - $(Agent.BuildDirectory)/survey-library/packages/survey-core
+        - $(Agent.BuildDirectory)/survey-library/packages/survey-js-ui
         - $(Build.SourcesDirectory)
         - $(Build.SourcesDirectory)/packages/survey-creator-core
         - $(Build.SourcesDirectory)/packages/survey-creator-js
         - $(Build.SourcesDirectory)/packages/survey-creator-js/example
 
-  - template: ../../utils/artifact.yml
-    parameters:
-      artifacts:
-        - $(ArtifactNameLibraryCore)
-        - $(ArtifactNameLibraryJS)
+  - script: npm run build:all
+    workingDirectory: $(Agent.BuildDirectory)/survey-library/packages/survey-core
+    displayName: "Build survey-core"
+
+  - script: npm run build
+    workingDirectory: $(Agent.BuildDirectory)/survey-library/packages/survey-js-ui
+    displayName: "Build survey-js-ui"
 
   - template: ../../utils/copy.yml
     parameters:
       items:
-        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)
-          destination: $(Build.SourcesDirectory)/packages/survey-creator-core/node_modules/survey-core         
-        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)
-          destination: $(Build.SourcesDirectory)/packages/survey-creator-js/node_modules/survey-core            
-        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryJS)
+        - source: $(Agent.BuildDirectory)/survey-library/packages/survey-core/build
+          destination: $(Build.SourcesDirectory)/packages/survey-creator-core/node_modules/survey-core
+        - source: $(Agent.BuildDirectory)/survey-library/packages/survey-core/build
+          destination: $(Build.SourcesDirectory)/packages/survey-creator-js/node_modules/survey-core
+        - source: $(Agent.BuildDirectory)/survey-library/packages/survey-js-ui/build
           destination: $(Build.SourcesDirectory)/packages/survey-creator-js/node_modules/survey-js-ui
 
   - script: npm run build:all
@@ -49,7 +70,7 @@ steps:
   - script: npm run build
     workingDirectory: $(Build.SourcesDirectory)/packages/survey-creator-js
     displayName: "Build JS"
-  
+
   - ${{ if eq(parameters.store, true) }}:
     - task: PublishBuildArtifacts@1
       inputs:

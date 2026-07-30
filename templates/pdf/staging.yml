@@ -12,20 +12,25 @@ steps:
     displayName: "Checkout survey-utils"
     timeoutInMinutes: 5
 
+  - checkout: Library
+    displayName: "Checkout survey-library"
+    timeoutInMinutes: 5
+
   - template: ../utils/npm.yml
     parameters:
       directories:
+        - $(Build.SourcesDirectory)/survey-library
+        - $(Build.SourcesDirectory)/survey-library/packages/survey-core
         - $(Build.SourcesDirectory)/survey-pdf
 
-  - template: ../utils/artifact.yml
-    parameters:
-      artifacts:
-        - $(ArtifactNameLibraryCore)
+  - script: npm run build:all
+    workingDirectory: $(Build.SourcesDirectory)/survey-library/packages/survey-core
+    displayName: "Build survey-core"
 
   - template: ../utils/copy.yml
     parameters:
       items:
-        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)
+        - source: $(Build.SourcesDirectory)/survey-library/packages/survey-core/build
           destination: $(Build.SourcesDirectory)/survey-pdf/node_modules/survey-core
 
   - script: |
