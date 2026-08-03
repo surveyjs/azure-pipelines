@@ -66,90 +66,14 @@ stages:
           - template: templates/utils/commit_message_parser.yml
 
   ###########
-  # LIBRARY #
-  ###########
-  - stage: LibraryCoreBuild
-    displayName: "Library Core Build"
-    dependsOn:
-      - Options
-    variables:
-      PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
-    jobs:
-      - job:
-        steps:
-          - template: templates/library/core/build.yml
-            parameters:
-              checkout: Library
-              store: true
-
-  - stage: LibraryReactBuild
-    displayName: "Library React Build"
-    dependsOn:
-      - Options
-    variables:
-      PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
-    jobs:
-      - job:
-        steps:
-          - template: templates/library/react/build.yml
-            parameters:
-              checkout: Library
-              store: true
-
-  - stage: LibraryAngularBuild
-    displayName: "Library Angular Build"
-    dependsOn:
-      - Options
-    variables:
-      PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
-    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
-    jobs:
-      - job:
-        steps:
-          - template: templates/library/angular/build.yml
-            parameters:
-              checkout: Library
-              store: true
-
-  - stage: LibraryVueBuild
-    displayName: "Library Vue Build"
-    dependsOn:
-      - Options
-    variables:
-      PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
-    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
-    jobs:
-      - job:
-        steps:
-          - template: templates/library/vue/build.yml
-            parameters:
-              checkout: Library
-              store: true
-
-  - stage: LibraryJSBuild
-    displayName: "Library JS (Preact ShadowDOM BoxSizing) Build"
-    dependsOn:
-      - Options
-    variables:
-      PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
-    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
-    jobs:
-      - job:
-        steps:
-          - template: templates/library/js/build.yml
-            parameters:
-              checkout: Library
-              store: true
-
-
-  ###########
   # CREATOR #
   ###########
   - stage: CreatorCore
     displayName: "Creator Core"
     dependsOn:
       - Options
-      - LibraryCoreBuild
+    variables:
+      LIBRARY_PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
     condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
       - job:
@@ -164,10 +88,9 @@ stages:
     displayName: "Creator React"
     dependsOn:
       - Options
-      - LibraryCoreBuild
-      - LibraryReactBuild
     variables:
       SCR_UPDATE: $[ stageDependencies.Options.Commit.outputs['data.SCR_UPDATE'] ]
+      LIBRARY_PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
     jobs:
       - job:
         displayName: "Build"
@@ -182,8 +105,8 @@ stages:
     displayName: "Creator Angular"
     dependsOn:
       - Options
-      - LibraryCoreBuild
-      - LibraryAngularBuild
+    variables:
+      LIBRARY_PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
     condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
       - job:
@@ -198,8 +121,8 @@ stages:
     displayName: "Creator Vue"
     dependsOn:
       - Options
-      - LibraryCoreBuild
-      - LibraryVueBuild
+    variables:
+      LIBRARY_PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
     condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
       - job:
@@ -214,8 +137,8 @@ stages:
     displayName: "Creator JS (Preact ShadowDOM BoxSizing)"
     dependsOn:
       - Options
-      - LibraryCoreBuild
-      - LibraryJSBuild
+    variables:
+      LIBRARY_PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
     condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
       - job:

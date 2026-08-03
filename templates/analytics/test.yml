@@ -2,6 +2,9 @@ parameters:
   - name: checkout
     type: string
     default: self
+  - name: libraryCheckout
+    type: string
+    default: Library
 
 jobs:
   - job:
@@ -11,6 +14,7 @@ jobs:
       - template: build.yml
         parameters:
           checkout: ${{ parameters.checkout }}
+          libraryCheckout: ${{ parameters.libraryCheckout }}
 
       - script: npm run test
         workingDirectory: $(Build.SourcesDirectory)
@@ -29,6 +33,7 @@ jobs:
       - template: build.yml
         parameters:
           checkout: ${{ parameters.checkout }}
+          libraryCheckout: ${{ parameters.libraryCheckout }}
 
       - script: npm run pwinst
         displayName: "Playwright install"      
@@ -62,6 +67,7 @@ jobs:
       - template: build.yml
         parameters:
           checkout: ${{ parameters.checkout }}
+          libraryCheckout: ${{ parameters.libraryCheckout }}
 
       - script: npm run pwinst
         displayName: "Playwright install"

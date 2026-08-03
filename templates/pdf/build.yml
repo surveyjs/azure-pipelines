@@ -2,12 +2,16 @@ parameters:
   - name: checkout
     type: string
     default: self
+  - name: libraryCheckout
+    type: string
+    default: Library
   - name: store
     type: boolean
     default: false
 
 steps:
   - checkout: ${{ parameters.checkout }}
+    path: s
     displayName: "Checkout ${{ parameters.checkout }}"
     timeoutInMinutes: 5
     retryCountOnTaskFailure: 5
@@ -18,20 +22,33 @@ steps:
     condition: ne(variables['PR'], '')
     displayName: "Switch to PR $(PR)"
 
+  - checkout: ${{ parameters.libraryCheckout }}
+    path: s/survey-library
+    displayName: "Checkout survey-library"
+    timeoutInMinutes: 5
+    retryCountOnTaskFailure: 5
+    fetchDepth: 1
+
+  - script: git fetch origin pull/$(LIBRARY_PR)/head && git checkout FETCH_HEAD
+    workingDirectory: $(Build.SourcesDirectory)/survey-library
+    condition: ne(variables['LIBRARY_PR'], '')
+    displayName: "Switch library to PR $(LIBRARY_PR)"
+
   - template: ../utils/npm.yml
     parameters:
       directories:
+        - $(Build.SourcesDirectory)/survey-library
+        - $(Build.SourcesDirectory)/survey-library/packages/survey-core
         - $(Build.SourcesDirectory)
 
-  - template: ../utils/artifact.yml
-    parameters:
-      artifacts:
-        - $(ArtifactNameLibraryCore)
+  - script: npm run build:all
+    workingDirectory: $(Build.SourcesDirectory)/survey-library/packages/survey-core
+    displayName: "Build survey-core"
 
   - template: ../utils/copy.yml
     parameters:
       items:
-        - source: $(Agent.TempDirectory)/$(ArtifactNameLibraryCore)
+        - source: $(Build.SourcesDirectory)/survey-library/packages/survey-core/build
           destination: $(Build.SourcesDirectory)/node_modules/survey-core
 
   - script: npm run build:all

@@ -2,9 +2,6 @@ parameters:
   - name: checkout
     type: string
     default: self
-  - name: store
-    type: boolean
-    default: false
 
 steps:
   - checkout: ${{ parameters.checkout }}
@@ -33,10 +30,3 @@ steps:
   - script: npm run build
     workingDirectory: $(Build.SourcesDirectory)/packages/survey-angular-ui
     displayName: "Build"
-
-  - ${{ if eq(parameters.store, true) }}:
-    - task: PublishBuildArtifacts@1
-      inputs:
-        PathtoPublish: "$(Build.SourcesDirectory)/packages/survey-angular-ui/build"
-        ArtifactName: $(ArtifactNameLibraryAngular)
-        StoreAsTar: true

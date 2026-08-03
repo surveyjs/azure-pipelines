@@ -2,6 +2,9 @@ parameters:
   - name: checkout
     type: string
     default: self
+  - name: libraryCheckout
+    type: string
+    default: Library
 
 jobs:
   - job:
@@ -10,6 +13,7 @@ jobs:
       - template: build.yml
         parameters:
           checkout: ${{ parameters.checkout }}
+          libraryCheckout: ${{ parameters.libraryCheckout }}
 
       - script: npm run test:single
         workingDirectory: $(Build.SourcesDirectory)/packages/survey-creator-angular
@@ -29,6 +33,7 @@ jobs:
       - template: build.yml
         parameters:
           checkout: ${{ parameters.checkout }}
+          libraryCheckout: ${{ parameters.libraryCheckout }}
 
       - script: npm run build:example:prod
         workingDirectory: $(Build.SourcesDirectory)/packages/survey-creator-angular
@@ -63,6 +68,7 @@ jobs:
       - template: build.yml
         parameters:
           checkout: ${{ parameters.checkout }}
+          libraryCheckout: ${{ parameters.libraryCheckout }}
 
       - script: npm run build:example:prod
         workingDirectory: $(Build.SourcesDirectory)/packages/survey-creator-angular

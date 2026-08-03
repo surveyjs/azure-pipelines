@@ -1,9 +1,4 @@
 variables:
-  ArtifactNameLibraryCore: "SurveyJSLibraryBuildCore"
-  ArtifactNameLibraryReact: "SurveyJSLibraryBuildReact"
-  ArtifactNameLibraryAngular: "SurveyJSLibraryBuildAngular"
-  ArtifactNameLibraryVue: "SurveyJSLibraryBuildVue3"
-  ArtifactNameLibraryJS: "SurveyJSLibraryBuildSurveyUI"
   ArtifactNameCreatorCore: "SurveyJSCreatorBuildCore"
   ArtifactNameCreatorAngular: "SurveyJSCreatorBuildAngular"
   ArtifactNameCreatorReact: "SurveyJSCreatorBuildReact"

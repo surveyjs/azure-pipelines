@@ -2,6 +2,9 @@ parameters:
   - name: checkout
     type: string
     default: self
+  - name: libraryCheckout
+    type: string
+    default: Library
 
 jobs:
   - job:
@@ -11,6 +14,7 @@ jobs:
       - template: build.yml
         parameters:
           checkout: ${{ parameters.checkout }}
+          libraryCheckout: ${{ parameters.libraryCheckout }}
 
       - script: npm run build
         workingDirectory: $(Build.SourcesDirectory)/packages/survey-creator-react/example
@@ -31,6 +35,7 @@ jobs:
       - template: build.yml
         parameters:
           checkout: ${{ parameters.checkout }}
+          libraryCheckout: ${{ parameters.libraryCheckout }}
         
       - script: npm run e2e:ci
         workingDirectory: $(Build.SourcesDirectory)/packages/survey-creator-react
@@ -62,6 +67,7 @@ jobs:
       - template: build.yml
         parameters:
           checkout: ${{ parameters.checkout }}
+          libraryCheckout: ${{ parameters.libraryCheckout }}
         
       - script: npm run test:scr:ci
         workingDirectory: $(Build.SourcesDirectory)/packages/survey-creator-react
@@ -93,6 +99,7 @@ jobs:
       - template: build.yml
         parameters:
           checkout: ${{ parameters.checkout }}
+          libraryCheckout: ${{ parameters.libraryCheckout }}
         
       - script: npm run test:scr:legacy:ci
         workingDirectory: $(Build.SourcesDirectory)/packages/survey-creator-react
@@ -124,6 +131,7 @@ jobs:
       - template: build.yml
         parameters:
           checkout: ${{ parameters.checkout }}
+          libraryCheckout: ${{ parameters.libraryCheckout }}
 
       - script: npx playwright test --project scr --update-snapshots
         workingDirectory: $(Build.SourcesDirectory)/packages/survey-creator-react

@@ -9,22 +9,21 @@ steps:
     displayName: "Checkout survey-site-data"
     timeoutInMinutes: 5
 
-  - template: ../utils/artifact.yml
-    parameters:
-      artifacts:
-        - $(ArtifactNameLibraryCore)
-
-  - pwsh: |
-      $dest = "$(Build.SourcesDirectory)/survey-library/packages/survey-core/build"
-      New-Item -ItemType Directory -Force -Path $dest | Out-Null
-      Copy-Item -Recurse -Force "$(Agent.TempDirectory)/$(ArtifactNameLibraryCore)/*" $dest
-    displayName: "Provide survey-core build"
+  - checkout: Library
+    displayName: "Checkout survey-library"
+    timeoutInMinutes: 5
 
   - template: ../utils/npm.yml
     parameters:
       directories:
+        - $(Build.SourcesDirectory)/survey-library
+        - $(Build.SourcesDirectory)/survey-library/packages/survey-core
         - $(Build.SourcesDirectory)/survey-creator
         - $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core
+
+  - script: npm run build:all
+    workingDirectory: $(Build.SourcesDirectory)/survey-library/packages/survey-core
+    displayName: "Build survey-core"
 
   - script: npm update survey-utils
     workingDirectory: $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core

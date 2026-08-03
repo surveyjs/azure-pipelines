@@ -65,27 +65,13 @@ stages:
         steps:
           - template: templates/utils/commit_message_parser.yml
 
-  - stage: LibraryCoreBuild
-    displayName: "Library Core Build"
-    dependsOn:
-      - Options
-    variables:
-      PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
-    jobs:
-      - job:
-        steps:
-          - template: templates/library/core/build.yml
-            parameters:
-              checkout: Library
-              store: true
-
   - stage: Analytics
     displayName: "Analytics"
     dependsOn:
       - Options
-      - LibraryCoreBuild
     variables:
       SCR_UPDATE: $[ stageDependencies.Options.Commit.outputs['data.SCR_UPDATE'] ]
+      LIBRARY_PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
     jobs:
       - job:
         displayName: "Build"
