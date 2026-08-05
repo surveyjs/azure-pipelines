@@ -52,11 +52,6 @@ steps:
     workingDirectory: $(Build.SourcesDirectory)/survey-library/packages/survey-core
     displayName: "Build"
 
-  - script: |
-      npx survey-utils generate-doc library-site --path $(Build.SourcesDirectory)/survey-library --out $(Build.SourcesDirectory)/surveyjs-site-data/DocsLibrary
-    workingDirectory: $(Build.SourcesDirectory)/survey-library/packages/survey-core
-    displayName: "Generate Site docs"
-
   - pwsh: |
       Set-Location $(Build.SourcesDirectory)/surveyjs-site-data
       $branch = "$(siteDataRef)"
@@ -67,7 +62,11 @@ steps:
       git fetch origin $branch
       git checkout -B $branch origin/$branch
       git reset --hard origin/$branch
-    
+
+      Set-Location $(Build.SourcesDirectory)/survey-library/packages/survey-core
+      npx survey-utils generate-doc library-site --path $(Build.SourcesDirectory)/survey-library --out $(Build.SourcesDirectory)/surveyjs-site-data/DocsLibrary
+
+      Set-Location $(Build.SourcesDirectory)/surveyjs-site-data
       git add DocsLibrary
       if (git status --porcelain) {
           echo "There are changes in docs. Committing and pushing to GitHub..."
