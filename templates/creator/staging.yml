@@ -63,11 +63,6 @@ steps:
     workingDirectory: $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core
     displayName: "Build"
 
-  - script: |
-      npx survey-utils generate-doc creator-site --path $(Build.SourcesDirectory)/survey-creator --out $(Build.SourcesDirectory)/surveyjs-site-data/DocsEditor
-    workingDirectory: $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core
-    displayName: "Generate Site docs"
-
   - pwsh: |
       Set-Location $(Build.SourcesDirectory)/surveyjs-site-data
       $branch = "$(siteDataRef)"
@@ -79,6 +74,10 @@ steps:
       git checkout -B $branch origin/$branch
       git reset --hard origin/$branch
 
+      Set-Location $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core
+      npx survey-utils generate-doc creator-site --path $(Build.SourcesDirectory)/survey-creator --out $(Build.SourcesDirectory)/surveyjs-site-data/DocsEditor
+
+      Set-Location $(Build.SourcesDirectory)/surveyjs-site-data
       git add DocsEditor
       if (git status --porcelain) {
           echo "There are changes in docs. Committing and pushing to GitHub..."
