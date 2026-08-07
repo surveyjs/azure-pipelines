@@ -2,6 +2,9 @@ parameters:
   - name: checkout
     type: string
     default: self
+  - name: store
+    type: boolean
+    default: false
 
 steps:
   - checkout: ${{ parameters.checkout }}
@@ -24,3 +27,12 @@ steps:
   - script: npm run build:all
     workingDirectory: $(Build.SourcesDirectory)/packages/survey-core
     displayName: "Build"
+
+  - ${{ if eq(parameters.store, true) }}:
+    - task: PublishBuildArtifacts@1
+      displayName: "Publish build artifacts"
+      inputs:
+        PathtoPublish: "$(Build.SourcesDirectory)/packages/survey-core/build"
+        ArtifactName: $(ArtifactNameLibraryCore)
+        publishLocation: "Container"
+        StoreAsTar: true

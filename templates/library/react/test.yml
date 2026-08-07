@@ -11,6 +11,7 @@ jobs:
       - template: build.yml
         parameters:
           checkout: ${{ parameters.checkout }}
+          store: true
 
       - script: npm run test
         workingDirectory: $(Build.SourcesDirectory)/packages/survey-react-ui

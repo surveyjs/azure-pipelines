@@ -10,6 +10,7 @@ jobs:
       - template: build.yml
         parameters:
           checkout: ${{ parameters.checkout }}
+          store: true
 
       - script: npm run accessibility-tests:ci
         workingDirectory: $(Build.SourcesDirectory)/packages/survey-js-ui
