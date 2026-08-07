@@ -10,6 +10,7 @@ jobs:
       - template: build.yml
         parameters:
           checkout: ${{ parameters.checkout }}
+          store: true
 
       - script: npm run build:example:prod
         workingDirectory: $(Build.SourcesDirectory)/packages/survey-vue3-ui
