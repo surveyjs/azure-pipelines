@@ -24,9 +24,31 @@ jobs:
         workingDirectory: $(Build.SourcesDirectory)/packages/survey-creator-react
         displayName: "Test"
 
-      - script: npm run test:a11y:ci
+      # the a11y script pins --reporter dot, so junit is appended back here to get a results file
+      - script: npm run test:a11y:ci -- --reporter dot,junit
         workingDirectory: $(Build.SourcesDirectory)/packages/survey-creator-react
         displayName: "Test A11Y"
+        env:
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: "$(Build.SourcesDirectory)/packages/survey-creator-react/test-results/a11y-junit-results.xml"
+
+      - task: PublishBuildArtifacts@1
+        inputs:
+          PathtoPublish: "$(Build.SourcesDirectory)/packages/survey-creator-react/test-results"
+          ArtifactName: "Creator_React_A11Y"
+          publishLocation: "Container"
+        condition: always()
+        displayName: "Publish A11Y artifacts"
+
+      - task: PublishTestResults@2
+        inputs:
+          searchFolder: "$(Build.SourcesDirectory)/packages/survey-creator-react/test-results"
+          testResultsFormat: "JUnit"
+          testResultsFiles: "a11y-junit-results.xml"
+          mergeTestResults: true
+          failTaskOnFailedTests: true
+          testRunTitle: "Creator React A11Y Tests"
+        condition: succeededOrFailed()
+        displayName: "Publish A11Y results"
 
   - job:
     displayName: "E2E"
