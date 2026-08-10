@@ -16,9 +16,32 @@ jobs:
         workingDirectory: $(Build.SourcesDirectory)/packages/survey-angular-ui
         displayName: "Build Example"
 
-      - script: npm run accessibility-tests:ci
+      # the a11y script pins --reporter dot, so junit is appended back here and pointed at
+      # its own file to avoid clobbering the e2e results written in the same job
+      - script: npm run accessibility-tests:ci -- --reporter dot,junit
         workingDirectory: $(Build.SourcesDirectory)/packages/survey-angular-ui
         displayName: "Test A11Y"
+        env:
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: "$(Build.SourcesDirectory)/packages/survey-angular-ui/test-results/a11y-junit-results.xml"
+
+      - task: PublishBuildArtifacts@1
+        displayName: "Publish A11Y artifacts"
+        inputs:
+          PathtoPublish: "$(Build.SourcesDirectory)/packages/survey-angular-ui/test-results"
+          ArtifactName: "Library_Angular_A11Y"
+          publishLocation: "Container"
+        condition: always()
+
+      - task: PublishTestResults@2
+        displayName: "Publish A11Y results"
+        inputs:
+          searchFolder: "$(Build.SourcesDirectory)/packages/survey-angular-ui/test-results"
+          testResultsFormat: "JUnit"
+          testResultsFiles: "a11y-junit-results.xml"
+          mergeTestResults: true
+          failTaskOnFailedTests: true
+          testRunTitle: "Angular A11Y Tests"
+        condition: succeededOrFailed()
 
       - script: npm run e2e:ci
         workingDirectory: $(Build.SourcesDirectory)/packages/survey-angular-ui
