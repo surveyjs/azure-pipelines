@@ -1,14 +1,20 @@
 steps:
   - checkout: none
   - bash: |
-      TARGET_BRANCH="$(System.PullRequest.TargetBranch)"
-      TARGET_BRANCH="${TARGET_BRANCH#refs/heads/}"
-
       PR_TITLE=$(curl -sf "https://api.github.com/repos/$(Build.Repository.Name)/pulls/$(System.PullRequest.PullRequestNumber)" | jq -r '.title // empty') || {
         echo "##vso[task.logissue type=warning]Failed to fetch PR title"
         exit 0
       }
       echo "PR Title: $PR_TITLE"
+
+      SUMMARY="$(Agent.TempDirectory)/linked-prs.md"
+      {
+        echo "## Linked pull requests"
+        echo ""
+        echo "Triggered by [$(Build.Repository.Name)#$(System.PullRequest.PullRequestNumber)](https://github.com/$(Build.Repository.Name)/pull/$(System.PullRequest.PullRequestNumber)) \`$PR_TITLE\`"
+        echo ""
+      } > "$SUMMARY"
+      FOUND=0
 
       # Extract all [name: value] pairs from PR title and export as pipeline variables
       while IFS== read -r NAME VALUE; do
@@ -16,8 +22,28 @@ steps:
         if [[ "$NAME" =~ ^[A-Z_]+$ ]]; then
           echo "Extracted: ${NAME}=${VALUE}"
           echo "##vso[task.setvariable variable=${NAME};isOutput=true]${VALUE}"
+
+          case "$NAME" in
+            LIBRARY) REPO="surveyjs/survey-library" ;;
+            CREATOR) REPO="surveyjs/survey-creator" ;;
+            ANALYTICS) REPO="surveyjs/survey-analytics" ;;
+            PDF) REPO="surveyjs/survey-pdf" ;;
+            *) REPO="" ;;
+          esac
+          if [[ -n "$REPO" && "$VALUE" =~ ^[0-9]+$ ]]; then
+            echo "- **${NAME}** — [${REPO}#${VALUE}](https://github.com/${REPO}/pull/${VALUE})" >> "$SUMMARY"
+          else
+            echo "- **${NAME}** — \`${VALUE}\`" >> "$SUMMARY"
+          fi
+          FOUND=1
         else
           echo "Skipping invalid variable name: ${NAME}"
         fi
       done < <(echo "$PR_TITLE" | grep -oE '\[[^]]+:[^]]+\]' | sed -E 's/\[\s*([^:]+?)\s*:\s*(.*?)\s*\]/\1=\2/')
+
+      if [[ "$FOUND" == "1" ]]; then
+        echo "##vso[task.uploadsummary]$SUMMARY"
+      else
+        echo "No linked pull requests found in PR title, summary is not published"
+      fi
     name: data
