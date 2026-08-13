@@ -116,7 +116,7 @@ jobs:
         
   - job:
     displayName: "SCR Legacy"
-    condition: and(ne(variables['System.PullRequest.TargetBranch'], 'V3'), ne(variables['Build.SourceBranchName'], 'V3'), eq(variables['SCR_UPDATE'], ''))
+    condition: and(or(eq(variables['System.PullRequest.TargetBranch'], 'V2'), eq(variables['Build.SourceBranchName'], 'V2')), eq(variables['SCR_UPDATE'], ''))
     steps:
       - template: build.yml
         parameters:
@@ -164,7 +164,7 @@ jobs:
           npx playwright test --project scr_legacy --update-snapshots
         workingDirectory: $(Build.SourcesDirectory)/packages/survey-creator-react
         displayName: "Update SCR Legacy"
-        condition: ne(variables['System.PullRequest.TargetBranch'], 'V3')
+        condition: eq(variables['System.PullRequest.TargetBranch'], 'V2')
 
       - powershell: |
           $env:GIT_REDIRECT_STDERR = '2>&1'
