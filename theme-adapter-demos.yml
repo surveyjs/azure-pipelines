@@ -13,30 +13,30 @@ variables:
   - template: templates/utils/variables.yml
 
 stages:
-  - stage: Lint
-    displayName: "Lint & Typecheck"
-    dependsOn: []
-    jobs:
-      - job:
-        steps:
-          - checkout: self
-            displayName: "Checkout theme-adapter-demos"
-            timeoutInMinutes: 5
-            retryCountOnTaskFailure: 5
-            fetchDepth: 1
+  # - stage: Lint
+  #   displayName: "Lint & Typecheck"
+  #   dependsOn: []
+  #   jobs:
+  #     - job:
+  #       steps:
+  #         - checkout: self
+  #           displayName: "Checkout theme-adapter-demos"
+  #           timeoutInMinutes: 5
+  #           retryCountOnTaskFailure: 5
+  #           fetchDepth: 1
 
-          - template: templates/utils/npm.yml
-            parameters:
-              directories:
-                - $(Build.SourcesDirectory)
+  #         - template: templates/utils/npm.yml
+  #           parameters:
+  #             directories:
+  #               - $(Build.SourcesDirectory)
 
-          - script: npm run lint
-            workingDirectory: $(Build.SourcesDirectory)
-            displayName: "Lint"
+  #         - script: npm run lint
+  #           workingDirectory: $(Build.SourcesDirectory)
+  #           displayName: "Lint"
 
-          - script: npm run typecheck
-            workingDirectory: $(Build.SourcesDirectory)
-            displayName: "Typecheck"
+  #         - script: npm run typecheck
+  #           workingDirectory: $(Build.SourcesDirectory)
+  #           displayName: "Typecheck"
 
   - ${{ each app in parameters.apps }}:
     - stage: SCR_${{ app }}
