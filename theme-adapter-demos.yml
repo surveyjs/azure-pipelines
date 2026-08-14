@@ -56,6 +56,12 @@ stages:
                 directories:
                   - $(Build.SourcesDirectory)
 
+            - script: npx playwright install chromium
+              workingDirectory: $(Build.SourcesDirectory)
+              displayName: "Playwright install"
+              env:
+                PLAYWRIGHT_SKIP_BROWSER_GC: 1
+
             - script: npm run test:scr:${{ app }} -- --reporter=list,junit,html
               workingDirectory: $(Build.SourcesDirectory)
               displayName: "Test SCR ${{ app }}"
