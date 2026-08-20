@@ -51,8 +51,6 @@ resources:
       endpoint: github.com_surveyjsdeveloper
       name: surveyjs/survey-utils
 
-    # No `ref: $(branch)`: theme-adapter-demos only has `main` — no master/V2/V3
-    # counterparts for $(branch) to resolve against.
     - repository: ThemeAdapterDemos
       type: github
       endpoint: github.com_surveyjsdeveloper
