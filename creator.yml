@@ -32,6 +32,13 @@ resources:
       endpoint: github.com_surveyjsdeveloper
       name: surveyjs/survey-utils
 
+    # No `ref: $(branch)`: theme-adapter-demos only has `main` — no master/V2/V3
+    # counterparts for $(branch) to resolve against.
+    - repository: ThemeAdapterDemos
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/theme-adapter-demos
+
 stages:
   - stage: Lint
     dependsOn: []
@@ -152,6 +159,28 @@ stages:
             parameters:
               store: true
       - template: templates/creator/js/test.yml
+
+  - stage: ThemeAdapterDemosTest
+    displayName: "Theme Adapter Demos SCR"
+    dependsOn:
+      - Options
+    variables:
+      PR: $[ stageDependencies.Options.PRTitle.outputs['data.ADAPTERS'] ]
+      LIBRARY_PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
+    # PRs into master only: the demos track V3 (survey-* ^3.0.0), and running
+    # them on staging builds or on the V2/V3 branches is out of scope.
+    condition: >-
+      and(
+        eq(variables['Build.Reason'], 'PullRequest'),
+        in(variables['System.PullRequest.TargetBranch'], 'master', 'refs/heads/master'),
+        eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
+      )
+    jobs:
+      - template: templates/theme-adapter-demos/test.yml
+        parameters:
+          checkout: ThemeAdapterDemos
+          libraryCheckout: Library
+          creatorCheckout: self
 
 
 

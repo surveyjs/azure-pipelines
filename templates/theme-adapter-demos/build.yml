@@ -1,0 +1,115 @@
+# Checks out theme-adapter-demos plus survey-library / survey-creator, builds all
+# four survey-* packages from those sources and replaces the demos' installed
+# copies with them. Every pipeline that runs the demos does this — the apps are
+# always exercised against the libraries, never against the published packages.
+#
+# The substitution is all-or-nothing: the demos' builder page runs
+# survey-creator-react, and a published creator is compiled against a published
+# survey-core, so mixing a local core with an npm creator risks an API mismatch.
+#
+# Layout matters: the creator packages declare their deps as relative paths
+# (`../../../survey-library/packages/survey-core/build`), which resolve only when
+# survey-library sits next to the survey-creator root — hence s/survey-library
+# and s/survey-creator side by side under the demos checkout.
+#
+# SURVEYJS_LIBV3 is deliberately NOT set: without it the demos resolve survey-*
+# from node_modules, which is exactly what this template overwrites — for the
+# webpack bundle and for the CSS adapters that `prebuild` copies out of
+# node_modules/survey-core alike.
+
+parameters:
+  - name: checkout
+    type: string
+    default: ThemeAdapterDemos
+  - name: libraryCheckout
+    type: string
+    default: Library
+  - name: creatorCheckout
+    type: string
+    default: Creator
+
+steps:
+  - checkout: ${{ parameters.checkout }}
+    path: s
+    displayName: "Checkout theme-adapter-demos"
+    timeoutInMinutes: 5
+    retryCountOnTaskFailure: 5
+    fetchDepth: 1
+
+  - script: git fetch origin pull/$(PR)/head && git checkout FETCH_HEAD
+    workingDirectory: $(Build.SourcesDirectory)
+    condition: ne(variables['PR'], '')
+    displayName: "Switch to PR $(PR)"
+
+  - checkout: ${{ parameters.libraryCheckout }}
+    path: s/survey-library
+    displayName: "Checkout survey-library"
+    timeoutInMinutes: 5
+    retryCountOnTaskFailure: 5
+    fetchDepth: 1
+
+  - script: git fetch origin pull/$(LIBRARY_PR)/head && git checkout FETCH_HEAD
+    workingDirectory: $(Build.SourcesDirectory)/survey-library
+    condition: ne(variables['LIBRARY_PR'], '')
+    displayName: "Switch library to PR $(LIBRARY_PR)"
+
+  - checkout: ${{ parameters.creatorCheckout }}
+    path: s/survey-creator
+    displayName: "Checkout survey-creator"
+    timeoutInMinutes: 5
+    retryCountOnTaskFailure: 5
+    fetchDepth: 1
+
+  - script: git fetch origin pull/$(CREATOR_PR)/head && git checkout FETCH_HEAD
+    workingDirectory: $(Build.SourcesDirectory)/survey-creator
+    condition: ne(variables['CREATOR_PR'], '')
+    displayName: "Switch creator to PR $(CREATOR_PR)"
+
+  - template: ../utils/npm.yml
+    parameters:
+      directories:
+        - $(Build.SourcesDirectory)/survey-library
+        - $(Build.SourcesDirectory)/survey-library/packages/survey-core
+        - $(Build.SourcesDirectory)/survey-library/packages/survey-react-ui
+        - $(Build.SourcesDirectory)/survey-creator
+        - $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core
+        - $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-react
+        - $(Build.SourcesDirectory)
+
+  - script: npm run build:all
+    workingDirectory: $(Build.SourcesDirectory)/survey-library/packages/survey-core
+    displayName: "Build survey-core"
+
+  - script: npm run build
+    workingDirectory: $(Build.SourcesDirectory)/survey-library/packages/survey-react-ui
+    displayName: "Build survey-react-ui"
+
+  - template: ../utils/copy.yml
+    parameters:
+      items:
+        - source: $(Build.SourcesDirectory)/survey-library/packages/survey-core/build
+          destination: $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core/node_modules/survey-core
+        - source: $(Build.SourcesDirectory)/survey-library/packages/survey-core/build
+          destination: $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-react/node_modules/survey-core
+        - source: $(Build.SourcesDirectory)/survey-library/packages/survey-react-ui/build
+          destination: $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-react/node_modules/survey-react-ui
+
+  - script: npm run build:all
+    workingDirectory: $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core
+    displayName: "Build survey-creator-core"
+
+  - script: npm run build
+    workingDirectory: $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-react
+    displayName: "Build survey-creator-react"
+
+  - template: ../utils/copy.yml
+    parameters:
+      items:
+        - source: $(Build.SourcesDirectory)/survey-library/packages/survey-core/build
+          destination: $(Build.SourcesDirectory)/node_modules/survey-core
+        - source: $(Build.SourcesDirectory)/survey-library/packages/survey-react-ui/build
+          destination: $(Build.SourcesDirectory)/node_modules/survey-react-ui
+        - source: $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core/build
+          destination: $(Build.SourcesDirectory)/node_modules/survey-creator-core
+        - source: $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-react/build
+          destination: $(Build.SourcesDirectory)/node_modules/survey-creator-react

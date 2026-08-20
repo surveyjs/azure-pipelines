@@ -28,6 +28,7 @@ steps:
             CREATOR) REPO="surveyjs/survey-creator" ;;
             ANALYTICS) REPO="surveyjs/survey-analytics" ;;
             PDF) REPO="surveyjs/survey-pdf" ;;
+            ADAPTERS) REPO="surveyjs/theme-adapter-demos" ;;
             *) REPO="" ;;
           esac
           if [[ -n "$REPO" && "$VALUE" =~ ^[0-9]+$ ]]; then

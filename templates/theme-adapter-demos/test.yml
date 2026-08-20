@@ -1,0 +1,74 @@
+# Screenshot tests for the theme-adapter-demos apps, one job per app.
+#
+# Consumed by three pipelines: the demos' own and the library / creator ones.
+# All three run against locally built survey-* packages (see build.yml); they
+# differ only in which repository supplies the PR under test.
+
+parameters:
+  - name: apps
+    type: object
+    default:
+      - bootstrap
+      - shadcn
+      - mui
+  - name: checkout
+    type: string
+    default: ThemeAdapterDemos
+  - name: libraryCheckout
+    type: string
+    default: Library
+  - name: creatorCheckout
+    type: string
+    default: Creator
+
+jobs:
+  - ${{ each app in parameters.apps }}:
+    - job: SCR_${{ app }}
+      displayName: "SCR: ${{ app }}"
+      steps:
+        - template: build.yml
+          parameters:
+            checkout: ${{ parameters.checkout }}
+            libraryCheckout: ${{ parameters.libraryCheckout }}
+            creatorCheckout: ${{ parameters.creatorCheckout }}
+
+        - script: npx playwright install chromium
+          workingDirectory: $(Build.SourcesDirectory)
+          displayName: "Playwright install"
+          env:
+            PLAYWRIGHT_SKIP_BROWSER_GC: 1
+
+        - script: npm run test:scr:${{ app }} -- --reporter=list,junit,html
+          workingDirectory: $(Build.SourcesDirectory)
+          displayName: "Test SCR ${{ app }}"
+          env:
+            CI: "true"
+            PLAYWRIGHT_JUNIT_OUTPUT_FILE: "$(Build.SourcesDirectory)/test-results/scr-${{ app }}-junit.xml"
+            PLAYWRIGHT_HTML_OUTPUT_DIR: "$(Build.SourcesDirectory)/screenshot-tests/.report"
+
+        - task: PublishBuildArtifacts@1
+          displayName: "Publish SCR artifacts"
+          inputs:
+            PathtoPublish: "$(Build.SourcesDirectory)/test-results"
+            ArtifactName: "ThemeAdapterDemos_SCR_${{ app }}"
+            publishLocation: "Container"
+          condition: always()
+
+        - task: PublishBuildArtifacts@1
+          displayName: "Publish SCR report"
+          inputs:
+            PathtoPublish: "$(Build.SourcesDirectory)/screenshot-tests/.report"
+            ArtifactName: "ThemeAdapterDemos_SCR_Report_${{ app }}"
+            publishLocation: "Container"
+          condition: always()
+
+        - task: PublishTestResults@2
+          displayName: "Publish SCR results"
+          inputs:
+            searchFolder: "$(Build.SourcesDirectory)/test-results"
+            testResultsFormat: "JUnit"
+            testResultsFiles: "scr-${{ app }}-junit.xml"
+            mergeTestResults: true
+            failTaskOnFailedTests: true
+            testRunTitle: "Theme Adapter Demos SCR ${{ app }}"
+          condition: succeededOrFailed()

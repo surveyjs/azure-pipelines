@@ -51,6 +51,11 @@ resources:
       endpoint: github.com_surveyjsdeveloper
       name: surveyjs/survey-utils
 
+    - repository: ThemeAdapterDemos
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/theme-adapter-demos
+
 stages:
   - stage: Lint
     dependsOn: []
@@ -224,6 +229,27 @@ stages:
         parameters:
           checkout: PDF
           libraryCheckout: self
+
+  - stage: ThemeAdapterDemosTest
+    displayName: "Theme Adapter Demos"
+    dependsOn:
+      - Options
+    variables:
+      PR: $[ stageDependencies.Options.PRTitle.outputs['data.ADAPTERS'] ]
+      LIBRARY_PR: ''
+      CREATOR_PR: $[ stageDependencies.Options.PRTitle.outputs['data.CREATOR'] ]
+    condition: >-
+      and(
+        eq(variables['Build.Reason'], 'PullRequest'),
+        in(variables['System.PullRequest.TargetBranch'], 'master', 'refs/heads/master'),
+        eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
+      )
+    jobs:
+      - template: templates/theme-adapter-demos/test.yml
+        parameters:
+          checkout: ThemeAdapterDemos
+          libraryCheckout: self
+          creatorCheckout: Creator
 
 
 

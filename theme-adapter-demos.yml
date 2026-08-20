@@ -1,16 +1,19 @@
 # Lint / build / screenshot checks for pull requests in surveyjs/theme-adapter-demos.
 # Entry point: azurepipeline.yml in that repository extends this template.
 
-parameters:
-  - name: apps
-    type: object
-    default:
-      - bootstrap
-      - shadcn
-      - mui
-
 variables:
   - template: templates/utils/variables.yml
+
+resources:
+  repositories:
+    - repository: Library
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/survey-library
+    - repository: Creator
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/survey-creator
 
 stages:
   # - stage: Lint
@@ -38,61 +41,12 @@ stages:
   #           workingDirectory: $(Build.SourcesDirectory)
   #           displayName: "Typecheck"
 
-  - ${{ each app in parameters.apps }}:
-    - stage: SCR_${{ app }}
-      displayName: "Screenshot tests: ${{ app }}"
-      dependsOn: []
-      jobs:
-        - job:
-          steps:
-            - checkout: self
-              displayName: "Checkout theme-adapter-demos"
-              timeoutInMinutes: 5
-              retryCountOnTaskFailure: 5
-              fetchDepth: 1
-
-            - template: templates/utils/npm.yml
-              parameters:
-                directories:
-                  - $(Build.SourcesDirectory)
-
-            - script: npx playwright install chromium
-              workingDirectory: $(Build.SourcesDirectory)
-              displayName: "Playwright install"
-              env:
-                PLAYWRIGHT_SKIP_BROWSER_GC: 1
-
-            - script: npm run test:scr:${{ app }} -- --reporter=list,junit,html
-              workingDirectory: $(Build.SourcesDirectory)
-              displayName: "Test SCR ${{ app }}"
-              env:
-                CI: "true"
-                PLAYWRIGHT_JUNIT_OUTPUT_FILE: "$(Build.SourcesDirectory)/test-results/scr-${{ app }}-junit.xml"
-                PLAYWRIGHT_HTML_OUTPUT_DIR: "$(Build.SourcesDirectory)/screenshot-tests/.report"
-
-            - task: PublishBuildArtifacts@1
-              displayName: "Publish SCR artifacts"
-              inputs:
-                PathtoPublish: "$(Build.SourcesDirectory)/test-results"
-                ArtifactName: "ThemeAdapterDemos_SCR_${{ app }}"
-                publishLocation: "Container"
-              condition: always()
-
-            - task: PublishBuildArtifacts@1
-              displayName: "Publish SCR report"
-              inputs:
-                PathtoPublish: "$(Build.SourcesDirectory)/screenshot-tests/.report"
-                ArtifactName: "ThemeAdapterDemos_SCR_Report_${{ app }}"
-                publishLocation: "Container"
-              condition: always()
-
-            - task: PublishTestResults@2
-              displayName: "Publish SCR results"
-              inputs:
-                searchFolder: "$(Build.SourcesDirectory)/test-results"
-                testResultsFormat: "JUnit"
-                testResultsFiles: "scr-${{ app }}-junit.xml"
-                mergeTestResults: true
-                failTaskOnFailedTests: true
-                testRunTitle: "Theme Adapter Demos SCR ${{ app }}"
-              condition: succeededOrFailed()
+  - stage: SCR
+    displayName: "Screenshot tests"
+    dependsOn: []
+    jobs:
+      - template: templates/theme-adapter-demos/test.yml
+        parameters:
+          checkout: self
+          libraryCheckout: Library
+          creatorCheckout: Creator
