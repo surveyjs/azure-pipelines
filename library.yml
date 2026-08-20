@@ -229,14 +229,13 @@ stages:
           libraryCheckout: self
 
   - stage: ThemeAdapterDemosTest
-    displayName: "Theme Adapter Demos SCR"
+    displayName: "Theme Adapter Demos"
     dependsOn:
       - Options
     variables:
       PR: $[ stageDependencies.Options.PRTitle.outputs['data.ADAPTERS'] ]
+      LIBRARY_PR: ''
       CREATOR_PR: $[ stageDependencies.Options.PRTitle.outputs['data.CREATOR'] ]
-    # PRs into master only: the demos track V3 (survey-* ^3.0.0), and running
-    # them on staging builds or on the V2/V3 branches is out of scope.
     condition: >-
       and(
         eq(variables['Build.Reason'], 'PullRequest'),

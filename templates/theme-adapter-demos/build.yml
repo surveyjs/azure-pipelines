@@ -102,8 +102,6 @@ steps:
     workingDirectory: $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-react
     displayName: "Build survey-creator-react"
 
-  # Must stay after the npm install above, or the install would put the
-  # published packages back over these builds.
   - template: ../utils/copy.yml
     parameters:
       items:
