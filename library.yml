@@ -67,6 +67,10 @@ stages:
               directories:
                 - $(Build.SourcesDirectory)
 
+          - script: npm update eslint-plugin-surveyjs
+            workingDirectory: $(Build.SourcesDirectory)
+            displayName: "Update eslint-plugin-surveyjs dependency"
+
           - script: npm run lint
             workingDirectory: $(Build.SourcesDirectory)
 
