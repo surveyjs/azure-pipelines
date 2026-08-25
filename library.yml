@@ -104,7 +104,7 @@ stages:
     displayName: "Library Core Test"
     dependsOn:
       - Options
-    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
+    condition: and(succeeded(), eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], ''))
     jobs:
       - template: templates/library/core/test.yml
 
@@ -112,6 +112,7 @@ stages:
     displayName: "Library React Test"
     dependsOn:
       - Options
+    condition: succeeded()
     variables:
       SCR_UPDATE: $[ stageDependencies.Options.Commit.outputs['data.SCR_UPDATE'] ]
     jobs:
@@ -121,7 +122,7 @@ stages:
     displayName: "Library Angular Test"
     dependsOn:
       - Options
-    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
+    condition: and(succeeded(), eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], ''))
     jobs:
       - template: templates/library/angular/test.yml
 
@@ -129,7 +130,7 @@ stages:
     displayName: "Library Vue Test"
     dependsOn:
       - Options
-    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
+    condition: and(succeeded(), eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], ''))
     jobs:
       - template: templates/library/vue/test.yml
 
@@ -137,7 +138,7 @@ stages:
     displayName: "Library JS (Preact ShadowDOM BoxSizing) Test"
     dependsOn:
       - Options
-    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
+    condition: and(succeeded(), eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], ''))
     jobs:
       - template: templates/library/js/test.yml
 
