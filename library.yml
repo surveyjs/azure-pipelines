@@ -10,35 +10,37 @@ variables:
 
 resources:
   repositories:
-    - repository: Library
-      type: github
-      endpoint: github.com_surveyjsdeveloper
-      name: surveyjs/survey-library
-      ref: $(branch)
+    # TEMPORARILY DISABLED with the Creator/Analytics/PDF/Adapters stages - restore before merging.
+    # Note: these use `ref: $(branch)`, so they resolve only on branches that exist in every repo.
+    # - repository: Library
+    #   type: github
+    #   endpoint: github.com_surveyjsdeveloper
+    #   name: surveyjs/survey-library
+    #   ref: $(branch)
 
-    - repository: Creator
-      type: github
-      endpoint: github.com_surveyjsdeveloper
-      name: surveyjs/survey-creator
-      ref: $(branch)
+    # - repository: Creator
+    #   type: github
+    #   endpoint: github.com_surveyjsdeveloper
+    #   name: surveyjs/survey-creator
+    #   ref: $(branch)
 
-    - repository: Analytics
-      type: github
-      endpoint: github.com_surveyjsdeveloper
-      name: surveyjs/survey-analytics
-      ref: $(branch)
+    # - repository: Analytics
+    #   type: github
+    #   endpoint: github.com_surveyjsdeveloper
+    #   name: surveyjs/survey-analytics
+    #   ref: $(branch)
 
-    - repository: PDF
-      type: github
-      endpoint: github.com_surveyjsdeveloper
-      name: surveyjs/survey-pdf
-      ref: $(branch)
+    # - repository: PDF
+    #   type: github
+    #   endpoint: github.com_surveyjsdeveloper
+    #   name: surveyjs/survey-pdf
+    #   ref: $(branch)
 
-    - repository: Service
-      type: github
-      endpoint: github.com_surveyjsdeveloper
-      name: surveyjs/service
-      ref: $(branch)
+    # - repository: Service
+    #   type: github
+    #   endpoint: github.com_surveyjsdeveloper
+    #   name: surveyjs/service
+    #   ref: $(branch)
 
     - repository: SiteData
       type: github
@@ -46,15 +48,15 @@ resources:
       name: surveyjs/surveyjs-site-data
       ref: $(siteDataRef)
 
-    - repository: Utils
-      type: github
-      endpoint: github.com_surveyjsdeveloper
-      name: surveyjs/survey-utils
+    # - repository: Utils
+    #   type: github
+    #   endpoint: github.com_surveyjsdeveloper
+    #   name: surveyjs/survey-utils
 
-    - repository: ThemeAdapterDemos
-      type: github
-      endpoint: github.com_surveyjsdeveloper
-      name: surveyjs/theme-adapter-demos
+    # - repository: ThemeAdapterDemos
+    #   type: github
+    #   endpoint: github.com_surveyjsdeveloper
+    #   name: surveyjs/theme-adapter-demos
 
 stages:
   - stage: Lint
@@ -258,19 +260,19 @@ stages:
   ###############
   # Stage Phase #
   ###############
-  # - ${{ if eq(variables.isStage, 'True') }}:
-  #   - stage: Staging
-  #     displayName: "Staging"
-  #     dependsOn:
-  #       - LibraryCoreTest
-  #       - LibraryReactTest
-  #       - LibraryAngularTest
-  #       - LibraryVueTest
-  #       - LibraryJSTest
-  #     jobs:
-  #     - job:
-  #       steps:
-  #         - template: templates/library/staging.yml
+  - ${{ if eq(variables.isStage, 'True') }}:
+    - stage: Staging
+      displayName: "Staging"
+      dependsOn:
+        - LibraryCoreTest
+        - LibraryReactTest
+        - LibraryAngularTest
+        - LibraryVueTest
+        - LibraryJSTest
+      jobs:
+      - job:
+        steps:
+          - template: templates/library/staging.yml
 
   # Backport to V2: when the PR merged into master carries a [backport:V2] flag in its
   # title, cherry-pick it onto V2 and open a PR. See templates/utils/backport.yml.
