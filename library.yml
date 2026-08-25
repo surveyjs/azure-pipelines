@@ -139,117 +139,118 @@ stages:
     jobs:
       - template: templates/library/js/test.yml
 
-  - stage: CreatorCoreTest
-    displayName: "Creator Core Test"
-    dependsOn:
-      - Options
-    variables:
-      PR: $[ stageDependencies.Options.PRTitle.outputs['data.CREATOR'] ]
-    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
-    jobs:
-      - template: templates/creator/core/test.yml
-        parameters:
-          checkout: Creator
-          libraryCheckout: self
+  # TEMPORARILY DISABLED for testing the backport stage - restore before merging.
+  # - stage: CreatorCoreTest
+  #   displayName: "Creator Core Test"
+  #   dependsOn:
+  #     - Options
+  #   variables:
+  #     PR: $[ stageDependencies.Options.PRTitle.outputs['data.CREATOR'] ]
+  #   condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
+  #   jobs:
+  #     - template: templates/creator/core/test.yml
+  #       parameters:
+  #         checkout: Creator
+  #         libraryCheckout: self
 
-  - stage: CreatorReactTest
-    displayName: "Creator React Test"
-    dependsOn:
-      - Options
-    variables:
-      PR: $[ stageDependencies.Options.PRTitle.outputs['data.CREATOR'] ]
-    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
-    jobs:
-      - template: templates/creator/react/test.yml
-        parameters:
-          checkout: Creator
-          libraryCheckout: self
+  # - stage: CreatorReactTest
+  #   displayName: "Creator React Test"
+  #   dependsOn:
+  #     - Options
+  #   variables:
+  #     PR: $[ stageDependencies.Options.PRTitle.outputs['data.CREATOR'] ]
+  #   condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
+  #   jobs:
+  #     - template: templates/creator/react/test.yml
+  #       parameters:
+  #         checkout: Creator
+  #         libraryCheckout: self
 
-  - stage: CreatorAngularTest
-    displayName: "Creator Angular Test"
-    dependsOn:
-      - Options
-    variables:
-      PR: $[ stageDependencies.Options.PRTitle.outputs['data.CREATOR'] ]
-    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
-    jobs:
-      - template: templates/creator/angular/test.yml
-        parameters:
-          checkout: Creator
-          libraryCheckout: self
+  # - stage: CreatorAngularTest
+  #   displayName: "Creator Angular Test"
+  #   dependsOn:
+  #     - Options
+  #   variables:
+  #     PR: $[ stageDependencies.Options.PRTitle.outputs['data.CREATOR'] ]
+  #   condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
+  #   jobs:
+  #     - template: templates/creator/angular/test.yml
+  #       parameters:
+  #         checkout: Creator
+  #         libraryCheckout: self
 
-  - stage: CreatorVueTest
-    displayName: "Creator Vue Test"
-    dependsOn:
-      - Options
-    variables:
-      PR: $[ stageDependencies.Options.PRTitle.outputs['data.CREATOR'] ]
-    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
-    jobs:
-      - template: templates/creator/vue/test.yml
-        parameters:
-          checkout: Creator
-          libraryCheckout: self
+  # - stage: CreatorVueTest
+  #   displayName: "Creator Vue Test"
+  #   dependsOn:
+  #     - Options
+  #   variables:
+  #     PR: $[ stageDependencies.Options.PRTitle.outputs['data.CREATOR'] ]
+  #   condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
+  #   jobs:
+  #     - template: templates/creator/vue/test.yml
+  #       parameters:
+  #         checkout: Creator
+  #         libraryCheckout: self
 
-  - stage: CreatorJSTest
-    displayName: "Creator JS (Preact ShadowDOM BoxSizing) Test"
-    dependsOn:
-      - Options
-    variables:
-      PR: $[ stageDependencies.Options.PRTitle.outputs['data.CREATOR'] ]
-    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
-    jobs:
-      - template: templates/creator/js/test.yml
-        parameters:
-          checkout: Creator
-          libraryCheckout: self
+  # - stage: CreatorJSTest
+  #   displayName: "Creator JS (Preact ShadowDOM BoxSizing) Test"
+  #   dependsOn:
+  #     - Options
+  #   variables:
+  #     PR: $[ stageDependencies.Options.PRTitle.outputs['data.CREATOR'] ]
+  #   condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
+  #   jobs:
+  #     - template: templates/creator/js/test.yml
+  #       parameters:
+  #         checkout: Creator
+  #         libraryCheckout: self
 
-  - stage: AnalyticsTest
-    displayName: "Analytics Test"
-    dependsOn:
-      - Options
-    variables:
-      PR: $[ stageDependencies.Options.PRTitle.outputs['data.ANALYTICS'] ]
-    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
-    jobs:
-      - template: templates/analytics/test.yml
-        parameters:
-          checkout: Analytics
-          libraryCheckout: self
+  # - stage: AnalyticsTest
+  #   displayName: "Analytics Test"
+  #   dependsOn:
+  #     - Options
+  #   variables:
+  #     PR: $[ stageDependencies.Options.PRTitle.outputs['data.ANALYTICS'] ]
+  #   condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
+  #   jobs:
+  #     - template: templates/analytics/test.yml
+  #       parameters:
+  #         checkout: Analytics
+  #         libraryCheckout: self
 
-  - stage: PDFTest
-    displayName: "PDF Test"
-    dependsOn:
-      - Options
-    variables:
-      PR: $[ stageDependencies.Options.PRTitle.outputs['data.PDF'] ]
-    condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
-    jobs:
-      - template: templates/pdf/test.yml
-        parameters:
-          checkout: PDF
-          libraryCheckout: self
+  # - stage: PDFTest
+  #   displayName: "PDF Test"
+  #   dependsOn:
+  #     - Options
+  #   variables:
+  #     PR: $[ stageDependencies.Options.PRTitle.outputs['data.PDF'] ]
+  #   condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
+  #   jobs:
+  #     - template: templates/pdf/test.yml
+  #       parameters:
+  #         checkout: PDF
+  #         libraryCheckout: self
 
-  - stage: ThemeAdapterDemosTest
-    displayName: "Theme Adapter Demos"
-    dependsOn:
-      - Options
-    variables:
-      PR: $[ stageDependencies.Options.PRTitle.outputs['data.ADAPTERS'] ]
-      LIBRARY_PR: ''
-      CREATOR_PR: $[ stageDependencies.Options.PRTitle.outputs['data.CREATOR'] ]
-    condition: >-
-      and(
-        eq(variables['Build.Reason'], 'PullRequest'),
-        in(variables['System.PullRequest.TargetBranch'], 'master', 'refs/heads/master'),
-        eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
-      )
-    jobs:
-      - template: templates/theme-adapter-demos/test.yml
-        parameters:
-          checkout: ThemeAdapterDemos
-          libraryCheckout: self
-          creatorCheckout: Creator
+  # - stage: ThemeAdapterDemosTest
+  #   displayName: "Theme Adapter Demos"
+  #   dependsOn:
+  #     - Options
+  #   variables:
+  #     PR: $[ stageDependencies.Options.PRTitle.outputs['data.ADAPTERS'] ]
+  #     LIBRARY_PR: ''
+  #     CREATOR_PR: $[ stageDependencies.Options.PRTitle.outputs['data.CREATOR'] ]
+  #   condition: >-
+  #     and(
+  #       eq(variables['Build.Reason'], 'PullRequest'),
+  #       in(variables['System.PullRequest.TargetBranch'], 'master', 'refs/heads/master'),
+  #       eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
+  #     )
+  #   jobs:
+  #     - template: templates/theme-adapter-demos/test.yml
+  #       parameters:
+  #         checkout: ThemeAdapterDemos
+  #         libraryCheckout: self
+  #         creatorCheckout: Creator
 
 
 
@@ -257,37 +258,41 @@ stages:
   ###############
   # Stage Phase #
   ###############
-  - ${{ if eq(variables.isStage, 'True') }}:
-    - stage: Staging
-      displayName: "Staging"
-      dependsOn:
-        - LibraryCoreTest
-        - LibraryReactTest
-        - LibraryAngularTest
-        - LibraryVueTest
-        - LibraryJSTest
-      jobs:
-      - job:
-        steps:
-          - template: templates/library/staging.yml
+  # - ${{ if eq(variables.isStage, 'True') }}:
+  #   - stage: Staging
+  #     displayName: "Staging"
+  #     dependsOn:
+  #       - LibraryCoreTest
+  #       - LibraryReactTest
+  #       - LibraryAngularTest
+  #       - LibraryVueTest
+  #       - LibraryJSTest
+  #     jobs:
+  #     - job:
+  #       steps:
+  #         - template: templates/library/staging.yml
 
-    - stage: BackportV2
-      displayName: "Backport to V2"
-      dependsOn:
-        - LibraryCoreTest
-        - LibraryReactTest
-        - LibraryAngularTest
-        - LibraryVueTest
-        - LibraryJSTest
-        - CreatorCoreTest
-        - CreatorReactTest
-        - CreatorAngularTest
-        - CreatorVueTest
-        - CreatorJSTest
-        - AnalyticsTest
-        - PDFTest
-      condition: and(succeeded(), eq(variables['Build.SourceBranchName'], 'master_backport_test'))
-      jobs:
-        - template: templates/utils/backport.yml
-          parameters:
-            targetBranch: V2_backport_test
+  # Backport to V2: when the PR merged into master carries a [backport:V2] flag in its
+  # title, cherry-pick it onto V2 and open a PR. See templates/utils/backport.yml.
+  # Not wrapped in the isStage block - the stage gates itself on the source branch below.
+  - stage: BackportV2
+    displayName: "Backport to V2"
+    dependsOn:
+      - LibraryCoreTest
+      - LibraryReactTest
+      - LibraryAngularTest
+      - LibraryVueTest
+      - LibraryJSTest
+      # TEMPORARILY DISABLED together with the stages themselves - restore before merging:
+      # - CreatorCoreTest
+      # - CreatorReactTest
+      # - CreatorAngularTest
+      # - CreatorVueTest
+      # - CreatorJSTest
+      # - AnalyticsTest
+      # - PDFTest
+    condition: and(succeeded(), eq(variables['Build.SourceBranchName'], 'master_backport_test'))
+    jobs:
+      - template: templates/utils/backport.yml
+        parameters:
+          targetBranch: V2_backport_test
