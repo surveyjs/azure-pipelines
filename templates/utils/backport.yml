@@ -4,7 +4,9 @@
 # PR against that branch, so [backport:V2] [backport:V3] produces two backports (one matrix leg
 # each). A backport PR is a draft when the cherry-pick conflicted (conflicts are committed
 # unresolved) or when the original title had companion tags ([analytics: N], [creator: N], ...)
-# whose target-branch counterparts have to be set manually.
+# whose target-branch counterparts have to be set manually. Each backport PR is labeled
+# `backport` plus the target branch name, and assigned to the original PR's assignees
+# (falling back to its author when it had none).
 #
 # Caller contract:
 #   * Include from a stage that only runs on a CI build of the branch being backported FROM,
@@ -119,13 +121,16 @@ jobs:
           REPO="$(Build.Repository.Name)"
           PR_NUM="$(BACKPORT_PR)"
           TARGET="$(TARGET)"
-          # Flat label/branch names even for targets with slashes: release/2.5 -> backport-release-2.5.
-          LABEL="backport-$(printf '%s' "$TARGET" | tr '[:upper:]' '[:lower:]' | sed -E 's#[^a-z0-9._-]+#-#g')"
-          BRANCH="$LABEL/pr-$PR_NUM"
+          # Flat branch prefix even for targets with slashes: release/2.5 -> backport-release-2.5.
+          BRANCH="backport-$(printf '%s' "$TARGET" | tr '[:upper:]' '[:lower:]' | sed -E 's#[^a-z0-9._-]+#-#g')/pr-$PR_NUM"
 
           PR_JSON="$(gh api "repos/$REPO/pulls/$PR_NUM")"
           PR_TITLE="$(printf '%s' "$PR_JSON" | jq -r '.title')"
-          PR_AUTHOR="$(printf '%s' "$PR_JSON" | jq -r '.user.login // empty')"
+          # Assignees are copied from the original PR; its author is the fallback when it had none.
+          ASSIGNEES="$(printf '%s' "$PR_JSON" | jq -r '[.assignees[]?.login] | join(" ")')"
+          if [ -z "$ASSIGNEES" ]; then
+            ASSIGNEES="$(printf '%s' "$PR_JSON" | jq -r '.user.login // empty')"
+          fi
 
           # Companion tags ([analytics: N], [creator: N], ...) point to master PRs and must
           # not leak into the backport title - the target branch CI would check out master.
@@ -189,16 +194,22 @@ jobs:
             DRAFT=true
           fi
 
-          gh label create "$LABEL" --repo "$REPO" --color 0E8A16 --description "Automated backport to $TARGET" 2>/dev/null || true
+          gh label create "backport" --repo "$REPO" --color 0E8A16 --description "Automated backport" 2>/dev/null || true
+          gh label create "$TARGET" --repo "$REPO" --color 0E8A16 --description "Targets the $TARGET branch" 2>/dev/null || true
 
-          set -- pr create --repo "$REPO" --base "$TARGET" --head "$BRANCH" --title "$CLEAN_TITLE (#$PR_NUM)" --body "$BODY" --label "$LABEL"
+          set -- pr create --repo "$REPO" --base "$TARGET" --head "$BRANCH" --title "$CLEAN_TITLE (#$PR_NUM)" --body "$BODY" --label "backport" --label "$TARGET"
           if [ "$DRAFT" = true ]; then set -- "$@" --draft; fi
           PR_URL="$(gh "$@")"
           echo "Created backport PR: $PR_URL"
 
-          if [ -n "$PR_AUTHOR" ]; then
-            gh pr edit "${PR_URL##*/}" --repo "$REPO" --add-assignee "$PR_AUTHOR" \
-              || echo "##vso[task.logissue type=warning]Could not assign $PR_AUTHOR to the backport PR"
+          # REST instead of `gh pr edit --add-assignee`: the latter resolves metadata over GraphQL
+          # and needs the read:org scope the token does not have. Non-assignable users (e.g.
+          # external contributors) are silently ignored by this endpoint - that is acceptable.
+          if [ -n "$ASSIGNEES" ]; then
+            set -- api "repos/$REPO/issues/${PR_URL##*/}/assignees"
+            for A in $ASSIGNEES; do set -- "$@" -f "assignees[]=$A"; done
+            gh "$@" >/dev/null \
+              || echo "##vso[task.logissue type=warning]Could not assign '$ASSIGNEES' to the backport PR"
           fi
 
           if [ -n "$CONFLICT_FILES" ]; then
