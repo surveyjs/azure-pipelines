@@ -275,11 +275,11 @@ stages:
         steps:
           - template: templates/library/staging.yml
 
-  # Backport to V2: when the PR merged into master carries a [backport:V2] flag in its
-  # title, cherry-pick it onto V2 and open a PR. See templates/utils/backport.yml.
+  # Backport: every [backport:<branch>] flag in the title of the PR merged into master
+  # cherry-picks it onto that branch and opens a PR. See templates/utils/backport.yml.
   # Not wrapped in the isStage block - the stage gates itself on the source branch below.
-  - stage: BackportV2
-    displayName: "Backport to V2"
+  - stage: Backport
+    displayName: "Backport"
     dependsOn:
       - LibraryCoreTest
       - LibraryReactTest
@@ -297,5 +297,3 @@ stages:
     condition: and(succeeded(), eq(variables['Build.SourceBranchName'], 'master_backport_test'))
     jobs:
       - template: templates/utils/backport.yml
-        parameters:
-          targetBranch: V2_backport_test
