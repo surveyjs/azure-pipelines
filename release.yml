@@ -149,18 +149,26 @@ jobs:
         if ($build.result -ne 'succeeded') {
           $failed += $line
         }
+
+        # A run that is still going may push to the release branch mid-release
+        $activeUrl = "${orgUrl}${projectEnc}/_apis/build/builds?definitions=$id&statusFilter=inProgress,notStarted&branchName=refs/heads/$(projectsBranch)&`$top=1&api-version=7.0"
+        $active = (Invoke-RestMethod -Headers $headers -Uri $activeUrl -Method Get).value | Select-Object -First 1
+
+        if ($active) {
+          $failed += "[$alias] buildId=$($active.id) is $($active.status) on $($active.sourceBranch) - wait for it to finish before releasing"
+        }
       }
 
       if ($failed.Count -gt 0) {
-        Write-Host "##vso[task.logissue type=error]One or more upstream pipelines are not in 'succeeded' state:"
+        Write-Host "##vso[task.logissue type=error]One or more upstream pipelines are not ready:"
         $failed | ForEach-Object { Write-Host "##vso[task.logissue type=error]$_" }
         exit 1
       }
 
-      Write-Host "All upstream pipelines are succeeded."
+      Write-Host "All upstream pipelines are succeeded and idle."
     env:
       SYSTEM_ACCESSTOKEN: $(System.AccessToken)
-    displayName: 'Verify upstream *Main pipelines succeeded'
+    displayName: 'Verify upstream *Main pipelines succeeded and idle'
 
 
 
@@ -381,30 +389,45 @@ jobs:
 
 
 
-  # Push tags
-  - pwsh: |
-      $env:GIT_REDIRECT_STDERR = '2>&1'
+  # Push release commits and tags
+  - bash: |
+      set -e
 
-      cd $(Build.SourcesDirectory)/survey-library/
-      git checkout -B $(projectsBranch)
-      git push origin $(projectsBranch) --follow-tags --no-verify
+      BRANCH="$(projectsBranch)"
 
-      cd $(Build.SourcesDirectory)/survey-creator/
-      git checkout -B $(projectsBranch)
-      git push origin $(projectsBranch) --follow-tags --no-verify
+      for REPO in survey-library survey-creator survey-analytics survey-pdf custom-widgets; do
+        echo "=== $REPO"
+        cd "$(Build.SourcesDirectory)/$REPO"
 
-      cd $(Build.SourcesDirectory)/survey-analytics/
-      git checkout -B $(projectsBranch)
-      git push origin $(projectsBranch) --follow-tags --no-verify
+        git checkout -B "$BRANCH"
 
-      cd $(Build.SourcesDirectory)/survey-pdf/
-      git checkout -B $(projectsBranch)
-      git push origin $(projectsBranch) --follow-tags --no-verify
+        PUSHED=0
+        for ATTEMPT in 1 2 3; do
+          git fetch origin "$BRANCH"
 
-      cd $(Build.SourcesDirectory)/custom-widgets/
-      git checkout -B $(projectsBranch)
-      git push origin $(projectsBranch) --follow-tags --no-verify
-    displayName: 'Push tags'
+          # Bring in whatever landed on the branch while the release was building
+          if ! git merge -m "Merge origin/$BRANCH into release [azurepipelines skip]" FETCH_HEAD; then
+            git merge --abort || true
+            echo "##vso[task.logissue type=error]$REPO: merge conflict with origin/$BRANCH"
+            exit 1
+          fi
+
+          # --atomic: the tag must never land without the branch
+          if git push origin "$BRANCH" --follow-tags --atomic --no-verify; then
+            PUSHED=1
+            break
+          fi
+
+          echo "$REPO: push rejected (attempt $ATTEMPT of 3), retrying"
+          sleep 5
+        done
+
+        if [ "$PUSHED" -ne 1 ]; then
+          echo "##vso[task.logissue type=error]$REPO: failed to push $BRANCH after 3 attempts"
+          exit 1
+        fi
+      done
+    displayName: 'Push release commits and tags'
 
 
 
@@ -439,7 +462,19 @@ jobs:
       git add surveyjs.io/Web.config
       if (git status --porcelain) {
           git commit -m "released $surveyJSVersion"
-          git pull origin $branch -X ours --no-rebase
-          git push origin $branch
+
+          $pushed = $false
+          foreach ($attempt in 1..3) {
+              git pull origin $branch -X ours --no-rebase
+              git push origin $branch
+              if ($LASTEXITCODE -eq 0) { $pushed = $true; break }
+              Write-Host "Web.config push rejected (attempt $attempt of 3), retrying"
+              Start-Sleep -Seconds 5
+          }
+
+          if (-not $pushed) {
+              Write-Host "##vso[task.logissue type=error]Failed to push Web.config to $branch after 3 attempts"
+              exit 1
+          }
       }
     displayName: 'Update Web.config and push'
