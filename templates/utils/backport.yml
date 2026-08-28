@@ -1,0 +1,222 @@
+# Reusable jobs template: backport the PR merged into the current branch to other branches.
+#
+# The target branches come from the merged PR's title: every [backport:<branch>] flag opens one
+# PR against that branch, so [backport:V2] [backport:V3] produces two backports (one matrix leg
+# each). A backport PR is a draft when the cherry-pick conflicted (conflicts are committed
+# unresolved) or when the original title had companion tags ([analytics: N], [creator: N], ...)
+# whose target-branch counterparts have to be set manually. Each backport PR is labeled
+# `backport` plus the target branch name, and assigned to the original PR's assignees
+# (falling back to its author when it had none).
+#
+# Caller contract:
+#   * Include from a stage that only runs on a CI build of the branch being backported FROM,
+#     after the stages that validate it.
+#   * Have a `GITHUB_TOKEN` variable in scope (variable group `pipeline-secrets`) — `gh` needs it.
+#
+# Known limitations (accepted): only the PR whose merge commit equals Build.SourceVersion is
+# handled, so a batched build backports only the last merged PR; "Rebase and merge" of a
+# multi-commit PR is not supported. Recovery for both: make sure the flag is in the merged PR
+# title and re-run this stage — the flag is read from the API, not from the build.
+
+jobs:
+  - job: Detect
+    displayName: "Detect [backport:...] flags"
+    steps:
+      - checkout: none
+      - bash: |
+          set -euo pipefail
+          SHA="$(Build.SourceVersion)"
+          REPO="$(Build.Repository.Name)"
+          SOURCE_BRANCH="$(Build.SourceBranchName)"
+
+          # Always publish a matrix (at least "{}") plus a separate boolean gate: the Backport job
+          # keys its condition on the gate, because an empty matrix cannot skip the job on its own.
+          publish() {
+            echo "##vso[task.setvariable variable=BACKPORT_PR;isOutput=true]${1:-}"
+            echo "##vso[task.setvariable variable=MATRIX;isOutput=true]${2:-{\}}"
+            echo "##vso[task.setvariable variable=SHOULD_BACKPORT;isOutput=true]${3:-false}"
+          }
+
+          PRS_JSON="$(gh api "repos/$REPO/commits/$SHA/pulls" || true)"
+          PR_NUM="$(printf '%s' "$PRS_JSON" | jq -r --arg sha "$SHA" '[.[]? | select(.merge_commit_sha == $sha)][0].number // empty' 2>/dev/null || true)"
+          if [ -z "$PR_NUM" ]; then
+            echo "No merged PR found for commit $SHA - nothing to backport."
+            publish; exit 0
+          fi
+          PR_TITLE="$(printf '%s' "$PRS_JSON" | jq -r --arg sha "$SHA" '[.[] | select(.merge_commit_sha == $sha)][0].title // empty')"
+
+          # Every [backport:<branch>] flag in the title, value only. A bare [backport] has no
+          # colon, does not match, and is silently ignored.
+          TARGETS="$(printf '%s' "$PR_TITLE" | grep -oiE '\[backport[[:space:]]*:[[:space:]]*[^]]+\]' \
+            | sed -E 's/^\[[^:]*:[[:space:]]*//; s/[[:space:]]*\]$//' || true)"
+          if [ -z "$TARGETS" ]; then
+            echo "PR #$PR_NUM has no [backport:<branch>] flag in its title - skipping."
+            publish; exit 0
+          fi
+
+          MATRIX="{}"
+          BAD=""
+          SEEN=""
+          while IFS= read -r T; do
+            [ -z "$T" ] && continue
+            case " $SEEN " in *" $T "*) echo "Duplicate flag [backport:$T] - ignoring."; continue ;; esac
+            SEEN="$SEEN $T"
+
+            if [ "$T" = "$SOURCE_BRANCH" ]; then
+              echo "##vso[task.logissue type=warning]PR #$PR_NUM asks to backport into its own branch '$T' - ignoring that flag."
+              continue
+            fi
+            # Allowlist first (keeps shell metacharacters out), then git's own ref-name rules.
+            if ! printf '%s' "$T" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._/-]*$' || ! git check-ref-format --branch "$T" >/dev/null 2>&1; then
+              echo "Invalid branch name in [backport:$T]."
+              BAD="$BAD $T"; continue
+            fi
+            # Branch names are case-sensitive and taken verbatim: [backport:v2] does NOT mean V2.
+            if ! gh api "repos/$REPO/branches/$T" >/dev/null 2>&1; then
+              echo "Branch '$T' does not exist in $REPO."
+              BAD="$BAD $T"; continue
+            fi
+
+            KEY="b_$(printf '%s' "$T" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/_/g')"
+            MATRIX="$(printf '%s' "$MATRIX" | jq -c --arg k "$KEY" --arg t "$T" '. + {($k): {TARGET: $t}}')"
+            echo "Queueing backport of PR #$PR_NUM to '$T'."
+          done <<EOF
+          $TARGETS
+          EOF
+
+          # Any typo fails the whole stage: the title has to be fixed and the stage re-run anyway,
+          # and a half-done fan-out would hide the mistake.
+          if [ -n "$BAD" ]; then
+            echo "##vso[task.logissue type=error]PR #$PR_NUM references branches that cannot be backported to:$BAD"
+            publish; exit 1
+          fi
+
+          NLEGS="$(printf '%s' "$MATRIX" | jq 'length')"
+          echo "Backport legs queued: $NLEGS"
+          echo "Matrix: $MATRIX"
+          if [ "$NLEGS" -gt 0 ]; then publish "$PR_NUM" "$MATRIX" true; else publish; fi
+        name: detect
+        displayName: "Find merged PR and collect backport targets"
+        env:
+          GH_TOKEN: $(GITHUB_TOKEN)
+
+  - job: Backport
+    displayName: "Cherry-pick and create PR"
+    dependsOn: Detect
+    condition: eq(dependencies.Detect.outputs['detect.SHOULD_BACKPORT'], 'true')
+    # One leg per [backport:<branch>] flag; each leg gets its own $(TARGET). The condition above
+    # keys on the boolean gate, not on the matrix - an empty matrix cannot skip the job itself.
+    strategy:
+      matrix: $[ dependencies.Detect.outputs['detect.MATRIX'] ]
+    variables:
+      BACKPORT_PR: $[ dependencies.Detect.outputs['detect.BACKPORT_PR'] ]
+    steps:
+      - checkout: self
+        persistCredentials: true
+        fetchDepth: 0
+        retryCountOnTaskFailure: 5
+      - bash: |
+          set -euo pipefail
+          SHA="$(Build.SourceVersion)"
+          REPO="$(Build.Repository.Name)"
+          PR_NUM="$(BACKPORT_PR)"
+          TARGET="$(TARGET)"
+          # Flat branch prefix even for targets with slashes: release/2.5 -> backport-release-2.5.
+          BRANCH="backport-$(printf '%s' "$TARGET" | tr '[:upper:]' '[:lower:]' | sed -E 's#[^a-z0-9._-]+#-#g')/pr-$PR_NUM"
+
+          PR_JSON="$(gh api "repos/$REPO/pulls/$PR_NUM")"
+          PR_TITLE="$(printf '%s' "$PR_JSON" | jq -r '.title')"
+          # Assignees are copied from the original PR; its author is the fallback when it had none.
+          ASSIGNEES="$(printf '%s' "$PR_JSON" | jq -r '[.assignees[]?.login] | join(" ")')"
+          if [ -z "$ASSIGNEES" ]; then
+            ASSIGNEES="$(printf '%s' "$PR_JSON" | jq -r '.user.login // empty')"
+          fi
+
+          # Companion tags ([analytics: N], [creator: N], ...) point to master PRs and must
+          # not leak into the backport title - the target branch CI would check out master.
+          COMPANIONS="$(printf '%s' "$PR_TITLE" | grep -oE '\[[^]]+:[^]]+\]' | grep -viE '^\[backport[[:space:]]*:' || true)"
+          CLEAN_TITLE="$(printf '%s' "$PR_TITLE" | sed -E 's/\[[^]]+:[^]]+\]//g; s/[[:space:]]+/ /g; s/^ //; s/ $//')"
+
+          EXISTING="$(gh pr list --repo "$REPO" --head "$BRANCH" --state all --json number --jq '.[].number' || true)"
+          if [ -n "$EXISTING" ]; then
+            echo "Backport PR already exists for branch $BRANCH (#$EXISTING) - skipping."
+            exit 0
+          fi
+
+          git config user.email "surveyjs.org@gmail.com"
+          git config user.name "surveyjsdeveloper"
+
+          DRAFT=false
+          CONFLICT_FILES=""
+
+          if [ -n "$(git ls-remote --heads origin "$BRANCH")" ]; then
+            # A previous run pushed the branch but failed before creating the PR.
+            echo "Branch $BRANCH already pushed - creating the missing PR from it."
+            git fetch origin "$BRANCH"
+            CONFLICT_FILES="$(git log -1 --format=%B FETCH_HEAD | sed -n 's/^\[backport-conflicts\] //p' | tr ' ' '\n' | sed '/^$/d')"
+            if [ -n "$CONFLICT_FILES" ]; then DRAFT=true; fi
+          else
+            git fetch origin "$TARGET"
+            git checkout -B "$BRANCH" FETCH_HEAD
+
+            MAINLINE=""
+            if [ "$(git rev-list --parents -n1 "$SHA" | wc -w)" -gt 2 ]; then
+              MAINLINE="-m 1"
+            fi
+            if ! git cherry-pick -x $MAINLINE "$SHA"; then
+              CONFLICT_FILES="$(git diff --name-only --diff-filter=U)"
+              if [ -z "$CONFLICT_FILES" ]; then
+                git cherry-pick --abort || true
+                echo "Cherry-pick produced no changes (already in $TARGET) - nothing to backport."
+                exit 0
+              fi
+              echo "Cherry-pick conflicts, committing them unresolved:"
+              printf '%s\n' "$CONFLICT_FILES"
+              git add -A
+              GIT_EDITOR=true git cherry-pick --continue
+              # Record the conflicted files in the commit message so a re-run that only
+              # has to re-create the PR still knows this backport needs a draft.
+              git commit --amend --no-verify --no-edit \
+                -m "$(printf '%s\n[backport-conflicts] %s' "$(git log -1 --format=%B)" "$(printf '%s\n' "$CONFLICT_FILES" | tr '\n' ' ')")"
+              DRAFT=true
+            fi
+            git push --no-verify origin "HEAD:$BRANCH"
+          fi
+
+          BODY="$(printf 'Automated backport of #%s (commit %s) to %s.' "$PR_NUM" "$SHA" "$TARGET")"
+          if [ -n "$CONFLICT_FILES" ]; then
+            BODY="$(printf '%s\n\n**Cherry-pick had conflicts** - they are committed unresolved (conflict markers where the file exists in both branches). Resolve them in this branch:\n%s' \
+              "$BODY" "$(printf '%s\n' "$CONFLICT_FILES" | sed 's/^/- /')")"
+          fi
+          if [ -n "$COMPANIONS" ]; then
+            BODY="$(printf '%s\n\n**The original PR title had companion tags:** `%s` - they point to master PRs. Add the %s versions of the companion PRs to this title manually.' \
+              "$BODY" "$(printf '%s' "$COMPANIONS" | tr '\n' ' ')" "$TARGET")"
+            DRAFT=true
+          fi
+
+          gh label create "backport" --repo "$REPO" --color 0E8A16 --description "Automated backport" 2>/dev/null || true
+          gh label create "$TARGET" --repo "$REPO" --color 0E8A16 --description "Targets the $TARGET branch" 2>/dev/null || true
+
+          set -- pr create --repo "$REPO" --base "$TARGET" --head "$BRANCH" --title "$CLEAN_TITLE (#$PR_NUM)" --body "$BODY" --label "backport" --label "$TARGET"
+          if [ "$DRAFT" = true ]; then set -- "$@" --draft; fi
+          PR_URL="$(gh "$@")"
+          echo "Created backport PR: $PR_URL"
+
+          # REST instead of `gh pr edit --add-assignee`: the latter resolves metadata over GraphQL
+          # and needs the read:org scope the token does not have. Non-assignable users (e.g.
+          # external contributors) are silently ignored by this endpoint - that is acceptable.
+          if [ -n "$ASSIGNEES" ]; then
+            set -- api "repos/$REPO/issues/${PR_URL##*/}/assignees"
+            for A in $ASSIGNEES; do set -- "$@" -f "assignees[]=$A"; done
+            gh "$@" >/dev/null \
+              || echo "##vso[task.logissue type=warning]Could not assign '$ASSIGNEES' to the backport PR"
+          fi
+
+          if [ -n "$CONFLICT_FILES" ]; then
+            echo "##vso[task.logissue type=warning]Backport PR for #$PR_NUM created as draft with unresolved cherry-pick conflicts: $PR_URL"
+            echo "##vso[task.complete result=SucceededWithIssues;]Backport created with conflicts"
+          fi
+        displayName: "Cherry-pick and open backport PR"
+        env:
+          GH_TOKEN: $(GITHUB_TOKEN)
+          GITHUB_TOKEN: $(GITHUB_TOKEN)

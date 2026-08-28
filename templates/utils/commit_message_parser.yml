@@ -5,7 +5,7 @@ steps:
     retryCountOnTaskFailure: 5
   - bash: |
       set -e
-      SOURCE_SHA="$(System.PullRequest.SourceCommitId)"
+      SOURCE_SHA="${SYSTEM_PULLREQUEST_SOURCECOMMITID:-}"
       if [[ -n "$SOURCE_SHA" ]]; then
         # PR build: fetch the actual source commit and read its message,
         # otherwise HEAD points to a temporary "Merge X into Y" merge commit.
