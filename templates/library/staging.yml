@@ -64,10 +64,10 @@ steps:
       git reset --hard origin/$branch
 
       Set-Location $(Build.SourcesDirectory)/survey-library/packages/survey-core
-      npx survey-utils generate-doc library-site --path $(Build.SourcesDirectory)/survey-library --out $(Build.SourcesDirectory)/surveyjs-site-data/DocsLibrary
+      npx survey-utils generate-doc library-site --path $(Build.SourcesDirectory)/survey-library --out $(Build.SourcesDirectory)/surveyjs-site-data
 
       Set-Location $(Build.SourcesDirectory)/surveyjs-site-data
-      git add DocsLibrary
+      git add .
       if (git status --porcelain) {
           echo "There are changes in docs. Committing and pushing to GitHub..."
           git diff --cached --stat

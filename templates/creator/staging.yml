@@ -75,10 +75,10 @@ steps:
       git reset --hard origin/$branch
 
       Set-Location $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core
-      npx survey-utils generate-doc creator-site --path $(Build.SourcesDirectory)/survey-creator --out $(Build.SourcesDirectory)/surveyjs-site-data/DocsEditor
+      npx survey-utils generate-doc creator-site --path $(Build.SourcesDirectory)/survey-creator --out $(Build.SourcesDirectory)/surveyjs-site-data
 
       Set-Location $(Build.SourcesDirectory)/surveyjs-site-data
-      git add DocsEditor
+      git add .
       if (git status --porcelain) {
           echo "There are changes in docs. Committing and pushing to GitHub..."
           git diff --cached --stat
