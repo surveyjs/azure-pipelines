@@ -25,10 +25,25 @@ steps:
     workingDirectory: $(Build.SourcesDirectory)/survey-library/packages/survey-core
     displayName: "Build survey-core"
 
-  - script: npm update survey-utils
+  # survey-utils comes from a git URL - see the comment in ../utils/npm.yml for why the request
+  # needs the extraheader and why ssh is rewritten to https.
+  - bash: |
+      set -e
+      AUTH=""
+      if [ -n "${GITHUB_TOKEN:-}" ]; then
+        AUTH="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+      fi
+      export GIT_CONFIG_COUNT=3
+      export GIT_CONFIG_KEY_0="http.https://github.com/.extraheader" GIT_CONFIG_VALUE_0="$AUTH"
+      export GIT_CONFIG_KEY_1="url.https://github.com/.insteadOf"    GIT_CONFIG_VALUE_1="ssh://git@github.com/"
+      export GIT_CONFIG_KEY_2="url.https://github.com/.insteadOf"    GIT_CONFIG_VALUE_2="git@github.com:"
+      npm update survey-utils --no-package-lock --no-audit --no-fund
     workingDirectory: $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core
     displayName: "Update survey-utils dependency"
-    
+    env:
+      GITHUB_TOKEN: $(GITHUB_TOKEN)
+
+
   - pwsh: |
       Set-Location $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core
       npm run build:translate

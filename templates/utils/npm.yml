@@ -3,9 +3,28 @@ parameters:
     type: object
 
 steps:
+  # Some package.json files depend on git URLs (survey-utils, eslint-plugin-surveyjs). npm tries
+  # https first and, when that fails, silently retries over ssh - where the agent has no key, so
+  # the log shows only "Permission denied (publickey)" and hides the real error. The extraheader
+  # authenticates the request (anonymous git to github.com gets rate-limited across the agent
+  # pool); rewriting ssh to https keeps the real failure visible when it happens. An empty
+  # extraheader resets the header list, so a fork PR without the secret still works anonymously.
   - bash: |
       set -e
       export PLAYWRIGHT_SKIP_BROWSER_GC=1
+
+      TOKEN="${GITHUB_TOKEN:-}"
+      # a pipeline without the pipeline-secrets group leaves the macro unexpanded
+      case "$TOKEN" in '$('*) TOKEN="" ;; esac
+
+      AUTH=""
+      if [ -n "$TOKEN" ]; then
+        AUTH="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)"
+      fi
+      export GIT_CONFIG_COUNT=3
+      export GIT_CONFIG_KEY_0="http.https://github.com/.extraheader" GIT_CONFIG_VALUE_0="$AUTH"
+      export GIT_CONFIG_KEY_1="url.https://github.com/.insteadOf"    GIT_CONFIG_VALUE_1="ssh://git@github.com/"
+      export GIT_CONFIG_KEY_2="url.https://github.com/.insteadOf"    GIT_CONFIG_VALUE_2="git@github.com:"
 
       PUP_CACHE="${PUPPETEER_CACHE_DIR:-$HOME/.cache/puppeteer}"
       if [ -d "$PUP_CACHE" ]; then
@@ -64,3 +83,5 @@ steps:
       done
       exit $FAILED
     displayName: "npm install"
+    env:
+      GITHUB_TOKEN: $(GITHUB_TOKEN)

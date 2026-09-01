@@ -7,6 +7,10 @@
 # azureBlobContainer - Azure Blob Storage container name
 # azureBlobSubscription - Azure subscription name for the Azure Blob Storage service connection
 
+# GITHUB_TOKEN from the group authenticates the git dependencies npm installs below
+variables:
+  - group: pipeline-secrets
+
 # Projects list for npm publish stage (each usage)
 parameters:
   - name: pkgList
