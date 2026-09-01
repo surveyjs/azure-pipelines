@@ -25,6 +25,7 @@ steps:
 
   - checkout: ${{ parameters.libraryCheckout }}
     path: s/survey-library
+    persistCredentials: true
     timeoutInMinutes: 5
     retryCountOnTaskFailure: 5
     fetchDepth: 1

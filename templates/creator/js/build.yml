@@ -12,6 +12,7 @@ parameters:
 steps:
   - checkout: ${{ parameters.checkout }}
     path: s
+    persistCredentials: true
     displayName: "Checkout ${{ parameters.checkout }}"
     timeoutInMinutes: 5
     retryCountOnTaskFailure: 5
@@ -24,6 +25,7 @@ steps:
 
   - checkout: ${{ parameters.libraryCheckout }}
     path: s/survey-library
+    persistCredentials: true
     displayName: "Checkout survey-library"
     timeoutInMinutes: 5
     retryCountOnTaskFailure: 5

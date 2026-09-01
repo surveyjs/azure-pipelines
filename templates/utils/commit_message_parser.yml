@@ -3,6 +3,9 @@ steps:
     fetchDepth: 1
     timeoutInMinutes: 5
     retryCountOnTaskFailure: 5
+    # The step below runs `git fetch` by hand; without this the agent drops the auth
+    # header after checkout and that fetch goes to github.com anonymously.
+    persistCredentials: true
   - bash: |
       set -e
       SOURCE_SHA="${SYSTEM_PULLREQUEST_SOURCECOMMITID:-}"

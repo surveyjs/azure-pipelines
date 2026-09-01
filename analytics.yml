@@ -48,9 +48,28 @@ stages:
               directories:
                 - $(Build.SourcesDirectory)
 
-          - script: npm update eslint-plugin-surveyjs
+          # npm resolves eslint-plugin-surveyjs from a git URL. It tries https first and, when
+          # that fails, silently retries over ssh - where the agent has no key, so the log shows
+          # only "Permission denied (publickey)" and hides the real error. The extraheader
+          # authenticates the request (anonymous git to github.com gets rate-limited across the
+          # agent pool); rewriting ssh to https keeps the real failure visible when it happens.
+          # An empty extraheader resets the header list, so a fork PR without the secret still
+          # works anonymously.
+          - bash: |
+              set -e
+              AUTH=""
+              if [ -n "${GITHUB_TOKEN:-}" ]; then
+                AUTH="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+              fi
+              export GIT_CONFIG_COUNT=3
+              export GIT_CONFIG_KEY_0="http.https://github.com/.extraheader" GIT_CONFIG_VALUE_0="$AUTH"
+              export GIT_CONFIG_KEY_1="url.https://github.com/.insteadOf"    GIT_CONFIG_VALUE_1="ssh://git@github.com/"
+              export GIT_CONFIG_KEY_2="url.https://github.com/.insteadOf"    GIT_CONFIG_VALUE_2="git@github.com:"
+              npm update eslint-plugin-surveyjs --no-package-lock --no-audit --no-fund
             workingDirectory: $(Build.SourcesDirectory)
             displayName: "Update eslint-plugin-surveyjs dependency"
+            env:
+              GITHUB_TOKEN: $(GITHUB_TOKEN)
 
           - script: npm run lint
             workingDirectory: $(Build.SourcesDirectory)

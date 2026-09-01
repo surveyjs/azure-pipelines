@@ -31,6 +31,7 @@ parameters:
 steps:
   - checkout: ${{ parameters.checkout }}
     path: s
+    persistCredentials: true
     displayName: "Checkout theme-adapter-demos"
     timeoutInMinutes: 5
     retryCountOnTaskFailure: 5
@@ -43,6 +44,7 @@ steps:
 
   - checkout: ${{ parameters.libraryCheckout }}
     path: s/survey-library
+    persistCredentials: true
     displayName: "Checkout survey-library"
     timeoutInMinutes: 5
     retryCountOnTaskFailure: 5
@@ -55,6 +57,7 @@ steps:
 
   - checkout: ${{ parameters.creatorCheckout }}
     path: s/survey-creator
+    persistCredentials: true
     displayName: "Checkout survey-creator"
     timeoutInMinutes: 5
     retryCountOnTaskFailure: 5

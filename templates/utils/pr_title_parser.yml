@@ -1,17 +1,52 @@
+# Reads the triggering PR's title, exports every `[name: value]` tag in it as an output variable
+# (CREATOR, ANALYTICS, PDF, ADAPTERS, ...) and publishes a "Linked pull requests" build summary.
+#
+# Caller contract:
+#   * Have a `GITHUB_TOKEN` variable in scope (variable group `pipeline-secrets`). Anonymous
+#     api.github.com is capped at 60 requests/hour per IP and the agent containers share egress
+#     IPs, so an unauthenticated call here fails intermittently. The token is optional: fork PR
+#     builds get no variable-group secrets and fall back to anonymous.
+#
+# A failed API call is fatal on purpose. The tags select the companion PRs the test stages run
+# against; losing them silently means those stages test the target branch instead and the build
+# goes green having checked the wrong code.
+
 steps:
   - checkout: none
   - bash: |
-      PR_TITLE=$(curl -sf "https://api.github.com/repos/$(Build.Repository.Name)/pulls/$(System.PullRequest.PullRequestNumber)" | jq -r '.title // empty') || {
-        echo "##vso[task.logissue type=warning]Failed to fetch PR title"
+      set -o pipefail
+
+      PR_NUMBER="${SYSTEM_PULLREQUEST_PULLREQUESTNUMBER:-}"
+      if [ -z "$PR_NUMBER" ]; then
+        echo "Not a pull request build - no PR title to parse"
         exit 0
-      }
+      fi
+
+      CURL_ARGS=(-sS -f --max-time 30)
+      if [ -n "${GITHUB_TOKEN:-}" ]; then
+        CURL_ARGS+=(-H "Authorization: Bearer $GITHUB_TOKEN")
+      else
+        echo "GITHUB_TOKEN is not set (fork PR?) - falling back to anonymous api.github.com"
+      fi
+
+      API_URL="https://api.github.com/repos/$(Build.Repository.Name)/pulls/$PR_NUMBER"
+      if ! RESPONSE=$(curl "${CURL_ARGS[@]}" "$API_URL"); then
+        echo "##vso[task.logissue type=error]Could not fetch PR #$PR_NUMBER from api.github.com (see the curl error above). Companion PR tags are unknown, so the test stages would silently run against the target branch."
+        exit 1
+      fi
+
+      PR_TITLE=$(echo "$RESPONSE" | jq -r '.title // empty')
+      if [ -z "$PR_TITLE" ]; then
+        echo "##vso[task.logissue type=error]api.github.com returned no title for PR #$PR_NUMBER."
+        exit 1
+      fi
       echo "PR Title: $PR_TITLE"
 
       SUMMARY="$(Agent.TempDirectory)/linked-prs.md"
       {
         echo "## Linked pull requests"
         echo ""
-        echo "Triggered by [$(Build.Repository.Name)#$(System.PullRequest.PullRequestNumber)](https://github.com/$(Build.Repository.Name)/pull/$(System.PullRequest.PullRequestNumber)) \`$PR_TITLE\`"
+        echo "Triggered by [$(Build.Repository.Name)#$PR_NUMBER](https://github.com/$(Build.Repository.Name)/pull/$PR_NUMBER) \`$PR_TITLE\`"
         echo ""
       } > "$SUMMARY"
       FOUND=0
@@ -48,3 +83,5 @@ steps:
         echo "No linked pull requests found in PR title, summary is not published"
       fi
     name: data
+    env:
+      GITHUB_TOKEN: $(GITHUB_TOKEN)
