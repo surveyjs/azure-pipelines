@@ -2,6 +2,7 @@
 # Entry point: azurepipeline.yml in that repository extends this template.
 
 variables:
+  - group: pipeline-secrets
   - template: templates/utils/variables.yml
 
 resources:
