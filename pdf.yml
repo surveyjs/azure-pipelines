@@ -112,3 +112,14 @@ stages:
       - job:
         steps:
           - template: templates/pdf/staging.yml
+
+  # Backport: every [backport:<branch>] flag in the title of the PR merged into master
+  # cherry-picks it onto that branch and opens a PR. See templates/utils/backport.yml.
+  # Not wrapped in the isStage block - the stage gates itself on the source branch below.
+  - stage: Backport
+    displayName: "Backport"
+    dependsOn:
+      - PDF
+    condition: and(succeeded(), eq(variables['Build.SourceBranchName'], 'master'))
+    jobs:
+      - template: templates/utils/backport.yml
