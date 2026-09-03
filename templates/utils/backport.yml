@@ -2,11 +2,30 @@
 #
 # The target branches come from the merged PR's title: every [backport:<branch>] flag opens one
 # PR against that branch, so [backport:V2] [backport:V3] produces two backports (one matrix leg
-# each). A backport PR is a draft when the cherry-pick conflicted (conflicts are committed
-# unresolved) or when the original title had companion tags ([analytics: N], [creator: N], ...)
-# whose target-branch counterparts have to be set manually. Each backport PR is labeled
-# `backport` plus the target branch name, and assigned to the original PR's assignees
-# (falling back to its author when it had none).
+# each). Each backport PR is labeled `backport` plus the target branch name, and assigned to the
+# original PR's assignees (falling back to its author when it had none). A backport PR is a draft
+# when the cherry-pick conflicted (see below) or when the original title had companion tags
+# ([analytics: N], [creator: N], ...) whose target-branch counterparts have to be set manually.
+#
+# Conflicts are handled in three levels, because GitHub can only show a conflict on a PR when
+# BOTH sides changed the same lines relative to merge-base(head, base) — while the head branch is
+# a descendant of the target tip, the merge is a fast-forward and no conflict can exist:
+#   1. Cherry-pick onto the target tip. Clean -> an ordinary, mergeable PR.
+#   2. The same cherry-pick onto merge-base(source, target). The commit itself is clean (no
+#      markers) and the PR diff is still exactly the backported change, but merging it into the
+#      target conflicts, so GitHub reports the conflicts and offers "Resolve conflicts". Two
+#      caveats: such a PR merges as a merge commit from an older base (with "Require linear
+#      history" on the target only squash stays available), and its CI runs against the
+#      merge-base tree until the conflicts are resolved — resolving in the web UI merges the
+#      target into the branch, after which CI is representative again. Skipped when the target is
+#      a direct ancestor of the source branch (merge-base == target tip, e.g. a release branch
+#      with no commits of its own): level 2 would just repeat the failed level 1.
+#   3. The change does not apply to the target's older code and the target has no competing
+#      change of its own, so there is nothing for GitHub to conflict with ("patch does not
+#      apply" has no PR UI). Only here the conflicts are committed unresolved, in diff3 style so
+#      the base version is visible next to both sides, and the PR is a draft. Paths only one side
+#      has (the target never had the file, or the change deletes it) carry no markers at all -
+#      they are committed as the change leaves them, and are listed separately in the PR body.
 #
 # Caller contract:
 #   * Include from a stage that only runs on a CI build of the branch being backported FROM,
@@ -148,45 +167,111 @@ jobs:
 
           DRAFT=false
           CONFLICT_FILES=""
+          # Paths only one side has at all (delete/modify, add/add): `git add -A` resolves those
+          # to whatever is in the tree, without markers, so they are reported on their own.
+          ONE_SIDED=""
+          # Level 2: branch rooted at the merge base, GitHub itself reports the conflicts.
+          NEEDS_RESOLUTION=false
+          # Level 3: conflicts committed unresolved, GitHub cannot report them (see the header).
+          MARKERS=false
+
+          # Pinned right away: FETCH_HEAD is overwritten by every later fetch.
+          git fetch origin "$TARGET"
+          TARGET_SHA="$(git rev-parse FETCH_HEAD)"
+
+          MAINLINE=""
+          if [ "$(git rev-list --parents -n1 "$SHA" | wc -w)" -gt 2 ]; then
+            MAINLINE="-m 1"
+          fi
 
           if [ -n "$(git ls-remote --heads origin "$BRANCH")" ]; then
-            # A previous run pushed the branch but failed before creating the PR.
+            # A previous run pushed the branch but failed before creating the PR: the conflict
+            # state is recovered from the branch itself - not being rooted off the target tip
+            # means level 2, the [backport-conflicts] trailer means level 3.
             echo "Branch $BRANCH already pushed - creating the missing PR from it."
             git fetch origin "$BRANCH"
-            CONFLICT_FILES="$(git log -1 --format=%B FETCH_HEAD | sed -n 's/^\[backport-conflicts\] //p' | tr ' ' '\n' | sed '/^$/d')"
-            if [ -n "$CONFLICT_FILES" ]; then DRAFT=true; fi
-          else
-            git fetch origin "$TARGET"
-            git checkout -B "$BRANCH" FETCH_HEAD
-
-            MAINLINE=""
-            if [ "$(git rev-list --parents -n1 "$SHA" | wc -w)" -gt 2 ]; then
-              MAINLINE="-m 1"
+            BRANCH_SHA="$(git rev-parse FETCH_HEAD)"
+            if ! git merge-base --is-ancestor "$TARGET_SHA" "$BRANCH_SHA"; then
+              NEEDS_RESOLUTION=true
+              DRAFT=true
+            else
+              CONFLICT_FILES="$(git log -1 --format=%B "$BRANCH_SHA" | sed -n 's/^\[backport-conflicts\] //p' | tr ' ' '\n' | sed '/^$/d')"
+              if [ -n "$CONFLICT_FILES" ]; then MARKERS=true; DRAFT=true; fi
             fi
+          else
+            git checkout -B "$BRANCH" "$TARGET_SHA"
             if ! git cherry-pick -x $MAINLINE "$SHA"; then
               CONFLICT_FILES="$(git diff --name-only --diff-filter=U)"
+              ONE_SIDED="$(git status --porcelain | sed -n 's/^\(DU\|UD\|AU\|UA\|DD\) //p')"
+              git cherry-pick --abort || true
               if [ -z "$CONFLICT_FILES" ]; then
-                git cherry-pick --abort || true
                 echo "Cherry-pick produced no changes (already in $TARGET) - nothing to backport."
                 exit 0
               fi
-              echo "Cherry-pick conflicts, committing them unresolved:"
+              echo "Cherry-pick conflicts:"
               printf '%s\n' "$CONFLICT_FILES"
-              git add -A
-              GIT_EDITOR=true git cherry-pick --continue
-              # Record the conflicted files in the commit message so a re-run that only
-              # has to re-create the PR still knows this backport needs a draft.
-              git commit --amend --no-verify --no-edit \
-                -m "$(printf '%s\n[backport-conflicts] %s' "$(git log -1 --format=%B)" "$(printf '%s\n' "$CONFLICT_FILES" | tr '\n' ' ')")"
-              DRAFT=true
+
+              # Level 2: the same cherry-pick onto the merge base commits cleanly, which moves
+              # the conflict to where it can be resolved - onto the PR. Pointless when the
+              # target is an ancestor of the source commit (merge base == target tip): that
+              # would just repeat the cherry-pick that has already failed above.
+              if ! git merge-base --is-ancestor "$TARGET_SHA" "$SHA"; then
+                MERGE_BASE="$(git merge-base "$SHA" "$TARGET_SHA")"
+                echo "Retrying onto merge base $MERGE_BASE so GitHub can report the conflicts."
+                git checkout -B "$BRANCH" "$MERGE_BASE"
+                if git cherry-pick -x $MAINLINE "$SHA"; then
+                  NEEDS_RESOLUTION=true
+                  DRAFT=true
+                else
+                  git cherry-pick --abort || true
+                fi
+              fi
+
+              # Level 3: nothing on the target side to conflict with, so commit the conflicts
+              # unresolved - in diff3 style, which keeps the base version next to both sides.
+              if [ "$NEEDS_RESOLUTION" = false ]; then
+                echo "The change does not apply to $TARGET at all - committing the conflicts unresolved."
+                git checkout -B "$BRANCH" "$TARGET_SHA"
+                git -c merge.conflictStyle=diff3 cherry-pick -x $MAINLINE "$SHA" || true
+                if git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null; then
+                  git add -A
+                  GIT_EDITOR=true git cherry-pick --continue
+                fi
+                # Record the conflicted files in the commit message so a re-run that only
+                # has to re-create the PR still knows this backport needs a draft.
+                git commit --amend --no-verify --no-edit \
+                  -m "$(printf '%s\n[backport-conflicts] %s' "$(git log -1 --format=%B)" "$(printf '%s\n' "$CONFLICT_FILES" | tr '\n' ' ')")"
+                MARKERS=true
+                DRAFT=true
+              fi
             fi
             git push --no-verify origin "HEAD:$BRANCH"
           fi
 
           BODY="$(printf 'Automated backport of #%s (commit %s) to %s.' "$PR_NUM" "$SHA" "$TARGET")"
-          if [ -n "$CONFLICT_FILES" ]; then
-            BODY="$(printf '%s\n\n**Cherry-pick had conflicts** - they are committed unresolved (conflict markers where the file exists in both branches). Resolve them in this branch:\n%s' \
-              "$BODY" "$(printf '%s\n' "$CONFLICT_FILES" | sed 's/^/- /')")"
+          if [ "$NEEDS_RESOLUTION" = true ]; then
+            BODY="$(printf '%s\n\n**Cherry-picking onto %s conflicted**, so this branch is rooted at the merge base of %s and the source branch: the commit itself is clean and this diff is exactly the backported change, but merging it into %s conflicts - GitHub reports those conflicts on this PR, press **Resolve conflicts** (or merge %s into this branch locally). Until they are resolved, CI here runs against the merge base rather than against %s.' \
+              "$BODY" "$TARGET" "$TARGET" "$TARGET" "$TARGET" "$TARGET")"
+            if [ -n "$CONFLICT_FILES" ]; then
+              BODY="$(printf '%s\n\nFiles that conflicted when cherry-picking onto %s:\n%s' \
+                "$BODY" "$TARGET" "$(printf '%s\n' "$CONFLICT_FILES" | sed 's/^/- /')")"
+            fi
+          fi
+          if [ "$MARKERS" = true ]; then
+            BODY="$(printf '%s\n\n**The change does not apply to %s, and %s has no competing change of its own** - GitHub has nothing to report a PR conflict against, so the conflict is committed as it is and has to be sorted out by hand in this branch.' \
+              "$BODY" "$TARGET" "$TARGET")"
+            MARKER_FILES="$CONFLICT_FILES"
+            if [ -n "$ONE_SIDED" ]; then
+              MARKER_FILES="$(printf '%s\n' "$CONFLICT_FILES" | grep -vxF "$ONE_SIDED" || true)"
+            fi
+            if [ -n "$MARKER_FILES" ]; then
+              BODY="$(printf '%s\n\nCommitted in diff3 style (`<<<<<<<` the %s version, `|||||||` the base version, `=======`, `>>>>>>>` the backported version):\n%s' \
+                "$BODY" "$TARGET" "$(printf '%s\n' "$MARKER_FILES" | sed 's/^/- /')")"
+            fi
+            if [ -n "$ONE_SIDED" ]; then
+              BODY="$(printf '%s\n\nFiles only one side has - committed the way the backported change leaves them, with no markers to search for. Check whether they belong in %s at all:\n%s' \
+                "$BODY" "$TARGET" "$(printf '%s\n' "$ONE_SIDED" | sed 's/^/- /')")"
+            fi
           fi
           if [ -n "$COMPANIONS" ]; then
             BODY="$(printf '%s\n\n**The original PR title had companion tags:** `%s` - they point to master PRs. Add the %s versions of the companion PRs to this title manually.' \
@@ -212,9 +297,12 @@ jobs:
               || echo "##vso[task.logissue type=warning]Could not assign '$ASSIGNEES' to the backport PR"
           fi
 
-          if [ -n "$CONFLICT_FILES" ]; then
-            echo "##vso[task.logissue type=warning]Backport PR for #$PR_NUM created as draft with unresolved cherry-pick conflicts: $PR_URL"
-            echo "##vso[task.complete result=SucceededWithIssues;]Backport created with conflicts"
+          if [ "$NEEDS_RESOLUTION" = true ]; then
+            echo "##vso[task.logissue type=warning]Backport PR for #$PR_NUM created as draft; GitHub reports the cherry-pick conflicts on it: $PR_URL"
+            echo "##vso[task.complete result=SucceededWithIssues;]Backport created with conflicts to resolve on GitHub"
+          elif [ "$MARKERS" = true ]; then
+            echo "##vso[task.logissue type=warning]Backport PR for #$PR_NUM created as draft with the cherry-pick conflicts committed unresolved: $PR_URL"
+            echo "##vso[task.complete result=SucceededWithIssues;]Backport created with committed conflicts"
           fi
         displayName: "Cherry-pick and open backport PR"
         env:
