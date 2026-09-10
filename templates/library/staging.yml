@@ -33,10 +33,13 @@ steps:
     env:
       GITHUB_TOKEN: $(GITHUB_TOKEN)
 
-  - pwsh: |
-      Set-Location $(Build.SourcesDirectory)/survey-library/packages/survey-core
-      npm run build:translate
+  - script: npm run build:translate
+    workingDirectory: $(Build.SourcesDirectory)/survey-library/packages/survey-core
+    displayName: "Build l10n"
+    env:
+      TRANSLATION_API_KEY: $(TRANSLATION_API_KEY)
 
+  - pwsh: |
       Set-Location $(Build.SourcesDirectory)/survey-library
       $branch = "$(Build.SourceBranchName)"
       $env:GIT_REDIRECT_STDERR = '2>&1'
@@ -56,9 +59,7 @@ steps:
       else {
           echo "No changes in translations. Skipping commit and push."
       }
-    displayName: "l10n for $(Build.SourceBranchName)"
-    env:
-      TRANSLATION_API_KEY: $(TRANSLATION_API_KEY)
+    displayName: "Commit l10n for $(Build.SourceBranchName)"
 
   - script: |
       npm run release -- --skip.tag
