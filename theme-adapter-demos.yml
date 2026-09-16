@@ -42,9 +42,26 @@ stages:
   #           workingDirectory: $(Build.SourcesDirectory)
   #           displayName: "Typecheck"
 
+  # Companion PR tags from the PR title: [library: N] [creator: N].
+  # See templates/utils/pr_title_parser.yml for the syntax and the GITHUB_TOKEN contract.
+  - stage: Options
+    dependsOn: []
+    jobs:
+      - job: PRTitle
+        displayName: "PR title"
+        condition: eq(variables.isStage, 'False')
+        steps:
+          - template: templates/utils/pr_title_parser.yml
+
   - stage: SCR
     displayName: "Screenshot tests"
-    dependsOn: []
+    dependsOn:
+      - Options
+    variables:
+      # `self` is the demos repo here - its PR is already checked out, nothing to switch.
+      PR: ''
+      LIBRARY_PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
+      CREATOR_PR: $[ stageDependencies.Options.PRTitle.outputs['data.CREATOR'] ]
     jobs:
       - template: templates/theme-adapter-demos/test.yml
         parameters:
