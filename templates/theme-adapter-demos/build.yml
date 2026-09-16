@@ -37,7 +37,19 @@ steps:
     retryCountOnTaskFailure: 5
     fetchDepth: 1
 
-  - script: git fetch origin pull/$(PR)/head && git checkout FETCH_HEAD
+  # pull/N/merge, not /head: the PR already merged into its base, the same shape of ref Azure
+  # checks out for self. The branch tip alone misses commits the base got after the PR forked, so
+  # an API that is already on the base branch reads as missing and the build fails. A missing merge
+  # ref means the PR conflicts with its base - warn and fall back to the tip rather than fail here.
+  - bash: |
+      set -euo pipefail
+      if git fetch origin "pull/$(PR)/merge"; then
+        echo "${{ parameters.checkout }} PR $(PR) merged into its base branch"
+      else
+        echo "##vso[task.logissue type=warning]pull/$(PR)/merge is unavailable - ${{ parameters.checkout }} PR $(PR) most likely conflicts with its base branch. Falling back to the PR branch tip: this build does not see commits the base branch got after the PR forked."
+        git fetch origin "pull/$(PR)/head"
+      fi
+      git checkout FETCH_HEAD
     workingDirectory: $(Build.SourcesDirectory)
     condition: ne(variables['PR'], '')
     displayName: "Switch to PR $(PR)"
@@ -50,7 +62,19 @@ steps:
     retryCountOnTaskFailure: 5
     fetchDepth: 1
 
-  - script: git fetch origin pull/$(LIBRARY_PR)/head && git checkout FETCH_HEAD
+  # pull/N/merge, not /head: the PR already merged into its base, the same shape of ref Azure
+  # checks out for self. The branch tip alone misses commits the base got after the PR forked, so
+  # an API that is already on the base branch reads as missing and the build fails. A missing merge
+  # ref means the PR conflicts with its base - warn and fall back to the tip rather than fail here.
+  - bash: |
+      set -euo pipefail
+      if git fetch origin "pull/$(LIBRARY_PR)/merge"; then
+        echo "survey-library PR $(LIBRARY_PR) merged into its base branch"
+      else
+        echo "##vso[task.logissue type=warning]pull/$(LIBRARY_PR)/merge is unavailable - survey-library PR $(LIBRARY_PR) most likely conflicts with its base branch. Falling back to the PR branch tip: this build does not see commits the base branch got after the PR forked."
+        git fetch origin "pull/$(LIBRARY_PR)/head"
+      fi
+      git checkout FETCH_HEAD
     workingDirectory: $(Build.SourcesDirectory)/survey-library
     condition: ne(variables['LIBRARY_PR'], '')
     displayName: "Switch library to PR $(LIBRARY_PR)"
@@ -63,7 +87,19 @@ steps:
     retryCountOnTaskFailure: 5
     fetchDepth: 1
 
-  - script: git fetch origin pull/$(CREATOR_PR)/head && git checkout FETCH_HEAD
+  # pull/N/merge, not /head: the PR already merged into its base, the same shape of ref Azure
+  # checks out for self. The branch tip alone misses commits the base got after the PR forked, so
+  # an API that is already on the base branch reads as missing and the build fails. A missing merge
+  # ref means the PR conflicts with its base - warn and fall back to the tip rather than fail here.
+  - bash: |
+      set -euo pipefail
+      if git fetch origin "pull/$(CREATOR_PR)/merge"; then
+        echo "survey-creator PR $(CREATOR_PR) merged into its base branch"
+      else
+        echo "##vso[task.logissue type=warning]pull/$(CREATOR_PR)/merge is unavailable - survey-creator PR $(CREATOR_PR) most likely conflicts with its base branch. Falling back to the PR branch tip: this build does not see commits the base branch got after the PR forked."
+        git fetch origin "pull/$(CREATOR_PR)/head"
+      fi
+      git checkout FETCH_HEAD
     workingDirectory: $(Build.SourcesDirectory)/survey-creator
     condition: ne(variables['CREATOR_PR'], '')
     displayName: "Switch creator to PR $(CREATOR_PR)"

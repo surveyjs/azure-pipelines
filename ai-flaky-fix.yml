@@ -282,12 +282,18 @@ stages:
               echo "Triggering Library build ran on: $SRC"
               SD="$(LibDir)"
               case "$SRC" in
-                # PR validation build — sourceBranch is refs/pull/<N>/merge|head. The /merge ref is
-                # transient; fetch the stable /head (the PR branch tip), matching build.yml's convention.
+                # PR validation build — sourceBranch is refs/pull/<N>/merge|head. Fetch the /merge
+                # ref, the PR merged into its base: that is what the failing build ran on, and it matches
+                # build.yml's convention for companion repos. GitHub recomputes the ref whenever the PR or
+                # its base moves, so the tree can differ from the one that failed; and the ref disappears
+                # once the PR conflicts with its base — fall back to the branch tip then.
                 refs/pull/*)
                   PR_NUM="$(echo "$SRC" | sed -E 's#^refs/pull/([0-9]+)/.*#\1#')"
-                  echo "PR build detected (PR #$PR_NUM); fetching pull/$PR_NUM/head"
-                  git -C "$SD" fetch --depth 1 origin "pull/$PR_NUM/head"
+                  echo "PR build detected (PR #$PR_NUM); fetching pull/$PR_NUM/merge"
+                  if ! git -C "$SD" fetch --depth 1 origin "pull/$PR_NUM/merge"; then
+                    echo "##vso[task.logissue type=warning]pull/$PR_NUM/merge is unavailable - PR #$PR_NUM most likely conflicts with its base branch. Falling back to the PR branch tip."
+                    git -C "$SD" fetch --depth 1 origin "pull/$PR_NUM/head"
+                  fi
                   ;;
                 *)
                   BRANCH="$(echo "$SRC" | sed 's#^refs/heads/##')"
