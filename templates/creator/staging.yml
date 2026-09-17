@@ -9,6 +9,11 @@ steps:
     displayName: "Checkout survey-site-data"
     timeoutInMinutes: 5
 
+  - checkout: Service
+    persistCredentials: true
+    displayName: "Checkout service"
+    timeoutInMinutes: 5
+
   - checkout: Library
     displayName: "Checkout survey-library"
     timeoutInMinutes: 5
@@ -104,3 +109,32 @@ steps:
           echo "No changes in docs. Skipping commit and push."
       }
     displayName: "Docs for $(Build.SourceBranchName)"
+
+  - pwsh: |
+      Set-Location $(Build.SourcesDirectory)/service
+      $branch = "$(branch)"
+      $env:GIT_REDIRECT_STDERR = '2>&1'
+      git config user.email "surveyjs.org@gmail.com"
+      git config user.name "surveyjsdeveloper"
+
+      git fetch origin $branch
+      git checkout -B $branch origin/$branch
+      git reset --hard origin/$branch
+
+      Copy-Item -Force "$(Build.SourcesDirectory)/surveyjs-site-data/DocsEditor/classes.json" "surveyjs.io/App_Data/DocsEditor/"
+      Copy-Item -Force "$(Build.SourcesDirectory)/surveyjs-site-data/DocsEditor/pmes.json" "surveyjs.io/App_Data/DocsEditor/"
+      Copy-Item -Force "$(Build.SourcesDirectory)/surveyjs-site-data/DocsEditor/classes.json" "surveyjs.io.web/App_Data/DocsEditor/"
+      Copy-Item -Force "$(Build.SourcesDirectory)/surveyjs-site-data/DocsEditor/pmes.json" "surveyjs.io.web/App_Data/DocsEditor/"
+
+      git add surveyjs.io/App_Data/DocsEditor/classes.json surveyjs.io/App_Data/DocsEditor/pmes.json surveyjs.io.web/App_Data/DocsEditor/classes.json surveyjs.io.web/App_Data/DocsEditor/pmes.json
+
+      if (git status --porcelain) {
+          echo "There are changes in classes.json and pmes.json. Committing and pushing to GitHub..."
+          git diff --cached --stat
+          git commit -m "updated survey-creator classes json and pmes jsonfor $branch [azurepipelines skip]"
+          git push origin $branch
+      }
+      else {
+          echo "No changes in classes.json and pmes.json. Skipping commit and push."
+      }
+    displayName: "Docs JSON to service for $(Build.SourceBranchName)"
