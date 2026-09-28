@@ -1,0 +1,245 @@
+# Reusable steps template: run Claude Code headless (`claude -p`) on a prepared prompt and leave
+# everything it produced in `outDir` for the caller's next steps.
+#
+# The prompt is `promptFile` (static instructions, one of prompts/*.md) followed by `contextFile`
+# (the run-specific part the caller wrote). The agent works in `workingDirectory` with only the
+# tools the caller allows. This template never commits, pushes or reverts anything - checking
+# what the agent did is the caller's job.
+#
+# Output in `outDir` (must be outside `workingDirectory`, the agent's cwd):
+#   prompt.md     the exact prompt
+#   stream.jsonl  the raw stream-json transcript (the log shows a compact rendering of it)
+#   stderr.txt    claude's stderr
+#   result.json   the final `result` event - missing when the run never finished
+#   summary.md    the agent's final text (`result`), empty when it has none
+#   report.txt    subtype, turns, cost and the tool calls that were denied
+#   done.txt      written last: the step finished and the key is redacted from the files above
+#   skipped.txt   instead of all of the above when the agent was not run, with the reason
+#
+# The step never fails the job: a missing API key or CLI, a crash, a timeout or a hit limit all
+# end with exit 0, and the caller decides from the files above. It runs with restricted logging
+# commands and cannot set variables - the log shows what the agent read, and a `##vso[...]` line
+# in a file must not steer the pipeline; the transcript is defanged on top of that.
+#
+# Caller contract:
+#   * Have `ANTHROPIC_API_KEY` in scope (variable group `pipeline-secrets`); without it the agent
+#     is skipped.
+#   * Do not map GitHub tokens into this step. The push credential that `persistCredentials: true`
+#     stores in the working tree's .git/config (readable with `cat`) is removed for the duration
+#     of the run and put back afterwards.
+
+parameters:
+  - name: displayName
+    type: string
+    default: "Claude"
+  - name: condition
+    type: string
+    default: succeeded()
+  - name: workingDirectory     # the agent's cwd
+    type: string
+    default: $(Build.SourcesDirectory)
+  - name: promptFile           # static instructions
+    type: string
+  - name: contextFile          # optional: appended to the prompt
+    type: string
+    default: ""
+  - name: outDir               # outside workingDirectory, created if missing
+    type: string
+  - name: model
+    type: string
+    default: claude-opus-5
+  - name: maxTurns
+    type: number
+    default: 60
+  - name: maxBudgetUsd
+    type: number
+    default: 10
+  - name: timeoutInMinutes
+    type: number
+    default: 30
+  - name: allowedTools
+    type: string
+  - name: disallowedTools
+    type: string
+    default: "WebFetch,WebSearch"
+
+steps:
+  - bash: |
+      set -uo pipefail
+      OUT="$CLAUDE_OUT_DIR"
+      mkdir -p "$OUT"
+      OUT="$(cd "$OUT" && pwd -P)"
+      case "$OUT/" in
+        "$(pwd -P)/"*)
+          echo "##vso[task.logissue type=error]outDir $OUT is inside the agent's working directory - not running the agent."
+          exit 0 ;;
+      esac
+      rm -f "$OUT"/{prompt.md,stream.jsonl,stderr.txt,result.json,summary.md,report.txt,done.txt,skipped.txt,npm-install.txt}
+      defang() { sed 's/##/#_#/g'; }
+
+      skip() {
+        printf '%s\n' "$1" > "$OUT/skipped.txt"
+        echo "##vso[task.logissue type=warning]Claude not run: $1"
+        exit 0
+      }
+      # a pipeline without the secret leaves the macro unexpanded
+      case "${ANTHROPIC_API_KEY:-}" in ''|'$('*) skip "ANTHROPIC_API_KEY is not set (variable group pipeline-secrets)" ;; esac
+      [ -f "$CLAUDE_PROMPT_FILE" ] || skip "prompt file $CLAUDE_PROMPT_FILE not found"
+      if [ -n "$CLAUDE_CONTEXT_FILE" ] && [ ! -f "$CLAUDE_CONTEXT_FILE" ]; then
+        skip "context file $CLAUDE_CONTEXT_FILE not found"
+      fi
+
+      CLAUDE="$(command -v claude || true)"
+      if [ -z "$CLAUDE" ]; then
+        PREFIX="$(Agent.TempDirectory)/claude-cli"
+        echo "claude CLI not found - installing @anthropic-ai/claude-code into $PREFIX"
+        timeout 300 npm install --prefix "$PREFIX" --no-audit --no-fund --loglevel=error @anthropic-ai/claude-code > "$OUT/npm-install.txt" 2>&1 || true
+        CLAUDE="$PREFIX/node_modules/.bin/claude"
+        [ -x "$CLAUDE" ] || skip "claude CLI is missing and could not be installed: $(tail -n 3 "$OUT/npm-install.txt" | tr '\n' ' ')"
+      fi
+      echo "Claude Code $("$CLAUDE" --version 2>&1 | head -n1)"
+
+      # Hide the push credential while the agent runs; put it back on every exit path.
+      HEADERS="$(git config --local --get-regexp '^http\..*\.extraheader$' 2>/dev/null || true)"
+      restore_headers() {
+        [ -n "$HEADERS" ] || return 0
+        while IFS= read -r L; do
+          [ -n "$L" ] && git config --local --add "${L%% *}" "${L#* }"
+        done <<< "$HEADERS"
+        HEADERS=""
+      }
+      if [ -n "$HEADERS" ]; then
+        trap restore_headers EXIT
+        trap 'restore_headers; exit 1' INT TERM
+        while IFS= read -r L; do
+          [ -n "$L" ] && git config --local --unset-all "${L%% *}" 2>/dev/null
+        done <<< "$HEADERS"
+      fi
+
+      { cat "$CLAUDE_PROMPT_FILE"
+        if [ -n "$CLAUDE_CONTEXT_FILE" ]; then printf '\n\n'; cat "$CLAUDE_CONTEXT_FILE"; fi
+      } > "$OUT/prompt.md"
+      echo "Prompt: $(wc -c < "$OUT/prompt.md" | tr -d ' ') bytes"
+
+      # Compact formatter: one readable log line per stream-json event (turn-by-turn tool calls and
+      # their results). Non-JSON lines are skipped (fromjson?). Same as in ai-flaky-fix.yml.
+      STREAM_FMT='
+        def trunc($s; $n):
+          ($s | if . == null then "" else tostring end | gsub("\\s+"; " ") | gsub("^\\s+|\\s+$"; "")) as $t
+          | if ($t | length) > $n then $t[:$n] + " …[+" + (($t | length) - $n | tostring) + " chars]" else $t end;
+        foreach (inputs | fromjson?) as $e (
+          0;
+          . + (if ($e.type == "assistant" and ($e.message | type) == "object") then 1 else 0 end);
+          . as $turn
+          | if ($e.type == "system" and $e.subtype == "init") then
+              "[init] model=" + ($e.model // "?") + " cwd=" + ($e.cwd // "?") + " tools=" + (($e.tools // [] | length) | tostring)
+            elif ($e.type == "assistant" and ($e.message | type) == "object") then
+              ($e.message.content // [])[]
+              | if (.type == "text" and ((.text // "") | gsub("^\\s+|\\s+$"; "")) != "") then
+                  "\n[turn " + ($turn | tostring) + "] 🤖 " + trunc(.text; 1000)
+                elif (.type == "tool_use") then
+                  (if (.input | type) == "object" then .input else {} end) as $i
+                  | (([$i.command, $i.file_path, $i.path, $i.pattern, $i.description]
+                      | map(select(type == "string" and . != "")) | .[0]) // ($i | tojson)) as $arg
+                  | "[turn " + ($turn | tostring) + "] 🔧 " + (.name // "") + ": " + trunc($arg; 400)
+                else empty end
+            elif ($e.type == "user" and ($e.message | type) == "object") then
+              ($e.message.content // [])[]
+              | if (.type == "tool_result") then
+                  (if (.content | type) == "array" then (.content | map(.text // "") | join("")) else .content end) as $c
+                  | "          ↩ " + (if .is_error then "[ERROR] " else "" end) + trunc($c; 1000)
+                else empty end
+            elif ($e.type == "result") then
+              "\n[result] subtype=" + ($e.subtype | tostring) + " is_error=" + ($e.is_error | tostring) + " num_turns=" + ($e.num_turns | tostring) + " cost_usd=" + ($e.total_cost_usd | tostring) + " duration_ms=" + ($e.duration_ms | tostring)
+            else empty end
+        )'
+
+      # What is left of the step's timeout, minus a few minutes for the restore trap and the
+      # report, so no claude process outlives the step.
+      LIMIT=$(( CLAUDE_TIMEOUT_MIN * 60 - SECONDS - 180 ))
+      [ "$LIMIT" -ge 60 ] || LIMIT=60
+      echo "Running Claude Code (model=$CLAUDE_MODEL, max-turns=$CLAUDE_MAX_TURNS, max-budget-usd=$CLAUDE_MAX_BUDGET_USD, limit=${LIMIT}s)..."
+      # The prompt goes in on stdin (no argv size limit); the argument only points to it.
+      timeout -k 60 "${LIMIT}s" "$CLAUDE" -p "Your complete instructions are on stdin. Follow them." \
+        --bare \
+        --output-format stream-json \
+        --verbose \
+        --model "$CLAUDE_MODEL" \
+        --max-turns "$CLAUDE_MAX_TURNS" \
+        --max-budget-usd "$CLAUDE_MAX_BUDGET_USD" \
+        --permission-mode dontAsk \
+        --no-session-persistence \
+        --allowedTools "$CLAUDE_ALLOWED_TOOLS" \
+        --disallowedTools "$CLAUDE_DISALLOWED_TOOLS" \
+        < "$OUT/prompt.md" 2> "$OUT/stderr.txt" \
+        | tee "$OUT/stream.jsonl" \
+        | jq -rRn "$STREAM_FMT" \
+        | defang \
+        || echo "claude pipeline exited non-zero (the caller decides from the output files)"
+      restore_headers
+
+      if [ -s "$OUT/stderr.txt" ]; then
+        echo "===== claude stderr ====="
+        defang < "$OUT/stderr.txt"
+        echo "========================="
+      fi
+
+      # The final `result` event (the last one), if the run got that far.
+      jq -c -R 'fromjson? | select(.type == "result")' "$OUT/stream.jsonl" 2>/dev/null | tail -n1 > "$OUT/result.json"
+      if [ ! -s "$OUT/result.json" ]; then
+        rm -f "$OUT/result.json"
+        echo "No result event in the stream - the agent did not finish (see the transcript above)."
+      else
+        jq -r '.result // ""' "$OUT/result.json" > "$OUT/summary.md"
+        jq -r --arg model "$CLAUDE_MODEL" '
+          def s($v): if $v == null then "n/a" else ($v | tostring) end;
+          [ "=== CLAUDE REPORT ===",
+            "model: " + $model,
+            "subtype: " + s(.subtype),
+            "is_error: " + s(.is_error),
+            "num_turns: " + s(.num_turns),
+            "duration_ms: " + s(.duration_ms),
+            "cost_usd: " + s(.total_cost_usd),
+            (.permission_denials // [] | map("denied: " + (.tool_name // "?") + " " + ((.tool_input // {}) | tojson | .[:200])) | .[]),
+            "",
+            (if (.result // "") == "" then "(no result text)" else .result end)
+          ] | join("\n")' "$OUT/result.json" > "$OUT/report.txt"
+        defang < "$OUT/report.txt"
+        if [ "$(jq -r '.subtype // ""' "$OUT/result.json")" = "error_max_turns" ]; then
+          echo "##vso[task.logissue type=warning]Claude hit --max-turns ($CLAUDE_MAX_TURNS) before finishing."
+        fi
+      fi
+
+      # The output is published as an artifact, which Azure does not mask: drop the key and
+      # anything that looks like an HTTP credential from it.
+      for F in "$OUT"/*; do
+        [ -f "$F" ] || continue
+        if grep -qF -- "$ANTHROPIC_API_KEY" "$F"; then
+          awk -v k="$ANTHROPIC_API_KEY" '{ s = $0; o = ""
+            while ((i = index(s, k)) > 0) { o = o substr(s, 1, i - 1) "***"; s = substr(s, i + length(k)) }
+            print o s }' "$F" > "$F.redacted" && mv "$F.redacted" "$F"
+        fi
+        sed -i -E 's#(authorization:[[:space:]]*(basic|bearer)[[:space:]]+)[A-Za-z0-9+/=._~-]+#\1***#gI' "$F"
+      done
+      echo ok > "$OUT/done.txt"
+      exit 0
+    displayName: ${{ parameters.displayName }}
+    condition: ${{ parameters.condition }}
+    workingDirectory: ${{ parameters.workingDirectory }}
+    timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
+    continueOnError: true
+    target:
+      commands: restricted
+      settableVariables: none
+    env:
+      ANTHROPIC_API_KEY: $(ANTHROPIC_API_KEY)
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+      CLAUDE_PROMPT_FILE: ${{ parameters.promptFile }}
+      CLAUDE_CONTEXT_FILE: ${{ parameters.contextFile }}
+      CLAUDE_OUT_DIR: ${{ parameters.outDir }}
+      CLAUDE_MODEL: ${{ parameters.model }}
+      CLAUDE_MAX_TURNS: ${{ parameters.maxTurns }}
+      CLAUDE_MAX_BUDGET_USD: ${{ parameters.maxBudgetUsd }}
+      CLAUDE_TIMEOUT_MIN: ${{ parameters.timeoutInMinutes }}
+      CLAUDE_ALLOWED_TOOLS: ${{ parameters.allowedTools }}
+      CLAUDE_DISALLOWED_TOOLS: ${{ parameters.disallowedTools }}

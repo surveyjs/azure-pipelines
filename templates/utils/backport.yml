@@ -7,10 +7,22 @@
 # when the cherry-pick conflicted (see below) or when the original title had companion tags
 # ([analytics: N], [creator: N], ...) whose target-branch counterparts have to be set manually.
 #
-# Conflicts are handled in three levels, because GitHub can only show a conflict on a PR when
+# Conflicts are handled in up to four levels, because GitHub can only show a conflict on a PR when
 # BOTH sides changed the same lines relative to merge-base(head, base) — while the head branch is
 # a descendant of the target tip, the merge is a fast-forward and no conflict can exist:
 #   1. Cherry-pick onto the target tip. Clean -> an ordinary, mergeable PR.
+#  1a. The cherry-pick conflicted: Claude Code (templates/utils/claude.yml, instructions in
+#      prompts/backport-conflicts.md) resolves the content conflicts in place - text files with
+#      markers only; binary files and paths only one side has stay as the cherry-pick left them.
+#      The Guard step accepts the result only when the agent reports VERDICT: RESOLVED, no markers
+#      are left, nothing but the conflicted files changed, no file was created, the index is
+#      untouched and the resolution is not empty. It then commits the pick with a
+#      [backport-ai-resolved] trailer, and the PR is a draft labeled `ai-resolved` with the
+#      agent's summary in its body. All or nothing: anything else - no ANTHROPIC_API_KEY, no CLI,
+#      an agent error, a rejected resolution - goes on to level 2 exactly as without the agent,
+#      and a rejection is noted in the PR body. The agent's prompt, transcript and the Guard's
+#      verdict are published as the pipeline artifact Backport_AI_<target>_<job attempt>.
+#      Switched off with `aiResolve: false`.
 #   2. The same cherry-pick onto merge-base(source, target). The commit itself is clean (no
 #      markers) and the PR diff is still exactly the backported change, but merging it into the
 #      target conflicts, so GitHub reports the conflicts and offers "Resolve conflicts". Two
@@ -31,11 +43,25 @@
 #   * Include from a stage that only runs on a CI build of the branch being backported FROM,
 #     after the stages that validate it.
 #   * Have a `GITHUB_TOKEN` variable in scope (variable group `pipeline-secrets`) — `gh` needs it.
+#   * With `aiResolve` on (the default): declare the azure-pipelines repository resource as
+#     `azurepipelines` (the product repos do, for `extends`) - the agent's prompt is checked out
+#     from it - and have `ANTHROPIC_API_KEY` in scope (`pipeline-secrets`); without the key the
+#     agent is skipped.
 #
 # Known limitations (accepted): only the PR whose merge commit equals Build.SourceVersion is
 # handled, so a batched build backports only the last merged PR; "Rebase and merge" of a
 # multi-commit PR is not supported. Recovery for both: make sure the flag is in the merged PR
 # title and re-run this stage — the flag is read from the API, not from the build.
+
+parameters:
+  # Level 1a (see the header): let Claude resolve cherry-pick conflicts before levels 2/3.
+  # false leaves the job exactly as it was before the agent.
+  - name: aiResolve
+    type: boolean
+    default: true
+  - name: aiModel
+    type: string
+    default: claude-opus-5
 
 jobs:
   - job: Detect
@@ -129,11 +155,26 @@ jobs:
       matrix: $[ dependencies.Detect.outputs['detect.MATRIX'] ]
     variables:
       BACKPORT_PR: $[ dependencies.Detect.outputs['detect.BACKPORT_PR'] ]
+    # The steps hand their state on through BP_* variables (scalars, read from the environment:
+    # a variable a step did not get to set stays unexpanded as a $(macro)) and through files in
+    # $(Agent.TempDirectory)/backport (lists and snapshots - outside the working tree, so
+    # `git add -A` and `git clean` never see them, and wiped after every job).
+    #
+    # Every step runs with `commands: restricted` and names the variables it may set: the log
+    # shows file contents and agent output, and a `##vso[...]` line in them must not be able to
+    # steer the job (e.g. set BP_BRANCH to the target branch and have it pushed to directly).
+    # Whatever the steps echo from the repository or the agent is defanged on top of that.
     steps:
+      # `path: s` keeps the repo at $(Build.SourcesDirectory) despite the second checkout below,
+      # which would otherwise move it to s/<repo>.
       - checkout: self
+        path: s
         persistCredentials: true
         fetchDepth: 0
         retryCountOnTaskFailure: 5
+
+      # Level 1. A conflicted cherry-pick is left in progress for the agent (level 1a) or, when
+      # that is off or fails, for levels 2/3 in the PR step.
       - bash: |
           set -euo pipefail
           SHA="$(Build.SourceVersion)"
@@ -142,8 +183,375 @@ jobs:
           TARGET="$(TARGET)"
           # Flat branch prefix even for targets with slashes: release/2.5 -> backport-release-2.5.
           BRANCH="backport-$(printf '%s' "$TARGET" | tr '[:upper:]' '[:lower:]' | sed -E 's#[^a-z0-9._-]+#-#g')/pr-$PR_NUM"
+          ST="$(Agent.TempDirectory)/backport"
+          rm -rf "$ST"
+          mkdir -p "$ST/ai"
+          TARGET_SHA=""
+          MAINLINE=""
 
-          PR_JSON="$(gh api "repos/$REPO/pulls/$PR_NUM")"
+          # What the later steps have to do: skip, clean (picked cleanly), conflict (the pick
+          # stopped with conflicts and is still in progress) or recover (the branch is already
+          # pushed). Emitted after all git output, so nothing git printed can override it.
+          state() {
+            echo "##vso[task.setvariable variable=BP_BRANCH]$BRANCH"
+            echo "##vso[task.setvariable variable=BP_TARGET_SHA]$TARGET_SHA"
+            echo "##vso[task.setvariable variable=BP_MAINLINE]$MAINLINE"
+            # Artifact names cannot hold '/', as in release/2.5.
+            echo "##vso[task.setvariable variable=BP_LEG]$(printf '%s' "$TARGET" | sed -E 's#[^A-Za-z0-9._-]+#-#g')"
+            echo "##vso[task.setvariable variable=BP_STATE]$1"
+          }
+
+          gh api "repos/$REPO/pulls/$PR_NUM" > "$ST/pr.json"
+
+          EXISTING="$(gh pr list --repo "$REPO" --head "$BRANCH" --state all --json number --jq '.[].number' || true)"
+          if [ -n "$EXISTING" ]; then
+            echo "Backport PR already exists for branch $BRANCH (#$EXISTING) - skipping."
+            state skip
+            exit 0
+          fi
+
+          git config user.email "surveyjs.org@gmail.com"
+          git config user.name "surveyjsdeveloper"
+
+          # Pinned right away: FETCH_HEAD is overwritten by every later fetch.
+          git fetch origin "$TARGET"
+          TARGET_SHA="$(git rev-parse FETCH_HEAD)"
+
+          if [ "$(git rev-list --parents -n1 "$SHA" | wc -w)" -gt 2 ]; then
+            MAINLINE="-m 1"
+          fi
+
+          if [ -n "$(git ls-remote --heads origin "$BRANCH")" ]; then
+            echo "Branch $BRANCH already pushed - the PR step creates the missing PR from it."
+            state recover
+            exit 0
+          fi
+
+          # A cancelled run on a reused workspace can leave a cherry-pick behind.
+          git cherry-pick --quit 2>/dev/null || true
+          git reset -q --hard
+          git clean -fdq
+
+          git checkout -B "$BRANCH" "$TARGET_SHA"
+          if git cherry-pick -x $MAINLINE "$SHA"; then
+            state clean
+            exit 0
+          fi
+
+          git -c core.quotePath=false diff --name-only --diff-filter=U > "$ST/conflicts.txt"
+          # Paths only one side has at all (delete/modify, add/add): `git add -A` resolves those
+          # to whatever is in the tree, without markers, so they are reported on their own.
+          git -c core.quotePath=false status --porcelain | sed -n 's/^\(DU\|UD\|AU\|UA\|DD\) //p' > "$ST/one-sided.txt"
+          if [ ! -s "$ST/conflicts.txt" ]; then
+            git cherry-pick --abort || true
+            echo "Cherry-pick produced no changes (already in $TARGET) - nothing to backport."
+            state skip
+            exit 0
+          fi
+          echo "Cherry-pick conflicts:"
+          sed 's/##/#_#/g' "$ST/conflicts.txt"
+          state conflict
+        name: pick
+        displayName: "Cherry-pick onto the target branch"
+        target:
+          commands: restricted
+          settableVariables: [BP_STATE, BP_BRANCH, BP_TARGET_SHA, BP_MAINLINE, BP_LEG]
+        env:
+          GH_TOKEN: $(GITHUB_TOKEN)
+          GITHUB_TOKEN: $(GITHUB_TOKEN)
+
+      - ${{ if parameters.aiResolve }}:
+          # Level 1a, prepared: which files go to the agent, the agent's context, and snapshots of
+          # everything it must not change. A failure here only means no agent: levels 2/3 follow.
+          - bash: |
+              set -euo pipefail
+              SHA="$(Build.SourceVersion)"
+              REPO="$(Build.Repository.Name)"
+              PR_NUM="$(BACKPORT_PR)"
+              TARGET="$(TARGET)"
+              TARGET_SHA="${BP_TARGET_SHA:?}"
+              MAINLINE="${BP_MAINLINE:-}"
+              ST="$(Agent.TempDirectory)/backport"
+
+              # The agent gets the content conflicts: text files with markers. Binary files and
+              # paths only one side has carry no markers; they stay as the cherry-pick left them.
+              : > "$ST/ai-files.txt"
+              : > "$ST/hands-off.txt"
+              while IFS= read -r F; do
+                if [ -f "$F" ] && ! grep -qxF -- "$F" "$ST/one-sided.txt" && grep -qI '^<<<<<<< ' -- "$F"; then
+                  # zdiff3 adds the base version to the markers (diff3 before git 2.35). Only
+                  # re-rendered here: level 1 itself must merge as before, and the diff3 styles
+                  # merge less aggressively - some clean hunks would become conflicts.
+                  git checkout --conflict=zdiff3 -- "$F" 2>/dev/null || git checkout --conflict=diff3 -- "$F" 2>/dev/null || true
+                  echo "$F" >> "$ST/ai-files.txt"
+                else
+                  echo "$F" >> "$ST/hands-off.txt"
+                fi
+              done < "$ST/conflicts.txt"
+              if [ ! -s "$ST/ai-files.txt" ]; then
+                echo "No text conflicts for the agent - only binary or one-sided paths."
+                exit 0
+              fi
+
+              # What the agent may change: the AI files, and nothing else in the working tree,
+              # the index or .git. The agent can write anywhere the agent user can, these files
+              # included, so the Guard trusts them only against hashes kept in pipeline variables.
+              git ls-files -s > "$ST/index.before"
+              git -c core.quotePath=false ls-files --others --exclude-standard > "$ST/untracked.before"
+              while IFS= read -r F; do
+                if [ -e "$F" ]; then echo "$(git hash-object -- "$F") $F"; else echo "ABSENT $F"; fi
+              done < "$ST/hands-off.txt" > "$ST/hands-off.before"
+              # .git as the agent must leave it: config without the push credential (put back
+              # from a secret variable, so even a killed agent step cannot lose it), hooks,
+              # info/ and the pending commit message.
+              GIT_DIR="$(git rev-parse --git-dir)"
+              mkdir -p "$ST/git"
+              cp "$GIT_DIR/config" "$ST/git/config"
+              HEADERS="$(git config --local --get-regexp '^http\..*\.extraheader$' || true)"
+              while IFS= read -r L; do
+                [ -n "$L" ] && git config -f "$ST/git/config" --unset-all "${L%% *}" || true
+              done <<< "$HEADERS"
+              for D in hooks info; do [ -d "$GIT_DIR/$D" ] && cp -R "$GIT_DIR/$D" "$ST/git/$D"; done
+              [ -f "$GIT_DIR/MERGE_MSG" ] && cp "$GIT_DIR/MERGE_MSG" "$ST/git/MERGE_MSG"
+              # sha256 of every file under a directory, names included
+              tree_hash() { (cd "$1" && find . -type f | LC_ALL=C sort | while IFS= read -r f; do sha256sum "$f"; done) | sha256sum | cut -d' ' -f1; }
+              # The PR step relies on the lists, the Guard on the snapshots as well.
+              LISTS="$(cd "$ST" && sha256sum pr.json conflicts.txt one-sided.txt ai-files.txt hands-off.txt | sha256sum | cut -d' ' -f1)"
+              SNAPSHOT="$(cd "$ST" && sha256sum index.before untracked.before hands-off.before | sha256sum | cut -d' ' -f1)"
+
+              PICK_BASE="$(git rev-parse "$SHA^1")"
+              MERGE_BASE="$(git merge-base "$SHA" "$TARGET_SHA" || echo "$TARGET_SHA")"
+              {
+                echo "=== RUN-SPECIFIC CONTEXT ==="
+                echo "Repository: $REPO"
+                echo "Original PR: #$PR_NUM - $(jq -r '.title' "$ST/pr.json")"
+                echo "Backported commit: $SHA"
+                if [ -n "$MAINLINE" ]; then
+                  echo "  (a merge commit, picked against its first parent $PICK_BASE)"
+                fi
+                echo "TARGET branch: $TARGET (tip $TARGET_SHA)"
+                echo "Merge base of the commit and the TARGET: $MERGE_BASE"
+                echo
+                echo "Everything the commit changes:"
+                git diff --stat=200 --stat-graph-width=20 -M "$PICK_BASE" "$SHA"
+                echo
+                echo "Files to resolve:"
+                sed 's/^/  - /' "$ST/ai-files.txt"
+                if [ -s "$ST/hands-off.txt" ]; then
+                  echo
+                  echo "Do not touch (binary, or present on one side only - the pipeline handles them):"
+                  sed 's/^/  - /' "$ST/hands-off.txt"
+                fi
+                echo
+                echo "Commands, to run verbatim from the repository root:"
+                while IFS= read -r F; do
+                  echo "  $F"
+                  echo "    change to backport: git diff $PICK_BASE $SHA -- '$F'"
+                  echo "    TARGET history:     git log --oneline $MERGE_BASE..HEAD -- '$F'"
+                done < "$ST/ai-files.txt"
+              } > "$ST/ai/context.md"
+
+              echo "Files for the agent:"
+              sed 's/##/#_#/g' "$ST/ai-files.txt"
+              echo "##vso[task.setvariable variable=BP_GIT_AUTH;issecret=true]$(printf '%s' "$HEADERS" | base64 -w0)"
+              echo "##vso[task.setvariable variable=BP_GIT_SNAPSHOT]$(tree_hash "$ST/git")"
+              echo "##vso[task.setvariable variable=BP_AI_LISTS]$LISTS"
+              echo "##vso[task.setvariable variable=BP_AI_SNAPSHOT]$SNAPSHOT"
+              echo "##vso[task.setvariable variable=BP_AI_ELIGIBLE]true"
+            name: prep
+            displayName: "Prepare the conflicts for the agent"
+            condition: and(succeeded(), eq(variables['BP_STATE'], 'conflict'))
+            continueOnError: true
+            target:
+              commands: restricted
+              settableVariables: [BP_AI_ELIGIBLE, BP_AI_LISTS, BP_AI_SNAPSHOT, BP_GIT_SNAPSHOT, BP_GIT_AUTH]
+
+          # The prompt lives in this repository (prompts/). Checked out next to s/, not into it:
+          # the agent's Grep/Glob and the Guard's working-tree checks must not see it.
+          - checkout: azurepipelines
+            path: azure-pipelines
+            fetchDepth: 1
+            retryCountOnTaskFailure: 5
+            continueOnError: true
+            condition: and(succeeded(), eq(variables['BP_AI_ELIGIBLE'], 'true'))
+
+          - template: claude.yml
+            parameters:
+              displayName: "Claude: resolve the cherry-pick conflicts"
+              condition: and(succeeded(), eq(variables['BP_AI_ELIGIBLE'], 'true'))
+              promptFile: $(Pipeline.Workspace)/azure-pipelines/prompts/backport-conflicts.md
+              contextFile: $(Agent.TempDirectory)/backport/ai/context.md
+              outDir: $(Agent.TempDirectory)/backport/ai/out
+              model: ${{ parameters.aiModel }}
+              # Read and edit, git only to look. The Guard below checks the rest.
+              allowedTools: "Read,Grep,Glob,Edit,Bash(git show *),Bash(git log *),Bash(git diff *),Bash(git status *),Bash(git blame *),Bash(cat *),Bash(head *),Bash(tail *),Bash(grep *),Bash(ls *)"
+              disallowedTools: "Write,NotebookEdit,WebFetch,WebSearch,Bash(git add *),Bash(git commit *),Bash(git checkout *),Bash(git switch *),Bash(git restore *),Bash(git reset *),Bash(git stash *),Bash(git cherry-pick *),Bash(git merge *),Bash(git rebase *),Bash(git push *),Bash(git rm *),Bash(git mv *),Bash(git clean *),Bash(git apply *),Bash(git config *),Bash(git update-ref *),Bash(rm *),Bash(mv *),Bash(cp *),Bash(find *)"
+
+          # Accepts the agent's resolution only when every check passes, and then commits the
+          # cherry-pick. A rejection only records the reason: the PR step undoes the attempt.
+          - bash: |
+              set -uo pipefail
+              SHA="$(Build.SourceVersion)"
+              TARGET="$(TARGET)"
+              TARGET_SHA="${BP_TARGET_SHA:?}"
+              ST="$(Agent.TempDirectory)/backport"
+              OUT="$ST/ai/out"
+              # File contents and agent text must not reach the log as logging commands.
+              defang() { sed 's/##/#_#/g'; }
+
+              reject() {
+                printf '%s\n' "$1" > "$ST/ai/rejected.txt"
+                echo "##vso[task.logissue type=warning]AI conflict resolution rejected, falling back to levels 2/3: $(printf '%s' "$1" | defang)"
+                echo "##vso[task.setvariable variable=BP_AI_RESOLVED]false"
+                exit 0
+              }
+              rm -f "$ST/ai/rejected.txt" "$ST/ai/files.tsv"
+
+              # The snapshots are what the checks below compare against - first make sure the
+              # agent did not rewrite them.
+              tree_hash() { (cd "$1" && find . -type f | LC_ALL=C sort | while IFS= read -r f; do sha256sum "$f"; done) | sha256sum | cut -d' ' -f1; }
+              LISTS="$(cd "$ST" && sha256sum pr.json conflicts.txt one-sided.txt ai-files.txt hands-off.txt | sha256sum | cut -d' ' -f1)"
+              SNAPSHOT="$(cd "$ST" && sha256sum index.before untracked.before hands-off.before | sha256sum | cut -d' ' -f1)"
+              [ "$LISTS" = "${BP_AI_LISTS:-}" ] && [ "$SNAPSHOT" = "${BP_AI_SNAPSHOT:-}" ] \
+                || reject "the Guard's snapshots were changed while the agent ran"
+              [ "$(tree_hash "$ST/git")" = "${BP_GIT_SNAPSHOT:-}" ] || reject "the copy of .git was changed while the agent ran"
+              # .git before any git command reads it (hooks, fsmonitor, ...): compared as git
+              # sees it, then put back from the copy either way.
+              git_state() {
+                { git config -f "$1/config" --list 2>/dev/null | grep -v '\.extraheader=' | LC_ALL=C sort
+                  (cd "$1" && find hooks info MERGE_MSG -type f 2>/dev/null | LC_ALL=C sort | while IFS= read -r f; do sha256sum "$f"; done)
+                } | sha256sum | cut -d' ' -f1
+              }
+              GIT_DIR="$(git rev-parse --git-dir)"
+              TAMPERED=false
+              [ "$(git_state "$GIT_DIR")" = "$(git_state "$ST/git")" ] || TAMPERED=true
+              cp "$ST/git/config" "$GIT_DIR/config"
+              rm -rf "$GIT_DIR/hooks" "$GIT_DIR/info"
+              for D in hooks info; do [ -d "$ST/git/$D" ] && cp -R "$ST/git/$D" "$GIT_DIR/$D"; done
+              [ -f "$ST/git/MERGE_MSG" ] && cp "$ST/git/MERGE_MSG" "$GIT_DIR/MERGE_MSG"
+              [ "$TAMPERED" = false ] || reject "the agent changed .git (config, hooks, info or the commit message)"
+
+              if [ -f "$OUT/skipped.txt" ]; then
+                echo "The agent was not run ($(defang < "$OUT/skipped.txt")) - falling back to levels 2/3."
+                echo "##vso[task.setvariable variable=BP_AI_RESOLVED]false"
+                exit 0
+              fi
+              # A killed or timed-out Claude step never redacted its output: drop the raw parts.
+              if [ ! -f "$OUT/done.txt" ]; then
+                rm -f "$OUT/stream.jsonl" "$OUT/stderr.txt" "$OUT/result.json" "$OUT/summary.md" "$OUT/report.txt"
+                reject "the Claude step did not complete (killed or timed out)"
+              fi
+              mapfile -t AI < "$ST/ai-files.txt"
+
+              echo "===== The agent's resolution (combined diff against both sides) ====="
+              git --no-pager -c core.quotePath=false diff -- "${AI[@]}" > "$ST/ai/resolution.diff"
+              defang < "$ST/ai/resolution.diff"
+              echo "====================================================================="
+
+              # The agent finished and reports that it resolved everything.
+              [ -s "$OUT/result.json" ] || reject "the agent did not finish (no result event - see the Claude step)"
+              SUBTYPE="$(jq -r '.subtype // ""' "$OUT/result.json")"
+              [ "$SUBTYPE" = success ] || reject "the agent stopped with $SUBTYPE"
+              IS_ERROR="$(jq -r '.is_error' "$OUT/result.json")"
+              [ "$IS_ERROR" = false ] || reject "the agent run ended with is_error=$IS_ERROR"
+              VERDICT="$(grep -v '^[[:space:]]*$' "$OUT/summary.md" | tail -n1 | sed -E 's/^[*`[:space:]]+//; s/[*`[:space:]]+$//')"
+              [ "$VERDICT" = "VERDICT: RESOLVED" ] || reject "the agent did not report VERDICT: RESOLVED (last line: ${VERDICT:-none})"
+
+              # Git is where the pick step left it, and nothing but the AI files changed.
+              [ "$(git rev-parse HEAD)" = "$TARGET_SHA" ] || reject "HEAD moved away from the target tip"
+              [ "$(git rev-parse -q --verify CHERRY_PICK_HEAD || true)" = "$SHA" ] || reject "the cherry-pick is no longer in progress"
+              git ls-files -s | cmp -s - "$ST/index.before" || reject "the agent changed the git index"
+              NEW="$(git -c core.quotePath=false ls-files --others --exclude-standard | grep -v '^\.claude/' | grep -vxF -f "$ST/untracked.before" || true)"
+              [ -z "$NEW" ] || reject "the agent created a new file: $(printf '%s' "$NEW" | head -n 3 | tr '\n' ' ')"
+              # Unmerged paths are always listed here, edited or not - hence the snapshot below.
+              EXTRA="$(git -c core.quotePath=false diff --name-only | grep -vxF -f "$ST/conflicts.txt" || true)"
+              [ -z "$EXTRA" ] || reject "the agent edited files outside the conflicted files: $(printf '%s' "$EXTRA" | head -n 3 | tr '\n' ' ')"
+              while read -r HASH F; do
+                if [ -e "$F" ]; then NOW="$(git hash-object -- "$F")"; else NOW=ABSENT; fi
+                [ "$NOW" = "$HASH" ] || reject "the agent changed $F, which it must not touch"
+              done < "$ST/hands-off.before"
+
+              # No conflict markers left.
+              for F in "${AI[@]}"; do
+                [ -f "$F" ] || reject "the agent removed $F"
+                ! grep -qE '^(<{7}|\|{7}|>{7})( |\r?$)' -- "$F" || reject "conflict markers left in $F"
+                # A bare ======= line is a marker too, unless one side already has as many.
+                SEPS="$(grep -cxE $'={7}\r?' -- "$F" || true)"
+                KNOWN="$( { git show ":2:$F" 2>/dev/null | grep -cxE $'={7}\r?'; git show ":3:$F" 2>/dev/null | grep -cxE $'={7}\r?'; } | sort -n | tail -n1)"
+                [ "${SEPS:-0}" -le "${KNOWN:-0}" ] || reject "conflict markers left in $F (=======)"
+              done
+
+              # Commit the pick. The trailer tells a re-run that only has to create the PR that
+              # this backport is AI-resolved (see the PR step).
+              while IFS= read -r F; do
+                git add -A -- "$F" || reject "could not stage $F"
+              done < "$ST/conflicts.txt"
+              [ -z "$(git diff --name-only --diff-filter=U)" ] || reject "unmerged paths left after staging"
+              if git diff --cached --quiet HEAD; then
+                reject "the resolution is empty - it would drop the whole change"
+              fi
+              GIT_EDITOR=true git cherry-pick --continue > /dev/null || reject "git cherry-pick --continue failed"
+              git commit --amend --no-verify --no-edit \
+                -m "$(printf '%s\n[backport-ai-resolved] %s' "$(git log -1 --format=%B)" "$(tr '\n' ' ' < "$ST/ai-files.txt")")" > /dev/null \
+                || reject "could not record the [backport-ai-resolved] trailer"
+              [ "$(git rev-parse HEAD^)" = "$TARGET_SHA" ] || reject "the commit is not on the target tip"
+              [ -z "$(git status --porcelain --untracked-files=no)" ] || reject "the working tree is not clean after the commit"
+
+              # A resolution identical to one side deserves a second look from the reviewer.
+              for F in "${AI[@]}"; do
+                NOW="$(git rev-parse -q --verify "HEAD:$F" || true)"
+                if [ "$NOW" = "$(git rev-parse -q --verify "HEAD^:$F" || true)" ]; then
+                  printf '%s\t%s\n' "$F" "left as the $TARGET version - the change to this file is dropped"
+                elif [ "$NOW" = "$(git rev-parse -q --verify "$SHA:$F" || true)" ]; then
+                  printf '%s\t%s\n' "$F" "taken over from master as a whole"
+                else
+                  printf '%s\t\n' "$F"
+                fi
+              done > "$ST/ai/files.tsv"
+
+              git --no-pager show --stat --format='%h %s%n%n%b' HEAD | defang
+              echo "##vso[task.setvariable variable=BP_AI_RESOLVED]true"
+            name: guard
+            displayName: "Guard: validate the AI resolution"
+            condition: and(succeeded(), eq(variables['BP_AI_ELIGIBLE'], 'true'))
+            continueOnError: true
+            target:
+              commands: restricted
+              settableVariables: [BP_AI_RESOLVED]
+
+      - bash: |
+          set -euo pipefail
+          SHA="$(Build.SourceVersion)"
+          REPO="$(Build.Repository.Name)"
+          PR_NUM="$(BACKPORT_PR)"
+          TARGET="$(TARGET)"
+          BRANCH="${BP_BRANCH:?}"
+          TARGET_SHA="${BP_TARGET_SHA:?}"
+          MAINLINE="${BP_MAINLINE:-}"
+          ST="$(Agent.TempDirectory)/backport"
+
+          if [ "${BP_AI_ELIGIBLE:-}" = true ]; then
+            # The agent ran in this working tree: before git runs here with GH_TOKEN, put .git
+            # back from the prep step's copy - verified, as the agent could have written to it -
+            # together with the push credential, which a killed agent step never restored.
+            tree_hash() { (cd "$1" && find . -type f | LC_ALL=C sort | while IFS= read -r f; do sha256sum "$f"; done) | sha256sum | cut -d' ' -f1; }
+            if [ "$(tree_hash "$ST/git")" != "${BP_GIT_SNAPSHOT:-}" ] \
+              || [ "$(cd "$ST" && sha256sum pr.json conflicts.txt one-sided.txt ai-files.txt hands-off.txt | sha256sum | cut -d' ' -f1)" != "${BP_AI_LISTS:-}" ]; then
+              echo "##vso[task.logissue type=error]The job's state files were changed while the agent ran - not creating a backport from this working tree."
+              exit 1
+            fi
+            GIT_DIR="$(git rev-parse --git-dir)"
+            cp "$ST/git/config" "$GIT_DIR/config"
+            rm -rf "$GIT_DIR/hooks" "$GIT_DIR/info"
+            for D in hooks info; do [ -d "$ST/git/$D" ] && cp -R "$ST/git/$D" "$GIT_DIR/$D"; done
+            AUTH="${BP_GIT_AUTH:-}"
+            case "$AUTH" in '$('*) AUTH="" ;; esac
+            printf '%s' "$AUTH" | base64 -d | while IFS= read -r L || [ -n "$L" ]; do
+              if [ -n "$L" ]; then git config --local --add "${L%% *}" "${L#* }"; fi
+            done
+          fi
+
+          PR_JSON="$(cat "$ST/pr.json")"
           PR_TITLE="$(printf '%s' "$PR_JSON" | jq -r '.title')"
           # Assignees are copied from the original PR; its author is the fallback when it had none.
           ASSIGNEES="$(printf '%s' "$PR_JSON" | jq -r '[.assignees[]?.login] | join(" ")')"
@@ -156,42 +564,32 @@ jobs:
           COMPANIONS="$(printf '%s' "$PR_TITLE" | grep -oE '\[[^]]+:[^]]+\]' | grep -viE '^\[backport[[:space:]]*:' || true)"
           CLEAN_TITLE="$(printf '%s' "$PR_TITLE" | sed -E 's/\[[^]]+:[^]]+\]//g; s/[[:space:]]+/ /g; s/^ //; s/ $//')"
 
-          EXISTING="$(gh pr list --repo "$REPO" --head "$BRANCH" --state all --json number --jq '.[].number' || true)"
-          if [ -n "$EXISTING" ]; then
-            echo "Backport PR already exists for branch $BRANCH (#$EXISTING) - skipping."
-            exit 0
-          fi
-
-          git config user.email "surveyjs.org@gmail.com"
-          git config user.name "surveyjsdeveloper"
-
           DRAFT=false
           CONFLICT_FILES=""
           # Paths only one side has at all (delete/modify, add/add): `git add -A` resolves those
           # to whatever is in the tree, without markers, so they are reported on their own.
           ONE_SIDED=""
+          # Level 1a: the agent resolved the conflicts and the Guard committed the pick.
+          AI_RESOLVED=false
+          AI_FILES=""
           # Level 2: branch rooted at the merge base, GitHub itself reports the conflicts.
           NEEDS_RESOLUTION=false
           # Level 3: conflicts committed unresolved, GitHub cannot report them (see the header).
           MARKERS=false
 
-          # Pinned right away: FETCH_HEAD is overwritten by every later fetch.
-          git fetch origin "$TARGET"
-          TARGET_SHA="$(git rev-parse FETCH_HEAD)"
-
-          MAINLINE=""
-          if [ "$(git rev-list --parents -n1 "$SHA" | wc -w)" -gt 2 ]; then
-            MAINLINE="-m 1"
-          fi
-
-          if [ -n "$(git ls-remote --heads origin "$BRANCH")" ]; then
+          if [ "$BP_STATE" = recover ]; then
             # A previous run pushed the branch but failed before creating the PR: the conflict
-            # state is recovered from the branch itself - not being rooted off the target tip
-            # means level 2, the [backport-conflicts] trailer means level 3.
+            # state is recovered from the branch itself - the [backport-ai-resolved] trailer means
+            # level 1a, not being rooted off the target tip level 2, the [backport-conflicts]
+            # trailer level 3. The AI trailer goes first: the target may have moved on since.
             echo "Branch $BRANCH already pushed - creating the missing PR from it."
             git fetch origin "$BRANCH"
             BRANCH_SHA="$(git rev-parse FETCH_HEAD)"
-            if ! git merge-base --is-ancestor "$TARGET_SHA" "$BRANCH_SHA"; then
+            AI_FILES="$(git log -1 --format=%B "$BRANCH_SHA" | sed -n 's/^\[backport-ai-resolved\] //p' | tr ' ' '\n' | sed '/^$/d')"
+            if [ -n "$AI_FILES" ]; then
+              AI_RESOLVED=true
+              DRAFT=true
+            elif ! git merge-base --is-ancestor "$TARGET_SHA" "$BRANCH_SHA"; then
               NEEDS_RESOLUTION=true
               DRAFT=true
             else
@@ -199,56 +597,94 @@ jobs:
               if [ -n "$CONFLICT_FILES" ]; then MARKERS=true; DRAFT=true; fi
             fi
           else
-            git checkout -B "$BRANCH" "$TARGET_SHA"
-            if ! git cherry-pick -x $MAINLINE "$SHA"; then
-              CONFLICT_FILES="$(git diff --name-only --diff-filter=U)"
-              ONE_SIDED="$(git status --porcelain | sed -n 's/^\(DU\|UD\|AU\|UA\|DD\) //p')"
-              git cherry-pick --abort || true
-              if [ -z "$CONFLICT_FILES" ]; then
-                echo "Cherry-pick produced no changes (already in $TARGET) - nothing to backport."
-                exit 0
-              fi
-              echo "Cherry-pick conflicts:"
-              printf '%s\n' "$CONFLICT_FILES"
-
-              # Level 2: the same cherry-pick onto the merge base commits cleanly, which moves
-              # the conflict to where it can be resolved - onto the PR. Pointless when the
-              # target is an ancestor of the source commit (merge base == target tip): that
-              # would just repeat the cherry-pick that has already failed above.
-              if ! git merge-base --is-ancestor "$TARGET_SHA" "$SHA"; then
-                MERGE_BASE="$(git merge-base "$SHA" "$TARGET_SHA")"
-                echo "Retrying onto merge base $MERGE_BASE so GitHub can report the conflicts."
-                git checkout -B "$BRANCH" "$MERGE_BASE"
-                if git cherry-pick -x $MAINLINE "$SHA"; then
-                  NEEDS_RESOLUTION=true
-                  DRAFT=true
-                else
-                  git cherry-pick --abort || true
-                fi
-              fi
-
-              # Level 3: nothing on the target side to conflict with, so commit the conflicts
-              # unresolved - in diff3 style, which keeps the base version next to both sides.
-              if [ "$NEEDS_RESOLUTION" = false ]; then
-                echo "The change does not apply to $TARGET at all - committing the conflicts unresolved."
-                git checkout -B "$BRANCH" "$TARGET_SHA"
-                git -c merge.conflictStyle=diff3 cherry-pick -x $MAINLINE "$SHA" || true
-                if git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null; then
-                  git add -A
-                  GIT_EDITOR=true git cherry-pick --continue
-                fi
-                # Record the conflicted files in the commit message so a re-run that only
-                # has to re-create the PR still knows this backport needs a draft.
-                git commit --amend --no-verify --no-edit \
-                  -m "$(printf '%s\n[backport-conflicts] %s' "$(git log -1 --format=%B)" "$(printf '%s\n' "$CONFLICT_FILES" | tr '\n' ' ')")"
-                MARKERS=true
+            if [ "$BP_STATE" = conflict ]; then
+              CONFLICT_FILES="$(cat "$ST/conflicts.txt")"
+              ONE_SIDED="$(cat "$ST/one-sided.txt")"
+              if [ "${BP_AI_RESOLVED:-}" = true ] && [ "$(git rev-parse HEAD^)" = "$TARGET_SHA" ] \
+                && git log -1 --format=%B | grep -q '^\[backport-ai-resolved\] '; then
+                AI_RESOLVED=true
+                AI_FILES="$(cat "$ST/ai-files.txt")"
                 DRAFT=true
+              else
+                # Back to a clean target tip: undo the agent's attempt, or the pick nobody
+                # touched, including anything left untracked - level 3's `git add -A` would
+                # commit it.
+                git cherry-pick --abort 2>/dev/null || git cherry-pick --quit 2>/dev/null || true
+                git checkout -q -f -B "$BRANCH" "$TARGET_SHA"
+                git clean -fdq
+
+                # Level 2: the same cherry-pick onto the merge base commits cleanly, which moves
+                # the conflict to where it can be resolved - onto the PR. Pointless when the
+                # target is an ancestor of the source commit (merge base == target tip): that
+                # would just repeat the cherry-pick that has already failed above.
+                if ! git merge-base --is-ancestor "$TARGET_SHA" "$SHA"; then
+                  MERGE_BASE="$(git merge-base "$SHA" "$TARGET_SHA")"
+                  echo "Retrying onto merge base $MERGE_BASE so GitHub can report the conflicts."
+                  git checkout -B "$BRANCH" "$MERGE_BASE"
+                  if git cherry-pick -x $MAINLINE "$SHA"; then
+                    NEEDS_RESOLUTION=true
+                    DRAFT=true
+                  else
+                    git cherry-pick --abort || true
+                  fi
+                fi
+
+                # Level 3: nothing on the target side to conflict with, so commit the conflicts
+                # unresolved - in diff3 style, which keeps the base version next to both sides.
+                if [ "$NEEDS_RESOLUTION" = false ]; then
+                  echo "The change does not apply to $TARGET at all - committing the conflicts unresolved."
+                  git checkout -B "$BRANCH" "$TARGET_SHA"
+                  git -c merge.conflictStyle=diff3 cherry-pick -x $MAINLINE "$SHA" || true
+                  if git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null; then
+                    git add -A
+                    GIT_EDITOR=true git cherry-pick --continue
+                  fi
+                  # Record the conflicted files in the commit message so a re-run that only
+                  # has to re-create the PR still knows this backport needs a draft.
+                  git commit --amend --no-verify --no-edit \
+                    -m "$(printf '%s\n[backport-conflicts] %s' "$(git log -1 --format=%B)" "$(printf '%s\n' "$CONFLICT_FILES" | tr '\n' ' ')")"
+                  MARKERS=true
+                  DRAFT=true
+                fi
               fi
             fi
             git push --no-verify origin "HEAD:$BRANCH"
           fi
 
+          # Agent text goes into a public PR body: no @-mentions, nothing that looks like a token.
+          sanitize() {
+            sed -E 's/@([A-Za-z0-9_-])/@\&#8203;\1/g; s/(sk-ant-|gh[pousr]_|github_pat_)[A-Za-z0-9_-]+/[redacted]/g; s#(authorization:[[:space:]]*(basic|bearer)[[:space:]]+)[A-Za-z0-9+/=._~-]+#\1[redacted]#gI'
+          }
+          ARTIFACT="Backport_AI_${BP_LEG:-}_$(System.JobAttempt)"
+          RUN_URL="$(System.CollectionUri)$(System.TeamProjectId)/_build/results?buildId=$(Build.BuildId)&view=artifacts&type=publishedArtifacts"
           BODY="$(printf 'Automated backport of #%s (commit %s) to %s.' "$PR_NUM" "$SHA" "$TARGET")"
+          if [ -f "$ST/ai/rejected.txt" ]; then
+            BODY="$(printf '%s\n\nAI conflict resolution was attempted and rejected: %s. Details in the `%s` artifact of [the pipeline run](%s).' \
+              "$BODY" "$(head -c 300 "$ST/ai/rejected.txt" | tr '\n' ' ' | sanitize)" "$ARTIFACT" "$RUN_URL")"
+          fi
+          if [ "$AI_RESOLVED" = true ]; then
+            BODY="$(printf '%s\n\n**Cherry-picking onto %s conflicted, and the conflicts were resolved by AI** (%s, Claude Code). Review the resolution against the original change in #%s before marking this PR ready.' \
+              "$BODY" "$TARGET" "${{ parameters.aiModel }}" "$PR_NUM")"
+            if [ -f "$ST/ai/files.tsv" ]; then
+              LIST="$(awk -F '\t' '{ printf "- `%s`%s\n", $1, ($2 == "" ? "" : " - **" $2 "**") }' "$ST/ai/files.tsv")"
+            else
+              LIST="$(printf '%s\n' "$AI_FILES" | sed 's/^/- `/; s/$/`/')"
+            fi
+            BODY="$(printf '%s\n\nFiles resolved by AI:\n%s' "$BODY" "$LIST")"
+            if [ -s "$ST/hands-off.txt" ]; then
+              BODY="$(printf '%s\n\nConflicted files the AI did not touch (binary, or only on one side) - committed the way the cherry-pick left them: a binary file keeps the %s version, a one-sided file stays as the change leaves it. Check them by hand:\n%s' \
+                "$BODY" "$TARGET" "$(sed 's/^/- `/; s/$/`/' "$ST/hands-off.txt")")"
+            fi
+            if [ -s "$ST/ai/out/summary.md" ]; then
+              # GitHub caps the body at 65536 characters.
+              SUMMARY="$(sed -E '/^[*`[:space:]]*VERDICT:/d' "$ST/ai/out/summary.md" | sanitize | jq -Rrs '.[:20000]')"
+              BODY="$(printf '%s\n\n<details><summary>Summary by the agent</summary>\n\n%s\n\n</details>' "$BODY" "$SUMMARY")"
+            fi
+            if [ -s "$ST/ai/out/result.json" ]; then
+              BODY="$(printf '%s\n\nAgent run: %s turns, $%s. Prompt and transcript: the `%s` artifact of [the pipeline run](%s).' \
+                "$BODY" "$(jq -r '.num_turns' "$ST/ai/out/result.json")" "$(jq -r '.total_cost_usd' "$ST/ai/out/result.json")" "$ARTIFACT" "$RUN_URL")"
+            fi
+          fi
           if [ "$NEEDS_RESOLUTION" = true ]; then
             BODY="$(printf '%s\n\n**Cherry-picking onto %s conflicted**, so this branch is rooted at the merge base of %s and the source branch: the commit itself is clean and this diff is exactly the backported change, but merging it into %s conflicts - GitHub reports those conflicts on this PR, press **Resolve conflicts** (or merge %s into this branch locally). Until they are resolved, CI here runs against the merge base rather than against %s.' \
               "$BODY" "$TARGET" "$TARGET" "$TARGET" "$TARGET" "$TARGET")"
@@ -281,8 +717,13 @@ jobs:
 
           gh label create "backport" --repo "$REPO" --color 0E8A16 --description "Automated backport" 2>/dev/null || true
           gh label create "$TARGET" --repo "$REPO" --color 0E8A16 --description "Targets the $TARGET branch" 2>/dev/null || true
+          if [ "$AI_RESOLVED" = true ]; then
+            gh label create "ai-resolved" --repo "$REPO" --color 5319E7 --description "Backport conflicts resolved by AI" 2>/dev/null || true
+          fi
 
-          set -- pr create --repo "$REPO" --base "$TARGET" --head "$BRANCH" --title "$CLEAN_TITLE (#$PR_NUM)" --body "$BODY" --label "backport" --label "$TARGET"
+          printf '%s\n' "$BODY" > "$ST/body.md"
+          set -- pr create --repo "$REPO" --base "$TARGET" --head "$BRANCH" --title "$CLEAN_TITLE (#$PR_NUM)" --body-file "$ST/body.md" --label "backport" --label "$TARGET"
+          if [ "$AI_RESOLVED" = true ]; then set -- "$@" --label "ai-resolved"; fi
           if [ "$DRAFT" = true ]; then set -- "$@" --draft; fi
           PR_URL="$(gh "$@")"
           echo "Created backport PR: $PR_URL"
@@ -297,14 +738,32 @@ jobs:
               || echo "##vso[task.logissue type=warning]Could not assign '$ASSIGNEES' to the backport PR"
           fi
 
-          if [ "$NEEDS_RESOLUTION" = true ]; then
+          if [ "$AI_RESOLVED" = true ]; then
+            echo "##vso[task.logissue type=warning]Backport PR for #$PR_NUM created as draft with the cherry-pick conflicts resolved by AI - review the resolution: $PR_URL"
+            echo "##vso[task.complete result=SucceededWithIssues;]Backport created with conflicts resolved by AI"
+          elif [ "$NEEDS_RESOLUTION" = true ]; then
             echo "##vso[task.logissue type=warning]Backport PR for #$PR_NUM created as draft; GitHub reports the cherry-pick conflicts on it: $PR_URL"
             echo "##vso[task.complete result=SucceededWithIssues;]Backport created with conflicts to resolve on GitHub"
           elif [ "$MARKERS" = true ]; then
             echo "##vso[task.logissue type=warning]Backport PR for #$PR_NUM created as draft with the cherry-pick conflicts committed unresolved: $PR_URL"
             echo "##vso[task.complete result=SucceededWithIssues;]Backport created with committed conflicts"
           fi
-        displayName: "Cherry-pick and open backport PR"
+        displayName: "Open the backport PR"
+        condition: and(succeeded(), in(variables['BP_STATE'], 'clean', 'conflict', 'recover'))
+        target:
+          commands: restricted
+          settableVariables: none
         env:
           GH_TOKEN: $(GITHUB_TOKEN)
           GITHUB_TOKEN: $(GITHUB_TOKEN)
+          BP_GIT_AUTH: $(BP_GIT_AUTH)
+
+      - ${{ if parameters.aiResolve }}:
+          # The agent's prompt, transcript and report, and the Guard's verdict.
+          - task: PublishPipelineArtifact@1
+            displayName: "Publish the AI conflict resolution"
+            condition: and(succeededOrFailed(), eq(variables['BP_AI_ELIGIBLE'], 'true'))
+            continueOnError: true
+            inputs:
+              targetPath: $(Agent.TempDirectory)/backport/ai
+              artifact: Backport_AI_$(BP_LEG)_$(System.JobAttempt)
