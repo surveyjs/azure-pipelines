@@ -234,3 +234,6 @@ stages:
     condition: and(succeeded(), eq(variables['Build.SourceBranchName'], 'master'))
     jobs:
       - template: templates/utils/backport.yml
+        parameters:
+          # Sources only: screenshots (screenshotTests/, screenshotLegacyTests/) live outside packages/.
+          backportPaths: ["packages/**"]

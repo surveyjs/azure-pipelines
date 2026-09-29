@@ -543,9 +543,12 @@ stages:
                   ($s | if . == null then "" else tostring end | gsub("\\s+"; " ") | gsub("^\\s+|\\s+$"; "")) as $t
                   | if ($t | length) > $n then $t[:$n] + " …[+" + (($t | length) - $n | tostring) + " chars]" else $t end;
                 foreach (inputs | fromjson?) as $e (
-                  0;
-                  . + (if ($e.type == "assistant" and ($e.message | type) == "object") then 1 else 0 end);
-                  . as $turn
+                  {n: 0, id: null};
+                  # One assistant event per content block: a turn is one message.id (as in num_turns).
+                  if ($e.type == "assistant" and ($e.message | type) == "object"
+                      and ($e.message.id == null or $e.message.id != .id))
+                  then {n: (.n + 1), id: $e.message.id} else . end;
+                  .n as $turn
                   | if ($e.type == "system" and $e.subtype == "init") then
                       "[init] model=" + ($e.model // "?") + " cwd=" + ($e.cwd // "?") + " tools=" + (($e.tools // [] | length) | tostring)
                     elif ($e.type == "assistant" and ($e.message | type) == "object") then

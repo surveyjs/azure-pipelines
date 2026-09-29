@@ -123,3 +123,6 @@ stages:
     condition: and(succeeded(), eq(variables['Build.SourceBranchName'], 'master'))
     jobs:
       - template: templates/utils/backport.yml
+        parameters:
+          # Sources only: tests (with the flat/pdf snapshots) and docs keep the target version.
+          backportPaths: ["src/**"]

@@ -48,6 +48,17 @@ Useful:
     (TARGET) and theirs versions of a conflicted file.
   * Read large files in parts (offset/limit) around the markers instead of in full.
 
+TOOLS AND TURNS (the number of turns is limited, running out of them is a give-up):
+  * Files change ONLY through the Edit tool; use `replace_all` for a substitution repeated in a
+    file. The shell is read-only: `git show/diff/log/status/blame/ls-files/cat-file`, `cat`,
+    `head`, `tail`, `grep`, `ls`, `wc`, `diff`. Anything else is denied and wastes a turn:
+    scripts (python, awk, perl, `sed -i`), output redirection, loops, `$(...)`, `<(...)`.
+    A compound command is denied as a whole when any part of it is not on that list.
+  * Every response is a turn: put independent tool calls into ONE response - read or grep
+    several files at once, edit different files in the same response.
+  * Check for leftover markers once at the end, with one Grep over all the files, rather than
+    after every edit.
+
 HARD CONSTRAINTS (a violation discards ALL your changes and a human resolves the conflicts):
   * Edit ONLY the files under "Files to resolve". Do not create, delete, rename or move files,
     and do not touch the files under "Do not touch".

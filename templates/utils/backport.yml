@@ -39,6 +39,11 @@
 #      has (the target never had the file, or the change deletes it) carry no markers at all -
 #      they are committed as the change leaves them, and are listed separately in the PR body.
 #
+# Only the sources (`backportPaths`) are backported: the target keeps its own version of everything
+# else the change touches - tests, markup snapshots, screenshots, docs, configs - at every level,
+# even when the change would apply to it cleanly. Those paths are reset (`git restore`) before
+# anything else looks at the pick, so they never conflict and never reach the agent.
+#
 # Caller contract:
 #   * Include from a stage that only runs on a CI build of the branch being backported FROM,
 #     after the stages that validate it.
@@ -62,6 +67,11 @@ parameters:
   - name: aiModel
     type: string
     default: claude-opus-5
+  # The only paths that are backported (see the header): git pathspecs, matched with `:(glob)`
+  # magic, e.g. ["packages/**"]. Everything else the change touches keeps the target version.
+  # [] backports everything. No default: every repository decides for its own layout.
+  - name: backportPaths
+    type: object
 
 jobs:
   - job: Detect
@@ -232,22 +242,44 @@ jobs:
           git reset -q --hard
           git clean -fdq
 
+          # --- same helpers in the PR step ---
+          # Everything outside `backportPaths` as one pathspec; empty when all paths are backported.
+          mapfile -t OUTSIDE < <(printf '%s' "$BP_ONLY" | jq -r 'if length == 0 then empty else ".", (.[] | ":(exclude,glob)" + .) end')
+          # Puts everything outside `backportPaths` back to its version in $1, in the index and the
+          # working tree - which also resolves it where it conflicted.
+          keep_outside() { [ "${#OUTSIDE[@]}" -eq 0 ] || git restore -q --source="$1" --staged --worktree -- "${OUTSIDE[@]}"; }
+          # Cherry-picks $SHA onto HEAD, which is $1, backporting only `backportPaths`. Returns 0
+          # with the pick committed, 1 with the pick stopped on conflicts in the backported paths
+          # (still in progress), 2 when nothing is left to pick (HEAD stays at $1), 3 on a git failure.
+          pick_onto() {
+            if git cherry-pick -x $MAINLINE "$SHA"; then
+              keep_outside "$1" || return 3
+              if git diff --cached --quiet "$1"; then git reset -q --hard "$1"; return 2; fi
+              git diff --cached --quiet HEAD || git commit -q --amend --no-verify --no-edit || return 3
+              return 0
+            fi
+            keep_outside "$1" || return 3
+            [ -z "$(git diff --name-only --diff-filter=U)" ] || return 1
+            if git diff --cached --quiet HEAD; then git cherry-pick --abort; return 2; fi
+            GIT_EDITOR=true git cherry-pick --continue > /dev/null || return 3
+          }
+          # ---
+
           git checkout -B "$BRANCH" "$TARGET_SHA"
-          if git cherry-pick -x $MAINLINE "$SHA"; then
-            state clean
-            exit 0
-          fi
+          RC=0
+          pick_onto "$TARGET_SHA" || RC=$?
+          case "$RC" in
+            0) state clean; exit 0 ;;
+            1) ;;
+            2) echo "Cherry-pick produced no changes (already in $TARGET, or nothing inside the backported paths) - nothing to backport."
+               state skip; exit 0 ;;
+            *) echo "##vso[task.logissue type=error]Cherry-picking $SHA onto $TARGET failed."; exit 1 ;;
+          esac
 
           git -c core.quotePath=false diff --name-only --diff-filter=U > "$ST/conflicts.txt"
           # Paths only one side has at all (delete/modify, add/add): `git add -A` resolves those
           # to whatever is in the tree, without markers, so they are reported on their own.
           git -c core.quotePath=false status --porcelain | sed -n 's/^\(DU\|UD\|AU\|UA\|DD\) //p' > "$ST/one-sided.txt"
-          if [ ! -s "$ST/conflicts.txt" ]; then
-            git cherry-pick --abort || true
-            echo "Cherry-pick produced no changes (already in $TARGET) - nothing to backport."
-            state skip
-            exit 0
-          fi
           echo "Cherry-pick conflicts:"
           sed 's/##/#_#/g' "$ST/conflicts.txt"
           state conflict
@@ -259,6 +291,7 @@ jobs:
         env:
           GH_TOKEN: $(GITHUB_TOKEN)
           GITHUB_TOKEN: $(GITHUB_TOKEN)
+          BP_ONLY: ${{ convertToJson(parameters.backportPaths) }}
 
       - ${{ if parameters.aiResolve }}:
           # Level 1a, prepared: which files go to the agent, the agent's context, and snapshots of
@@ -321,6 +354,8 @@ jobs:
 
               PICK_BASE="$(git rev-parse "$SHA^1")"
               MERGE_BASE="$(git merge-base "$SHA" "$TARGET_SHA" || echo "$TARGET_SHA")"
+              # Only `backportPaths` are backported; the pick step put everything else back.
+              mapfile -t ONLY < <(printf '%s' "$BP_ONLY" | jq -r '.[] | ":(glob)" + .')
               {
                 echo "=== RUN-SPECIFIC CONTEXT ==="
                 echo "Repository: $REPO"
@@ -332,8 +367,9 @@ jobs:
                 echo "TARGET branch: $TARGET (tip $TARGET_SHA)"
                 echo "Merge base of the commit and the TARGET: $MERGE_BASE"
                 echo
-                echo "Everything the commit changes:"
-                git diff --stat=200 --stat-graph-width=20 -M "$PICK_BASE" "$SHA"
+                echo "Everything the commit changes in the backported paths (the rest - tests, snapshots,"
+                echo "docs and the like - is not backported and already stays as the TARGET has it):"
+                git diff --stat=200 --stat-graph-width=20 -M "$PICK_BASE" "$SHA" -- "${ONLY[@]}"
                 echo
                 echo "Files to resolve:"
                 sed 's/^/  - /' "$ST/ai-files.txt"
@@ -365,6 +401,8 @@ jobs:
             target:
               commands: restricted
               settableVariables: [BP_AI_ELIGIBLE, BP_AI_LISTS, BP_AI_SNAPSHOT, BP_GIT_SNAPSHOT, BP_GIT_AUTH]
+            env:
+              BP_ONLY: ${{ convertToJson(parameters.backportPaths) }}
 
           # The prompt lives in this repository (prompts/). Checked out next to s/, not into it:
           # the agent's Grep/Glob and the Guard's working-tree checks must not see it.
@@ -384,7 +422,7 @@ jobs:
               outDir: $(Agent.TempDirectory)/backport/ai/out
               model: ${{ parameters.aiModel }}
               # Read and edit, git only to look. The Guard below checks the rest.
-              allowedTools: "Read,Grep,Glob,Edit,Bash(git show *),Bash(git log *),Bash(git diff *),Bash(git status *),Bash(git blame *),Bash(cat *),Bash(head *),Bash(tail *),Bash(grep *),Bash(ls *)"
+              allowedTools: "Read,Grep,Glob,Edit,Bash(git show *),Bash(git log *),Bash(git diff *),Bash(git status *),Bash(git blame *),Bash(git ls-files *),Bash(git cat-file *),Bash(cat *),Bash(head *),Bash(tail *),Bash(grep *),Bash(ls *),Bash(wc *),Bash(diff *)"
               disallowedTools: "Write,NotebookEdit,WebFetch,WebSearch,Bash(git add *),Bash(git commit *),Bash(git checkout *),Bash(git switch *),Bash(git restore *),Bash(git reset *),Bash(git stash *),Bash(git cherry-pick *),Bash(git merge *),Bash(git rebase *),Bash(git push *),Bash(git rm *),Bash(git mv *),Bash(git clean *),Bash(git apply *),Bash(git config *),Bash(git update-ref *),Bash(rm *),Bash(mv *),Bash(cp *),Bash(find *)"
 
           # Accepts the agent's resolution only when every check passes, and then commits the
@@ -577,6 +615,29 @@ jobs:
           # Level 3: conflicts committed unresolved, GitHub cannot report them (see the header).
           MARKERS=false
 
+          # --- same helpers in the pick step ---
+          # Everything outside `backportPaths` as one pathspec; empty when all paths are backported.
+          mapfile -t OUTSIDE < <(printf '%s' "$BP_ONLY" | jq -r 'if length == 0 then empty else ".", (.[] | ":(exclude,glob)" + .) end')
+          # Puts everything outside `backportPaths` back to its version in $1, in the index and the
+          # working tree - which also resolves it where it conflicted.
+          keep_outside() { [ "${#OUTSIDE[@]}" -eq 0 ] || git restore -q --source="$1" --staged --worktree -- "${OUTSIDE[@]}"; }
+          # Cherry-picks $SHA onto HEAD, which is $1, backporting only `backportPaths`. Returns 0
+          # with the pick committed, 1 with the pick stopped on conflicts in the backported paths
+          # (still in progress), 2 when nothing is left to pick (HEAD stays at $1), 3 on a git failure.
+          pick_onto() {
+            if git cherry-pick -x $MAINLINE "$SHA"; then
+              keep_outside "$1" || return 3
+              if git diff --cached --quiet "$1"; then git reset -q --hard "$1"; return 2; fi
+              git diff --cached --quiet HEAD || git commit -q --amend --no-verify --no-edit || return 3
+              return 0
+            fi
+            keep_outside "$1" || return 3
+            [ -z "$(git diff --name-only --diff-filter=U)" ] || return 1
+            if git diff --cached --quiet HEAD; then git cherry-pick --abort; return 2; fi
+            GIT_EDITOR=true git cherry-pick --continue > /dev/null || return 3
+          }
+          # ---
+
           if [ "$BP_STATE" = recover ]; then
             # A previous run pushed the branch but failed before creating the PR: the conflict
             # state is recovered from the branch itself - the [backport-ai-resolved] trailer means
@@ -621,11 +682,11 @@ jobs:
                   MERGE_BASE="$(git merge-base "$SHA" "$TARGET_SHA")"
                   echo "Retrying onto merge base $MERGE_BASE so GitHub can report the conflicts."
                   git checkout -B "$BRANCH" "$MERGE_BASE"
-                  if git cherry-pick -x $MAINLINE "$SHA"; then
+                  if pick_onto "$MERGE_BASE"; then
                     NEEDS_RESOLUTION=true
                     DRAFT=true
                   else
-                    git cherry-pick --abort || true
+                    git cherry-pick --abort 2>/dev/null || true
                   fi
                 fi
 
@@ -636,6 +697,7 @@ jobs:
                   git checkout -B "$BRANCH" "$TARGET_SHA"
                   git -c merge.conflictStyle=diff3 cherry-pick -x $MAINLINE "$SHA" || true
                   if git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null; then
+                    keep_outside "$TARGET_SHA"
                     git add -A
                     GIT_EDITOR=true git cherry-pick --continue
                   fi
@@ -757,6 +819,7 @@ jobs:
           GH_TOKEN: $(GITHUB_TOKEN)
           GITHUB_TOKEN: $(GITHUB_TOKEN)
           BP_GIT_AUTH: $(BP_GIT_AUTH)
+          BP_ONLY: ${{ convertToJson(parameters.backportPaths) }}
 
       - ${{ if parameters.aiResolve }}:
           # The agent's prompt, transcript and report, and the Guard's verdict.
