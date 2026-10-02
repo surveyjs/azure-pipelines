@@ -49,9 +49,9 @@
 #     after the stages that validate it.
 #   * Have a `GITHUB_TOKEN` variable in scope (variable group `pipeline-secrets`) — `gh` needs it.
 #   * With `aiResolve` on (the default): declare the azure-pipelines repository resource as
-#     `azurepipelines` (the product repos do, for `extends`) - the agent's prompt is checked out
-#     from it - and have `ANTHROPIC_API_KEY` in scope (`pipeline-secrets`); without the key the
-#     agent is skipped.
+#     `azurepipelines` (the product repos do, for `extends`) - the agent's prompt is downloaded
+#     from its commit through the GitHub API, not checked out - and have `ANTHROPIC_API_KEY` in
+#     scope (`pipeline-secrets`); without the key the agent is skipped.
 #
 # Known limitations (accepted): only the PR whose merge commit equals Build.SourceVersion is
 # handled, so a batched build backports only the last merged PR; "Rebase and merge" of a
@@ -175,10 +175,10 @@ jobs:
     # steer the job (e.g. set BP_BRANCH to the target branch and have it pushed to directly).
     # Whatever the steps echo from the repository or the agent is defanged on top of that.
     steps:
-      # `path: s` keeps the repo at $(Build.SourcesDirectory) despite the second checkout below,
-      # which would otherwise move it to s/<repo>.
+      # The only checkout: a second one would move s/<repo> around, and a product repo can have
+      # a folder of that name (survey-library tracks azure-pipelines/). The agent's prompt is
+      # downloaded instead (prep step).
       - checkout: self
-        path: s
         persistCredentials: true
         fetchDepth: 0
         retryCountOnTaskFailure: 5
@@ -294,7 +294,7 @@ jobs:
           BP_ONLY: ${{ convertToJson(parameters.backportPaths) }}
 
       - ${{ if parameters.aiResolve }}:
-          # Level 1a, prepared: which files go to the agent, the agent's context, and snapshots of
+          # Level 1a, prepared: which files go to the agent, its prompt and context, and snapshots of
           # everything it must not change. A failure here only means no agent: levels 2/3 follow.
           - bash: |
               set -euo pipefail
@@ -387,6 +387,15 @@ jobs:
                 done < "$ST/ai-files.txt"
               } > "$ST/ai/context.md"
 
+              # The agent's instructions, from the azure-pipelines commit these templates come
+              # from (the branch when the commit is unknown).
+              AP_REF="${AP_VERSION:-}"
+              case "$AP_REF" in ''|'$('*) AP_REF="${AP_BRANCH:-}" ;; esac
+              gh api -H "Accept: application/vnd.github.raw" \
+                "repos/$AP_REPO/contents/prompts/backport-conflicts.md?ref=$AP_REF" > "$ST/prompt.md"
+              [ -s "$ST/prompt.md" ]
+              echo "Prompt: prompts/backport-conflicts.md from $(printf '%s' "$AP_REPO@$AP_REF" | sed 's/##/#_#/g')"
+
               echo "Files for the agent:"
               sed 's/##/#_#/g' "$ST/ai-files.txt"
               echo "##vso[task.setvariable variable=BP_GIT_AUTH;issecret=true]$(printf '%s' "$HEADERS" | base64 -w0)"
@@ -403,21 +412,16 @@ jobs:
               settableVariables: [BP_AI_ELIGIBLE, BP_AI_LISTS, BP_AI_SNAPSHOT, BP_GIT_SNAPSHOT, BP_GIT_AUTH]
             env:
               BP_ONLY: ${{ convertToJson(parameters.backportPaths) }}
-
-          # The prompt lives in this repository (prompts/). Checked out next to s/, not into it:
-          # the agent's Grep/Glob and the Guard's working-tree checks must not see it.
-          - checkout: azurepipelines
-            path: azure-pipelines
-            fetchDepth: 1
-            retryCountOnTaskFailure: 5
-            continueOnError: true
-            condition: and(succeeded(), eq(variables['BP_AI_ELIGIBLE'], 'true'))
+              GH_TOKEN: $(GITHUB_TOKEN)
+              AP_REPO: $(resources.repositories.azurepipelines.name)
+              AP_VERSION: $(resources.repositories.azurepipelines.version)
+              AP_BRANCH: $(resources.repositories.azurepipelines.ref)
 
           - template: claude.yml
             parameters:
               displayName: "Claude: resolve the cherry-pick conflicts"
               condition: and(succeeded(), eq(variables['BP_AI_ELIGIBLE'], 'true'))
-              promptFile: $(Pipeline.Workspace)/azure-pipelines/prompts/backport-conflicts.md
+              promptFile: $(Agent.TempDirectory)/backport/prompt.md
               contextFile: $(Agent.TempDirectory)/backport/ai/context.md
               outDir: $(Agent.TempDirectory)/backport/ai/out
               model: ${{ parameters.aiModel }}
@@ -502,8 +506,10 @@ jobs:
               NEW="$(git -c core.quotePath=false ls-files --others --exclude-standard | grep -v '^\.claude/' | grep -vxF -f "$ST/untracked.before" || true)"
               [ -z "$NEW" ] || reject "the agent created a new file: $(printf '%s' "$NEW" | head -n 3 | tr '\n' ' ')"
               # Unmerged paths are always listed here, edited or not - hence the snapshot below.
-              EXTRA="$(git -c core.quotePath=false diff --name-only | grep -vxF -f "$ST/conflicts.txt" || true)"
-              [ -z "$EXTRA" ] || reject "the agent edited files outside the conflicted files: $(printf '%s' "$EXTRA" | head -n 3 | tr '\n' ' ')"
+              # With the status letter, so a deleted file (D) does not read as an edit.
+              EXTRA="$(git -c core.quotePath=false diff --no-renames --name-status \
+                | awk -F'\t' 'FILENAME == ARGV[1] { c[$0]; next } !($2 in c) { print $1 " " $2 }' "$ST/conflicts.txt" - || true)"
+              [ -z "$EXTRA" ] || reject "the agent changed files outside the conflicted files: $(printf '%s' "$EXTRA" | head -n 3 | tr '\n' ' ')"
               while read -r HASH F; do
                 if [ -e "$F" ]; then NOW="$(git hash-object -- "$F")"; else NOW=ABSENT; fi
                 [ "$NOW" = "$HASH" ] || reject "the agent changed $F, which it must not touch"
