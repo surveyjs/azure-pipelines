@@ -39,9 +39,10 @@
 #      has (the target never had the file, or the change deletes it) carry no markers at all -
 #      they are committed as the change leaves them, and are listed separately in the PR body.
 #
-# Only the sources (`backportPaths`) are backported: the target keeps its own version of everything
-# else the change touches - tests, markup snapshots, screenshots, docs, configs - at every level,
-# even when the change would apply to it cleanly. Those paths are reset (`git restore`) before
+# Only the sources (`backportPaths`, minus `backportExclude` - *.test.ts by default) are
+# backported: the target keeps its own version of everything else the change touches - tests,
+# markup snapshots, screenshots, docs, configs - at every level, even when the change would apply
+# to it cleanly. Those paths are reset (`git restore`) before
 # anything else looks at the pick, so they never conflict and never reach the agent.
 #
 # Caller contract:
@@ -73,6 +74,11 @@ parameters:
   # [] backports everything. No default: every repository decides for its own layout.
   - name: backportPaths
     type: object
+  # Paths inside `backportPaths` that are still not backported (same pathspec syntax): the target
+  # keeps its version of them, like everything outside `backportPaths`. Unit tests by default.
+  - name: backportExclude
+    type: object
+    default: ["**/*.test.ts"]
 
 jobs:
   - job: Detect
@@ -254,9 +260,19 @@ jobs:
           # --- same helpers in the PR step ---
           # Everything outside `backportPaths` as one pathspec; empty when all paths are backported.
           mapfile -t OUTSIDE < <(printf '%s' "$BP_ONLY" | jq -r 'if length == 0 then empty else ".", (.[] | ":(exclude,glob)" + .) end')
-          # Puts everything outside `backportPaths` back to its version in $1, in the index and the
-          # working tree - which also resolves it where it conflicted.
-          keep_outside() { [ "${#OUTSIDE[@]}" -eq 0 ] || git restore -q --source="$1" --staged --worktree -- "${OUTSIDE[@]}"; }
+          # `backportExclude`. Restored on its own: an exclude would beat `backportPaths` in OUTSIDE.
+          mapfile -t EXCLUDE < <(printf '%s' "$BP_EXCLUDE" | jq -r '.[] | ":(glob)" + .')
+          # Puts everything outside `backportPaths`, and `backportExclude`, back to its version in $1,
+          # in the index and the working tree - which also resolves it where it conflicted.
+          keep_outside() {
+            [ "${#OUTSIDE[@]}" -eq 0 ] || git restore -q --source="$1" --staged --worktree -- "${OUTSIDE[@]}" || return 1
+            [ "${#EXCLUDE[@]}" -gt 0 ] || return 0
+            # Only the excluded paths the pick changed (unmerged ones included): a pathspec that
+            # matches nothing makes `git restore` fail.
+            local CHANGED
+            mapfile -d '' -t CHANGED < <(git diff --cached --name-only -z --no-renames "$1" -- "${EXCLUDE[@]}")
+            [ "${#CHANGED[@]}" -eq 0 ] || git --literal-pathspecs restore -q --source="$1" --staged --worktree -- "${CHANGED[@]}"
+          }
           # Cherry-picks $SHA onto HEAD, which is $1, backporting only `backportPaths`. Returns 0
           # with the pick committed, 1 with the pick stopped on conflicts in the backported paths
           # (still in progress), 2 when nothing is left to pick (HEAD stays at $1), 3 on a git failure.
@@ -301,6 +317,7 @@ jobs:
           GH_TOKEN: $(GITHUB_TOKEN)
           GITHUB_TOKEN: $(GITHUB_TOKEN)
           BP_ONLY: ${{ convertToJson(parameters.backportPaths) }}
+          BP_EXCLUDE: ${{ convertToJson(parameters.backportExclude) }}
 
       - ${{ if parameters.aiResolve }}:
           # Level 1a, prepared: which files go to the agent, its prompt and context, and snapshots of
@@ -363,8 +380,10 @@ jobs:
 
               PICK_BASE="$(git rev-parse "$SHA^1")"
               MERGE_BASE="$(git merge-base "$SHA" "$TARGET_SHA" || echo "$TARGET_SHA")"
-              # Only `backportPaths` are backported; the pick step put everything else back.
+              # Only `backportPaths` minus `backportExclude` are backported; the pick step put
+              # everything else back.
               mapfile -t ONLY < <(printf '%s' "$BP_ONLY" | jq -r '.[] | ":(glob)" + .')
+              mapfile -t -O "${#ONLY[@]}" ONLY < <(printf '%s' "$BP_EXCLUDE" | jq -r '.[] | ":(exclude,glob)" + .')
               {
                 echo "=== RUN-SPECIFIC CONTEXT ==="
                 echo "Repository: $REPO"
@@ -424,6 +443,7 @@ jobs:
               settableVariables: [BP_AI_ELIGIBLE, BP_AI_LISTS, BP_AI_SNAPSHOT, BP_GIT_SNAPSHOT, BP_GIT_AUTH]
             env:
               BP_ONLY: ${{ convertToJson(parameters.backportPaths) }}
+              BP_EXCLUDE: ${{ convertToJson(parameters.backportExclude) }}
               GH_TOKEN: $(GITHUB_TOKEN)
 
           - template: claude.yml
@@ -633,9 +653,19 @@ jobs:
           # --- same helpers in the pick step ---
           # Everything outside `backportPaths` as one pathspec; empty when all paths are backported.
           mapfile -t OUTSIDE < <(printf '%s' "$BP_ONLY" | jq -r 'if length == 0 then empty else ".", (.[] | ":(exclude,glob)" + .) end')
-          # Puts everything outside `backportPaths` back to its version in $1, in the index and the
-          # working tree - which also resolves it where it conflicted.
-          keep_outside() { [ "${#OUTSIDE[@]}" -eq 0 ] || git restore -q --source="$1" --staged --worktree -- "${OUTSIDE[@]}"; }
+          # `backportExclude`. Restored on its own: an exclude would beat `backportPaths` in OUTSIDE.
+          mapfile -t EXCLUDE < <(printf '%s' "$BP_EXCLUDE" | jq -r '.[] | ":(glob)" + .')
+          # Puts everything outside `backportPaths`, and `backportExclude`, back to its version in $1,
+          # in the index and the working tree - which also resolves it where it conflicted.
+          keep_outside() {
+            [ "${#OUTSIDE[@]}" -eq 0 ] || git restore -q --source="$1" --staged --worktree -- "${OUTSIDE[@]}" || return 1
+            [ "${#EXCLUDE[@]}" -gt 0 ] || return 0
+            # Only the excluded paths the pick changed (unmerged ones included): a pathspec that
+            # matches nothing makes `git restore` fail.
+            local CHANGED
+            mapfile -d '' -t CHANGED < <(git diff --cached --name-only -z --no-renames "$1" -- "${EXCLUDE[@]}")
+            [ "${#CHANGED[@]}" -eq 0 ] || git --literal-pathspecs restore -q --source="$1" --staged --worktree -- "${CHANGED[@]}"
+          }
           # Cherry-picks $SHA onto HEAD, which is $1, backporting only `backportPaths`. Returns 0
           # with the pick committed, 1 with the pick stopped on conflicts in the backported paths
           # (still in progress), 2 when nothing is left to pick (HEAD stays at $1), 3 on a git failure.
@@ -835,6 +865,7 @@ jobs:
           GITHUB_TOKEN: $(GITHUB_TOKEN)
           BP_GIT_AUTH: $(BP_GIT_AUTH)
           BP_ONLY: ${{ convertToJson(parameters.backportPaths) }}
+          BP_EXCLUDE: ${{ convertToJson(parameters.backportExclude) }}
 
       - ${{ if parameters.aiResolve }}:
           # The agent's prompt, transcript and report, and the Guard's verdict.
