@@ -166,6 +166,11 @@ jobs:
       matrix: $[ dependencies.Detect.outputs['detect.MATRIX'] ]
     variables:
       BACKPORT_PR: $[ dependencies.Detect.outputs['detect.BACKPORT_PR'] ]
+      # The agent's prompt comes from the azure-pipelines resource (prep step). Runtime
+      # expressions: the $(resources.repositories.*) macros only reach jobs that check it out.
+      AP_REPO: $[ resources.repositories.azurepipelines.name ]
+      AP_VERSION: $[ resources.repositories.azurepipelines.version ]
+      AP_BRANCH: $[ resources.repositories.azurepipelines.ref ]
     # The steps hand their state on through BP_* variables (scalars, read from the environment:
     # a variable a step did not get to set stays unexpanded as a $(macro)) and through files in
     # $(Agent.TempDirectory)/backport (lists and snapshots - outside the working tree, so
@@ -392,13 +397,16 @@ jobs:
               } > "$ST/ai/context.md"
 
               # The agent's instructions, from the azure-pipelines commit these templates come
-              # from (the branch when the commit is unknown).
+              # from (the branch when the commit is unknown, main when neither is).
+              unset_var() { case "$1" in ''|'$('*) return 0 ;; *) return 1 ;; esac; }
+              AP_REPO="${AP_REPO:-}"; unset_var "$AP_REPO" && AP_REPO="surveyjs/azure-pipelines"
               AP_REF="${AP_VERSION:-}"
-              case "$AP_REF" in ''|'$('*) AP_REF="${AP_BRANCH:-}" ;; esac
+              unset_var "$AP_REF" && AP_REF="${AP_BRANCH:-}"
+              unset_var "$AP_REF" && AP_REF="main"
+              echo "Prompt: prompts/backport-conflicts.md from $(printf '%s' "$AP_REPO@$AP_REF" | sed 's/##/#_#/g')"
               gh api -H "Accept: application/vnd.github.raw" \
                 "repos/$AP_REPO/contents/prompts/backport-conflicts.md?ref=$AP_REF" > "$ST/prompt.md"
               [ -s "$ST/prompt.md" ]
-              echo "Prompt: prompts/backport-conflicts.md from $(printf '%s' "$AP_REPO@$AP_REF" | sed 's/##/#_#/g')"
 
               echo "Files for the agent:"
               sed 's/##/#_#/g' "$ST/ai-files.txt"
@@ -417,9 +425,6 @@ jobs:
             env:
               BP_ONLY: ${{ convertToJson(parameters.backportPaths) }}
               GH_TOKEN: $(GITHUB_TOKEN)
-              AP_REPO: $(resources.repositories.azurepipelines.name)
-              AP_VERSION: $(resources.repositories.azurepipelines.version)
-              AP_BRANCH: $(resources.repositories.azurepipelines.ref)
 
           - template: claude.yml
             parameters:
