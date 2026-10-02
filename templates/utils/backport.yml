@@ -56,7 +56,8 @@
 # Known limitations (accepted): only the PR whose merge commit equals Build.SourceVersion is
 # handled, so a batched build backports only the last merged PR; "Rebase and merge" of a
 # multi-commit PR is not supported. Recovery for both: make sure the flag is in the merged PR
-# title and re-run this stage — the flag is read from the API, not from the build.
+# title and re-run this stage — the flag is read from the API, not from the build. To redo a
+# backport, close its PR and delete its branch, then re-run: a closed, unmerged PR does not count.
 
 parameters:
   # Level 1a (see the header): let Claude resolve cherry-pick conflicts before levels 2/3.
@@ -213,7 +214,10 @@ jobs:
 
           gh api "repos/$REPO/pulls/$PR_NUM" > "$ST/pr.json"
 
-          EXISTING="$(gh pr list --repo "$REPO" --head "$BRANCH" --state all --json number --jq '.[].number' || true)"
+          # A closed, unmerged backport PR was discarded: a re-run makes a new one (delete its branch
+          # too, or the re-run only re-opens a PR from that branch - see `recover`).
+          EXISTING="$(gh pr list --repo "$REPO" --head "$BRANCH" --state all --json number,state \
+            --jq '.[] | select(.state != "CLOSED") | .number' || true)"
           if [ -n "$EXISTING" ]; then
             echo "Backport PR already exists for branch $BRANCH (#$EXISTING) - skipping."
             state skip
