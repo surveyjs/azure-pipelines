@@ -91,6 +91,13 @@ resources:
       name: surveyjs/service
       ref: refs/heads/$(projectsBranch)
 
+    # theme-adapter-demos only has main - no master/V2/V3 for $(projectsBranch)
+    - repository: ThemeAdapterDemos
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/theme-adapter-demos
+      ref: refs/heads/main
+
 
 
 #trigger only "by hand"
@@ -200,6 +207,13 @@ jobs:
   - checkout: Service
     persistCredentials: true
     clean: true
+
+  # Full history: in a shallow clone git cannot tell the release push is a fast-forward
+  - checkout: ThemeAdapterDemos
+    persistCredentials: true
+    clean: true
+    fetchDepth: 0
+    condition: eq(variables['projectsBranch'], 'master')
 
 
 
@@ -482,3 +496,24 @@ jobs:
           }
       }
     displayName: 'Update Web.config and push'
+
+
+
+  # Release theme-adapter-demos: fast-forward its release branch to main.
+  # The demos only have main, so this pairs with the master release only.
+  - bash: |
+      set -e
+      cd "$(Build.SourcesDirectory)/theme-adapter-demos"
+
+      # main as it is now, not as it was when the release started
+      git fetch origin +refs/heads/main:refs/remotes/origin/main +refs/heads/release:refs/remotes/origin/release
+
+      if ! git merge-base --is-ancestor origin/release origin/main; then
+        echo "##vso[task.logissue type=error]theme-adapter-demos: release has commits that are not on main - cannot fast-forward"
+        exit 1
+      fi
+
+      # No force: the remote rejects anything that is not a fast-forward
+      git push origin refs/remotes/origin/main:refs/heads/release --no-verify
+    condition: and(succeeded(), eq(variables['projectsBranch'], 'master'))
+    displayName: 'Fast-forward theme-adapter-demos release to main'
