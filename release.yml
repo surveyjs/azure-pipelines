@@ -517,3 +517,36 @@ jobs:
       git push origin refs/remotes/origin/main:refs/heads/release --no-verify
     condition: and(succeeded(), eq(variables['projectsBranch'], 'master'))
     displayName: 'Fast-forward theme-adapter-demos release to main'
+
+
+
+  # Update SurveyJSVersion in the web apps' settings
+  - task: AzureCLI@2
+    condition: and(succeeded(), eq(variables['projectsBranch'], 'master'))
+    displayName: 'Set AppSettings__SurveyJSVersion on surveyjs-io'
+    inputs:
+      azureSubscription: 'SurveyJS Azure'
+      scriptType: pscore
+      scriptLocation: inlineScript
+      workingDirectory: $(Build.SourcesDirectory)/survey-library/packages/survey-core
+      inlineScript: |
+        $ErrorActionPreference = 'Stop'
+        $version = (node -p "require('./package.json').version").Trim()
+        if ([string]::IsNullOrWhiteSpace($version)) {
+          Write-Error "Failed to read version from survey-core/package.json"
+        }
+
+        $app = 'surveyjs-io'
+        $rg = az webapp list --query "[?name=='$app'].resourceGroup | [0]" -o tsv
+        if ([string]::IsNullOrWhiteSpace($rg)) {
+          Write-Error "Resource group for $app not found"
+        }
+
+        az webapp config appsettings set `
+          --name $app `
+          --resource-group $rg `
+          --settings "AppSettings__SurveyJSVersion=$version" `
+          --output none
+        if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set AppSettings__SurveyJSVersion on $app" }
+
+        Write-Host "$app ($rg): AppSettings__SurveyJSVersion=$version"
