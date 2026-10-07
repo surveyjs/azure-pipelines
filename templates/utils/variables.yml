@@ -1,16 +1,4 @@
 variables:
-  ArtifactNameLibraryCore: "SurveyJSLibraryBuildCore"
-  ArtifactNameLibraryReact: "SurveyJSLibraryBuildReact"
-  ArtifactNameLibraryAngular: "SurveyJSLibraryBuildAngular"
-  ArtifactNameLibraryVue: "SurveyJSLibraryBuildVue3"
-  ArtifactNameLibraryJS: "SurveyJSLibraryBuildSurveyUI"
-  ArtifactNameCreatorCore: "SurveyJSCreatorBuildCore"
-  ArtifactNameCreatorAngular: "SurveyJSCreatorBuildAngular"
-  ArtifactNameCreatorReact: "SurveyJSCreatorBuildReact"
-  ArtifactNameCreatorVue: "SurveyJSCreatorBuildVue"
-  ArtifactNameCreatorJS: "SurveyJSCreatorBuildJS"
-  ArtifactNameAnalytics: "SurveyJSAnalyticsBuild"
-  ArtifactNamePDF: "SurveyjsPDFbuild"
   branch: $[coalesce(variables['System.PullRequest.TargetBranch'], variables['Build.SourceBranchName'])]
   isStage: ${{ and(ne(variables['Build.Reason'], 'PullRequest'), in(variables['Build.SourceBranchName'], 'master', 'main', 'V3', 'V2')) }}
   ${{ if eq(variables['Build.SourceBranchName'], 'master') }}:

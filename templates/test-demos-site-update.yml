@@ -1,0 +1,299 @@
+# SurveyJS site update
+
+# GITHUB_TOKEN from the group authenticates the git dependencies npm installs below
+variables:
+  - group: pipeline-secrets
+  - name: solution
+    value: '$(Build.SourcesDirectory)/service/surveyjs.io.sln'
+  - name: buildConfiguration
+    value: 'Debug'
+  - name: devBuilds
+    value: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds'
+
+resources:
+
+  repositories:
+
+    - repository: Library
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/survey-library
+      ref: refs/heads/master
+
+    - repository: Creator
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/survey-creator
+      ref: refs/heads/master
+
+    - repository: Analytics
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/survey-analytics
+      ref: refs/heads/master
+
+    - repository: PDF
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/survey-pdf
+      ref: refs/heads/master
+
+    - repository: CustomWidgets
+      type: github
+      endpoint: github.com_surveyjsdeveloper
+      name: surveyjs/custom-widgets
+      ref: refs/heads/master
+
+
+
+pool:
+  name: 'main-selfhosted'
+
+
+
+jobs:
+- job: SiteUpdate
+  timeoutInMinutes: 120
+  steps:
+
+  - checkout: Library
+    clean: true
+    fetchDepth: 1
+
+  - checkout: Creator
+    clean: true
+    fetchDepth: 1
+
+  - checkout: Analytics
+    clean: true
+    fetchDepth: 1
+
+  - checkout: PDF
+    clean: true
+    fetchDepth: 1
+
+  - checkout: CustomWidgets
+    clean: true
+    fetchDepth: 1
+
+  - checkout: self
+    clean: true
+    fetchDepth: 1
+
+
+
+  - template: utils/npm.yml
+    parameters:
+      directories:
+        - $(Build.SourcesDirectory)/survey-library
+        - $(Build.SourcesDirectory)/survey-library/packages/survey-core
+        - $(Build.SourcesDirectory)/survey-library/packages/survey-react-ui
+        - $(Build.SourcesDirectory)/survey-library/packages/survey-angular-ui
+        - $(Build.SourcesDirectory)/survey-library/packages/survey-vue3-ui
+        - $(Build.SourcesDirectory)/survey-library/packages/survey-js-ui
+        - $(Build.SourcesDirectory)/survey-creator
+        - $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core
+        - $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-react
+        - $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-angular
+        - $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-vue
+        - $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-js
+        - $(Build.SourcesDirectory)/custom-widgets
+        - $(Build.SourcesDirectory)/survey-analytics
+        - $(Build.SourcesDirectory)/survey-pdf
+
+
+
+  - script: |
+      cd packages/survey-core       && npm run build:all && cd -
+      cd packages/survey-react-ui   && npm run build && cd -
+      cd packages/survey-angular-ui && npm run build && cd -
+      cd packages/survey-vue3-ui    && npm run build && cd -
+      cd packages/survey-js-ui      && npm run build && cd -
+    workingDirectory: $(Build.SourcesDirectory)/survey-library
+    displayName: 'Build survey-library'
+
+  - template: utils/copy.yml
+    parameters:
+      items:
+        - source: $(Build.SourcesDirectory)/survey-library/packages/survey-core/build
+          destination: $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-core/node_modules/survey-core
+        - source: $(Build.SourcesDirectory)/survey-library/packages/survey-core/build
+          destination: $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-react/node_modules/survey-core
+        - source: $(Build.SourcesDirectory)/survey-library/packages/survey-react-ui/build
+          destination: $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-react/node_modules/survey-react-ui
+        - source: $(Build.SourcesDirectory)/survey-library/packages/survey-core/build
+          destination: $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-angular/node_modules/survey-core
+        - source: $(Build.SourcesDirectory)/survey-library/packages/survey-angular-ui/build
+          destination: $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-angular/node_modules/survey-angular-ui
+        - source: $(Build.SourcesDirectory)/survey-library/packages/survey-core/build
+          destination: $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-vue/node_modules/survey-core
+        - source: $(Build.SourcesDirectory)/survey-library/packages/survey-vue3-ui/build
+          destination: $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-vue/node_modules/survey-vue3-ui
+        - source: $(Build.SourcesDirectory)/survey-library/packages/survey-core/build
+          destination: $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-js/node_modules/survey-core
+        - source: $(Build.SourcesDirectory)/survey-library/packages/survey-js-ui/build
+          destination: $(Build.SourcesDirectory)/survey-creator/packages/survey-creator-js/node_modules/survey-js-ui
+        - source: $(Build.SourcesDirectory)/survey-library/packages/survey-core/build
+          destination: $(Build.SourcesDirectory)/survey-analytics/node_modules/survey-core
+        - source: $(Build.SourcesDirectory)/survey-library/packages/survey-core/build
+          destination: $(Build.SourcesDirectory)/survey-pdf/node_modules/survey-core
+        - source: $(Build.SourcesDirectory)/survey-library/packages/survey-core/build
+          destination: $(Build.SourcesDirectory)/custom-widgets/node_modules/survey-core
+
+  - script: |
+      cd packages/survey-creator-core    && npm run build:all && cd -
+      cd packages/survey-creator-react   && npm run build && cd -
+      cd packages/survey-creator-angular && npm run build && cd -
+      cd packages/survey-creator-vue     && npm run build && cd -
+      cd packages/survey-creator-js      && npm run build && cd -
+    workingDirectory: $(Build.SourcesDirectory)/survey-creator
+    displayName: 'Build survey-creator'
+
+  - script: npm run build:all
+    workingDirectory: $(Build.SourcesDirectory)/survey-analytics
+    displayName: 'Build survey-analytics'
+
+  - script: npm run build:all
+    workingDirectory: $(Build.SourcesDirectory)/survey-pdf
+    displayName: 'Build survey-pdf'
+
+  - script: npm run build
+    workingDirectory: $(Build.SourcesDirectory)/custom-widgets
+    displayName: 'Build custom-widgets'
+
+
+
+  - pwsh: |
+      $devBuilds = "$(devBuilds)"
+
+      if (Test-Path $devBuilds) {
+        Remove-Item -Path $devBuilds -Recurse -Force
+      }
+      New-Item -ItemType Directory -Force -Path $devBuilds | Out-Null
+
+      $libraryPkgs = @('survey-core','survey-react-ui','survey-angular-ui','survey-vue3-ui','survey-js-ui')
+      foreach ($pkg in $libraryPkgs) {
+        $dest = Join-Path $devBuilds $pkg
+        New-Item -ItemType Directory -Force -Path $dest | Out-Null
+        Copy-Item -Recurse -Force -Path "$(Build.SourcesDirectory)/survey-library/packages/$pkg/build/*" -Destination $dest
+      }
+
+      $creatorPkgs = @('survey-creator-core','survey-creator-react','survey-creator-angular','survey-creator-vue','survey-creator-js')
+      foreach ($pkg in $creatorPkgs) {
+        $dest = Join-Path $devBuilds $pkg
+        New-Item -ItemType Directory -Force -Path $dest | Out-Null
+        Copy-Item -Recurse -Force -Path "$(Build.SourcesDirectory)/survey-creator/packages/$pkg/build/*" -Destination $dest
+      }
+
+      $singleRepos = @(
+        @{ Pkg = 'surveyjs-widgets';   Src = "$(Build.SourcesDirectory)/custom-widgets/package" },
+        @{ Pkg = 'survey-analytics';   Src = "$(Build.SourcesDirectory)/survey-analytics/build" },
+        @{ Pkg = 'survey-pdf';         Src = "$(Build.SourcesDirectory)/survey-pdf/build" }
+      )
+      foreach ($r in $singleRepos) {
+        $dest = Join-Path $devBuilds $r.Pkg
+        New-Item -ItemType Directory -Force -Path $dest | Out-Null
+        Copy-Item -Recurse -Force -Path "$($r.Src)/*" -Destination $dest
+      }
+    displayName: 'Copy builds to DevBuilds'
+
+
+
+  - task: UseDotNet@2
+    displayName: 'Install .NET 8 SDK'
+    inputs:
+      packageType: 'sdk'
+      version: '8.x'
+
+  - task: NodeTool@0
+    displayName: 'Install Node.js'
+    inputs:
+      versionSpec: '20.x'
+
+  # surveyjs.api.Tests references surveyjs.api with SkipSpaBuild=true; building the SPA here and passing
+  # the same property to the whole solution keeps MSBuild from building surveyjs.api twice in parallel.
+  - script: npm install && npm run build
+    displayName: 'Build surveyjs.api SPA'
+    workingDirectory: '$(Build.SourcesDirectory)/service/surveyjs.api/ClientApp'
+
+  - script: npm run test
+    displayName: 'Test surveyjs.api SPA'
+    workingDirectory: '$(Build.SourcesDirectory)/service/surveyjs.api/ClientApp'
+
+  - script: npm install && npm run test
+    displayName: 'Test surveyjs.io.web scripts'
+    workingDirectory: '$(Build.SourcesDirectory)/service/surveyjs.io.web'
+
+  - task: DotNetCoreCLI@2
+    displayName: 'Restore'
+    inputs:
+      command: 'restore'
+      projects: '$(solution)'
+
+  - task: DotNetCoreCLI@2
+    displayName: 'Build'
+    inputs:
+      command: 'build'
+      projects: '$(solution)'
+      arguments: '--configuration $(buildConfiguration) --no-restore -p:SkipSpaBuild=true'
+
+  - task: DotNetCoreCLI@2
+    displayName: 'Test'
+    inputs:
+      command: 'test'
+      projects: '$(solution)'
+      arguments: '--configuration $(buildConfiguration) --no-build'
+
+  - task: DotNetCoreCLI@2
+    displayName: 'Publish'
+    inputs:
+      command: 'publish'
+      publishWebProjects: false
+      projects: '$(Build.SourcesDirectory)/service/surveyjs.io.web/surveyjs.io.web.csproj'
+      arguments: '--configuration $(buildConfiguration) --no-build --output $(Build.ArtifactStagingDirectory)'
+      zipAfterPublish: true
+
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      artifactName: SurveyJSSite
+
+
+
+  - task: AzureCLI@2
+    displayName: 'DevBuilds Upload to Azure Blobs'
+    inputs:
+      azureSubscription: 'SurveyJS Azure V3'
+      scriptType: pscore
+      scriptLocation: inlineScript
+      inlineScript: |
+        $ErrorActionPreference = 'Stop'
+
+        az storage blob delete-batch `
+          --account-name surveyjsdocsstorage `
+          --source 'builds-v3-next' `
+          --auth-mode login
+
+        az storage blob upload-batch `
+          --account-name surveyjsdocsstorage `
+          --destination 'builds-v3-next' `
+          --destination-path 'DevBuilds' `
+          --source "$(devBuilds)/" `
+          --auth-mode login `
+          --overwrite true
+
+  - task: DeleteFiles@1
+    inputs:
+      SourceFolder: '$(devBuilds)'
+      Contents: '**'
+      RemoveDotFiles: true
+
+
+
+  - task: AzureRmWebAppDeployment@4
+    inputs:
+      ConnectionType: 'AzureRM'
+      azureSubscription: 'SJS2'
+      appType: 'webApp'
+      WebAppName: 'surveyjstest'
+      packageForLinux: '$(Build.ArtifactStagingDirectory)/surveyjs.io.web.zip'

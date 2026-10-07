@@ -90,12 +90,6 @@ stages:
     variables:
       LIBRARY_PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
     jobs:
-      - job:
-        displayName: "Build"
-        steps:
-          - template: templates/pdf/build.yml
-            parameters:
-              store: true
       - template: templates/pdf/test.yml
 
 
