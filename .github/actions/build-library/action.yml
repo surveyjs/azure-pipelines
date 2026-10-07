@@ -1,0 +1,82 @@
+name: Build survey-library
+description: >
+  Port of templates/library/<framework>/build.yml (keep in sync while those live): checks
+  survey-library out at the workspace root, switches to a companion PR if one is given, installs,
+  builds survey-core and, with `package`, one UI package; with `artifact-name` uploads that build
+  (the Azure `store: true`).
+inputs:
+  repository:
+    description: survey-library repository; the triggering commit when it is the run's own repo
+    default: surveyjs/survey-library
+  ref:
+    description: Ref to check out; empty = the triggering commit (own repo) or the default branch
+    default: ""
+  pr:
+    description: Companion survey-library PR number, or empty
+    default: ""
+  package:
+    description: UI package under packages/ (survey-react-ui, ...); empty = survey-core only
+    default: ""
+  example:
+    description: "'true' - packages/<package>/example has a package.json of its own"
+    default: "false"
+  artifact-name:
+    description: Upload packages/<package or survey-core>/build under this name; empty = no upload
+    default: ""
+  browsers:
+    description: "'true' - install the system libraries of Playwright's Chromium"
+    default: "false"
+  token:
+    description: PAT (secrets.SURVEYJS_BOT_TOKEN); empty works for everything public
+    default: ""
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v5
+      with:
+        repository: ${{ inputs.repository }}
+        ref: ${{ inputs.ref }}
+        token: ${{ inputs.token || github.token }}
+        persist-credentials: false
+        fetch-depth: 1
+    - uses: surveyjs/azure-pipelines/.github/actions/checkout-pr@gha-migration
+      with:
+        pr: ${{ inputs.pr }}
+        name: survey-library
+        token: ${{ inputs.token }}
+    - id: dirs
+      shell: bash --noprofile --norc {0}
+      env:
+        PACKAGE: ${{ inputs.package }}
+        EXAMPLE: ${{ inputs.example }}
+      run: |
+        {
+          echo 'list<<EOF'
+          echo .
+          echo packages/survey-core
+          if [ -n "$PACKAGE" ]; then echo "packages/$PACKAGE"; fi
+          if [ -n "$PACKAGE" ] && [ "$EXAMPLE" = true ]; then echo "packages/$PACKAGE/example"; fi
+          echo EOF
+        } >> "$GITHUB_OUTPUT"
+    - uses: surveyjs/azure-pipelines/.github/actions/npm-install@gha-migration
+      with:
+        directories: ${{ steps.dirs.outputs.list }}
+        token: ${{ inputs.token }}
+        browsers: ${{ inputs.browsers }}
+    - name: Build Core
+      shell: bash --noprofile --norc {0}
+      working-directory: packages/survey-core
+      run: npm run build:all
+    - name: Build
+      if: inputs.package != ''
+      shell: bash --noprofile --norc {0}
+      working-directory: packages/${{ inputs.package }}
+      run: npm run build
+    - name: Publish build artifacts
+      if: inputs.artifact-name != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: packages/${{ inputs.package || 'survey-core' }}/build
+        overwrite: true
+        retention-days: 14

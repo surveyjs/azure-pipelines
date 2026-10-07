@@ -1,0 +1,29 @@
+name: Switch to the companion PR
+description: >
+  Port of the "Switch to PR $(PR)" step of templates/*/build.yml (keep in sync while those live).
+  Moves the repository at `path` to pull/<pr>/merge, falling back to pull/<pr>/head with a warning
+  when GitHub keeps no merge ref (the PR conflicts with its base). No-op when `pr` is empty.
+inputs:
+  pr:
+    description: Companion PR number, or empty
+    default: ""
+  path:
+    description: Repository directory, relative to the workspace
+    default: "."
+  name:
+    description: Repository name for the log
+    required: true
+  token:
+    description: PAT for the fetch; empty fetches anonymously
+    default: ""
+runs:
+  using: composite
+  steps:
+    - if: inputs.pr != ''
+      shell: bash --noprofile --norc {0}
+      env:
+        PR_NUMBER: ${{ inputs.pr }}
+        REPO_DIR: ${{ inputs.path }}
+        REPO_NAME: ${{ inputs.name }}
+        GIT_TOKEN: ${{ inputs.token }}
+      run: bash "$GITHUB_ACTION_PATH/switch.sh"

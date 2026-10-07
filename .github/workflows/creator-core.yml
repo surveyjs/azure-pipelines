@@ -1,0 +1,49 @@
+# Port of templates/creator/core/test.yml (keep in sync while it lives).
+name: Creator Core Test
+
+on:
+  workflow_call:
+    inputs:
+      creator-ref:
+        description: survey-creator ref - the branch the library PR targets
+        type: string
+        default: ""
+      creator-pr:
+        description: Companion survey-creator PR number, or empty
+        type: string
+        default: ""
+      library-ref:
+        description: survey-library ref; empty = the triggering commit
+        type: string
+        default: ""
+      library-pr:
+        description: Companion survey-library PR number, or empty
+        type: string
+        default: ""
+
+defaults:
+  run:
+    shell: bash --noprofile --norc {0}
+
+jobs:
+  unit:
+    name: Unit & Presets & PostCSS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: surveyjs/azure-pipelines/.github/actions/build-creator@gha-migration
+        with:
+          creator-ref: ${{ inputs.creator-ref }}
+          creator-pr: ${{ inputs.creator-pr }}
+          library-ref: ${{ inputs.library-ref }}
+          library-pr: ${{ inputs.library-pr }}
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+      - name: Unit
+        working-directory: packages/survey-creator-core
+        run: npm run test
+      - name: Presets
+        working-directory: packages/survey-creator-core
+        run: npm run test:presets
+      - name: PostCSS
+        working-directory: packages/survey-creator-core
+        run: npm run test:postcss

@@ -1,0 +1,85 @@
+name: Build a survey-core consumer
+description: >
+  Port of templates/analytics/build.yml and templates/pdf/build.yml - the two are identical (keep
+  in sync while they live): the product at the workspace root, survey-library at survey-library/,
+  each switched to its companion PR if one is given. Builds survey-core, copies it into the
+  product's node_modules and builds the product (`npm run build:all`).
+inputs:
+  repository:
+    description: Product repository (surveyjs/survey-analytics, surveyjs/survey-pdf)
+    required: true
+  name:
+    description: Product name for the log
+    required: true
+  ref:
+    description: Product ref; empty = the triggering commit (own repo) or the default branch
+    default: ""
+  pr:
+    description: Companion product PR number, or empty
+    default: ""
+  library-repository:
+    description: survey-library repository
+    default: surveyjs/survey-library
+  library-ref:
+    description: survey-library ref; empty = the triggering commit (own repo) or the default branch
+    default: ""
+  library-pr:
+    description: Companion survey-library PR number, or empty
+    default: ""
+  browsers:
+    description: "'true' - install the system libraries of Playwright's Chromium"
+    default: "false"
+  token:
+    description: PAT (secrets.SURVEYJS_BOT_TOKEN); empty works for everything public
+    default: ""
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v5
+      with:
+        repository: ${{ inputs.repository }}
+        ref: ${{ inputs.ref }}
+        token: ${{ inputs.token || github.token }}
+        persist-credentials: false
+        fetch-depth: 1
+    - uses: surveyjs/azure-pipelines/.github/actions/checkout-pr@gha-migration
+      with:
+        pr: ${{ inputs.pr }}
+        name: ${{ inputs.name }}
+        token: ${{ inputs.token }}
+    - uses: actions/checkout@v5
+      with:
+        repository: ${{ inputs.library-repository }}
+        ref: ${{ inputs.library-ref }}
+        path: survey-library
+        token: ${{ inputs.token || github.token }}
+        persist-credentials: false
+        fetch-depth: 1
+    - uses: surveyjs/azure-pipelines/.github/actions/checkout-pr@gha-migration
+      with:
+        pr: ${{ inputs.library-pr }}
+        path: survey-library
+        name: survey-library
+        token: ${{ inputs.token }}
+    - uses: surveyjs/azure-pipelines/.github/actions/npm-install@gha-migration
+      with:
+        directories: |
+          survey-library
+          survey-library/packages/survey-core
+          .
+        token: ${{ inputs.token }}
+        browsers: ${{ inputs.browsers }}
+    - name: Build survey-core
+      shell: bash --noprofile --norc {0}
+      working-directory: survey-library/packages/survey-core
+      run: npm run build:all
+    - name: Copy survey-core into node_modules
+      shell: bash --noprofile --norc {0}
+      run: |
+        set -e
+        echo "Copying survey-library/packages/survey-core/build -> node_modules/survey-core"
+        rm -rf node_modules/survey-core
+        cp -r survey-library/packages/survey-core/build node_modules/survey-core
+    - name: Build
+      shell: bash --noprofile --norc {0}
+      run: npm run build:all

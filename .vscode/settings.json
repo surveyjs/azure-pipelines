@@ -1,0 +1,9 @@
+{
+  // The Azure Pipelines extension claims every **/azure-pipelines/**/*.yml - and this repository
+  // is itself named azure-pipelines, so the GitHub Actions files would be checked against the
+  // Azure schema. Hand them back to plain YAML, where the GitHub schemas apply.
+  "files.associations": {
+    "**/.github/workflows/*.yml": "yaml",
+    "**/.github/actions/**/action.yml": "yaml"
+  }
+}

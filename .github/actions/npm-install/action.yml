@@ -1,0 +1,39 @@
+name: npm install
+description: >
+  Port of templates/utils/npm.yml (keep in sync while it lives): sets Node up and runs
+  `npm install` in every listed directory in parallel, then the optional `npm update`s.
+  No cache yet - sub-project D adds it.
+inputs:
+  directories:
+    description: Directories to install, one per line, relative to the workspace
+    required: true
+  update:
+    description: Optional "<directory> <package>" lines to `npm update` after the installs
+    default: ""
+  token:
+    description: PAT for the git dependencies; empty installs anonymously
+    default: ""
+  browsers:
+    description: "'true' - also install the system libraries of Playwright's Chromium"
+    default: "false"
+  node-version:
+    description: Node.js version - the one the Azure agents run (see the inventory)
+    default: "22"
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v5
+      with:
+        node-version: ${{ inputs.node-version }}
+        package-manager-cache: false
+    - shell: bash --noprofile --norc {0}
+      env:
+        NPM_DIRS: ${{ inputs.directories }}
+        NPM_UPDATE: ${{ inputs.update }}
+        GITHUB_TOKEN: ${{ inputs.token }}
+      run: bash "$GITHUB_ACTION_PATH/install.sh"
+    - if: inputs.browsers == 'true'
+      shell: bash --noprofile --norc {0}
+      env:
+        NPM_DIRS: ${{ inputs.directories }}
+      run: bash "$GITHUB_ACTION_PATH/browser-deps.sh"

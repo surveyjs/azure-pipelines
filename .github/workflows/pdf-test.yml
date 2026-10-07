@@ -1,0 +1,44 @@
+# Port of templates/pdf/test.yml (keep in sync while it lives).
+name: PDF Test
+
+on:
+  workflow_call:
+    inputs:
+      pdf-ref:
+        description: survey-pdf ref - the branch the library PR targets
+        type: string
+        default: ""
+      pdf-pr:
+        description: Companion survey-pdf PR number, or empty
+        type: string
+        default: ""
+      library-ref:
+        description: survey-library ref; empty = the triggering commit
+        type: string
+        default: ""
+      library-pr:
+        description: Companion survey-library PR number, or empty
+        type: string
+        default: ""
+
+defaults:
+  run:
+    shell: bash --noprofile --norc {0}
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: surveyjs/azure-pipelines/.github/actions/build-core-consumer@gha-migration
+        with:
+          repository: surveyjs/survey-pdf
+          name: survey-pdf
+          ref: ${{ inputs.pdf-ref }}
+          pr: ${{ inputs.pdf-pr }}
+          library-ref: ${{ inputs.library-ref }}
+          library-pr: ${{ inputs.library-pr }}
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+      - name: Test
+        run: npm run test

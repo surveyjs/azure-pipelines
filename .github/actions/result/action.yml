@@ -1,0 +1,16 @@
+name: Library CI result
+description: >
+  The single required status check of the library workflow: fails when a job it needs failed or
+  was cancelled. A job skipped by its own condition (scr_update, options on a push) is fine.
+inputs:
+  needs:
+    description: toJSON(needs) of the calling job
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash --noprofile --norc {0}
+      env:
+        # Through the environment, never interpolated: the needs outputs carry PR-title text.
+        NEEDS: ${{ inputs.needs }}
+      run: bash "$GITHUB_ACTION_PATH/check.sh"

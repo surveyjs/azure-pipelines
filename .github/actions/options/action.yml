@@ -1,0 +1,32 @@
+name: Options
+description: >
+  Port of templates/utils/pr_title_parser.yml + commit_message_parser.yml (keep in sync while
+  they live). Exports the [name: value] tags of the PR title and the [name] / [name: value] tags
+  of the PR head commit's message. Outside a pull_request event the outputs are {}, {} and "".
+outputs:
+  pr_tags:
+    description: JSON object of the PR title's tags, names upper-cased ({"CREATOR":"1234"})
+    value: ${{ steps.parse.outputs.pr_tags }}
+  commit_tags:
+    description: JSON object of the commit message's tags; a bare [name] is "true"
+    value: ${{ steps.parse.outputs.commit_tags }}
+  scr_update:
+    description: commit_tags.SCR_UPDATE, empty when absent
+    value: ${{ steps.parse.outputs.scr_update }}
+runs:
+  using: composite
+  steps:
+    - shell: bash --noprofile --norc {0}
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      run: bash "$GITHUB_ACTION_PATH/fetch.sh"
+    - id: parse
+      shell: bash --noprofile --norc {0}
+      env:
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+        PR_TITLE_FILE: ${{ runner.temp }}/options/title.txt
+        COMMIT_MESSAGE_FILE: ${{ runner.temp }}/options/commit.txt
+      run: bash "$GITHUB_ACTION_PATH/parse.sh"

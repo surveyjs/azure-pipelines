@@ -1,0 +1,37 @@
+# Port of templates/library/core/test.yml (keep in sync while it lives).
+name: Library Core Test
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: survey-library ref; empty = the triggering commit
+        type: string
+        default: ""
+      pr:
+        description: Companion survey-library PR number, or empty
+        type: string
+        default: ""
+
+defaults:
+  run:
+    shell: bash --noprofile --norc {0}
+
+jobs:
+  unit-postcss:
+    name: Unit PostCSS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: surveyjs/azure-pipelines/.github/actions/build-library@gha-migration
+        with:
+          ref: ${{ inputs.ref }}
+          pr: ${{ inputs.pr }}
+          artifact-name: SurveyJSLibraryBuildCore
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+      - name: Tests Unit
+        working-directory: packages/survey-core
+        run: npm run test
+      - name: Tests CSS
+        working-directory: packages/survey-core
+        run: npm run test:postcss

@@ -1,0 +1,156 @@
+# Port of templates/library/react/test.yml (keep in sync while it lives).
+name: Library React Test
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: survey-library ref; empty = the triggering commit
+        type: string
+        default: ""
+      pr:
+        description: Companion survey-library PR number, or empty
+        type: string
+        default: ""
+      scr-update:
+        description: Non-empty ([scr_update] in the commit message) - only regenerate the screenshots
+        type: string
+        default: ""
+
+defaults:
+  run:
+    shell: bash --noprofile --norc {0}
+
+jobs:
+  markup:
+    name: Markup
+    if: inputs.scr-update == ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: surveyjs/azure-pipelines/.github/actions/build-library@gha-migration
+        with:
+          ref: ${{ inputs.ref }}
+          pr: ${{ inputs.pr }}
+          package: survey-react-ui
+          artifact-name: SurveyJSLibraryBuildReact
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+      - name: Test Markup
+        working-directory: packages/survey-react-ui
+        run: npm run test
+
+  a11y-e2e:
+    name: A11Y & E2E
+    if: inputs.scr-update == ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: surveyjs/azure-pipelines/.github/actions/build-library@gha-migration
+        with:
+          ref: ${{ inputs.ref }}
+          pr: ${{ inputs.pr }}
+          package: survey-react-ui
+          browsers: "true"
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+      # the a11y script pins --reporter dot, so junit is appended back here and pointed at
+      # its own file to avoid clobbering the e2e results written in the same job
+      - name: Test A11Y
+        working-directory: packages/survey-react-ui
+        env:
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: ${{ github.workspace }}/packages/survey-react-ui/test-results/a11y-junit-results.xml
+        run: npm run accessibility-tests:ci -- --reporter dot,junit
+      - name: Publish A11Y results
+        if: ${{ !cancelled() }}
+        uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
+        with:
+          path: packages/survey-react-ui/test-results
+          artifact-name: Library_React_A11Y
+          junit-file: a11y-junit-results.xml
+          title: React A11Y Tests
+      - name: Test E2E
+        working-directory: packages/survey-react-ui
+        run: npm run e2e:ci
+      - name: Publish E2E results
+        if: ${{ !cancelled() }}
+        uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
+        with:
+          path: packages/survey-react-ui/test-results
+          artifact-name: Library_React_E2E
+          junit-file: e2e-junit-results.xml
+          title: React E2E Tests
+
+  scr:
+    name: SCR Test
+    if: inputs.scr-update == ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: surveyjs/azure-pipelines/.github/actions/build-library@gha-migration
+        with:
+          ref: ${{ inputs.ref }}
+          pr: ${{ inputs.pr }}
+          package: survey-react-ui
+          browsers: "true"
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+      - name: Test SCR
+        working-directory: packages/survey-react-ui
+        run: npm run scr:ci
+      - name: Publish SCR results
+        if: ${{ !cancelled() }}
+        uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
+        with:
+          path: packages/survey-react-ui/test-results
+          artifact-name: Library_React_SCR
+          junit-file: e2e-junit-results.xml
+          title: React SCR Tests
+
+  scr-update:
+    name: SCR Update
+    # Pushes back to the PR branch, so only for a PR from this repository.
+    if: inputs.scr-update != '' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: surveyjs/azure-pipelines/.github/actions/build-library@gha-migration
+        with:
+          ref: ${{ inputs.ref }}
+          pr: ${{ inputs.pr }}
+          package: survey-react-ui
+          browsers: "true"
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+      - name: Update SCR
+        working-directory: packages/survey-react-ui
+        run: npm run scr:update
+      - name: Commit updated screenshots
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          TOKEN: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.email "surveyjs.org@gmail.com"
+          git config user.name "surveyjsdeveloper"
+          git add screenshots
+          TOTAL="$(git diff --cached --name-only | wc -l | tr -d ' ')"
+          git commit --allow-empty -m "updated $TOTAL screenshots" --no-verify
+          # The PAT goes to git through the environment only - never into .git/config. The push
+          # must be the PAT's: a push with the workflow token would not start a new CI run.
+          AUTH="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)"
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.https://github.com/.extraheader" GIT_CONFIG_VALUE_0="$AUTH"
+          git fetch origin "$HEAD_REF"
+          git rebase --onto "origin/$HEAD_REF" HEAD~1
+          # The new baselines, for review and - in the shadow period - to take them from here.
+          mkdir -p "$RUNNER_TEMP/scr-update"
+          git diff --name-only --diff-filter=AM HEAD~1 HEAD -- screenshots | while IFS= read -r F; do
+            mkdir -p "$RUNNER_TEMP/scr-update/$(dirname "$F")"
+            cp "$F" "$RUNNER_TEMP/scr-update/$F"
+          done
+          # SHADOW-OFF: git push --no-verify origin "HEAD:$HEAD_REF"
+      - name: Publish updated screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Library_SCR_Update
+          path: ${{ runner.temp }}/scr-update
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 14

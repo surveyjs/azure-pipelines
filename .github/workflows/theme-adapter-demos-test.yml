@@ -1,0 +1,90 @@
+# Port of templates/theme-adapter-demos/test.yml (keep in sync while it lives): screenshot tests
+# of the theme-adapter-demos apps, one job per app, against locally built survey-* packages.
+name: Theme Adapter Demos
+
+on:
+  workflow_call:
+    inputs:
+      demos-ref:
+        description: theme-adapter-demos ref; empty = its default branch (main)
+        type: string
+        default: ""
+      demos-pr:
+        description: Companion theme-adapter-demos PR number, or empty
+        type: string
+        default: ""
+      library-ref:
+        description: survey-library ref; empty = the triggering commit
+        type: string
+        default: ""
+      library-pr:
+        description: Companion survey-library PR number, or empty
+        type: string
+        default: ""
+      creator-ref:
+        description: survey-creator ref - the branch the library PR targets
+        type: string
+        default: ""
+      creator-pr:
+        description: Companion survey-creator PR number, or empty
+        type: string
+        default: ""
+      scr-blocking:
+        description: false - a failed screenshot job does not fail the workflow (the baselines belong to theme-adapter-demos' own pipeline)
+        type: boolean
+        default: true
+
+defaults:
+  run:
+    shell: bash --noprofile --norc {0}
+
+jobs:
+  scr:
+    name: "SCR: ${{ matrix.app }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [bootstrap, shadcn, mui]
+    continue-on-error: ${{ !inputs.scr-blocking }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: surveyjs/azure-pipelines/.github/actions/build-theme-adapter-demos@gha-migration
+        with:
+          demos-ref: ${{ inputs.demos-ref }}
+          demos-pr: ${{ inputs.demos-pr }}
+          library-ref: ${{ inputs.library-ref }}
+          library-pr: ${{ inputs.library-pr }}
+          creator-ref: ${{ inputs.creator-ref }}
+          creator-pr: ${{ inputs.creator-pr }}
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+      - name: Playwright install
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_GC: "1"
+        run: npx playwright install chromium
+      - name: Test SCR ${{ matrix.app }}
+        env:
+          APP: ${{ matrix.app }}
+          CI: "true"
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: ${{ github.workspace }}/test-results/scr-${{ matrix.app }}-junit.xml
+          PLAYWRIGHT_HTML_OUTPUT_DIR: ${{ github.workspace }}/screenshot-tests/.report
+        run: npm run "test:scr:$APP" -- --reporter=list,junit,html
+      - name: Publish SCR results
+        if: ${{ !cancelled() }}
+        uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
+        with:
+          path: test-results
+          artifact-name: ThemeAdapterDemos_SCR_${{ matrix.app }}
+          junit-file: scr-${{ matrix.app }}-junit.xml
+          title: Theme Adapter Demos SCR ${{ matrix.app }}
+      - name: Publish SCR report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ThemeAdapterDemos_SCR_Report_${{ matrix.app }}
+          path: screenshot-tests/.report
+          # .report is a hidden directory: upload-artifact skips hidden paths unless told otherwise
+          include-hidden-files: true
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 14

@@ -1,0 +1,77 @@
+# CI of this repository: unit tests of the action scripts, actionlint over the workflows, and a
+# smoke run of every leaf composite action - the runner validates an action.yml only when it runs
+# it, and actionlint does not look into composite actions.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash --noprofile --norc {0}
+
+jobs:
+  unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Unit tests
+        run: bash tests/run.sh
+
+  actionlint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: actionlint
+        run: |
+          set -e
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint -color
+
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: result
+        uses: ./.github/actions/result
+        with:
+          needs: '{"lint":{"result":"success"},"options":{"result":"skipped"}}'
+      - name: checkout-pr (no PR - must be a no-op)
+        uses: ./.github/actions/checkout-pr
+        with:
+          name: azure-pipelines
+      - name: options
+        id: options
+        uses: ./.github/actions/options
+      - name: options outputs outside a PR
+        if: github.event_name == 'push'
+        env:
+          PR_TAGS: ${{ steps.options.outputs.pr_tags }}
+          SCR_UPDATE: ${{ steps.options.outputs.scr_update }}
+        run: |
+          [ "$PR_TAGS" = '{}' ] && [ -z "$SCR_UPDATE" ] || { echo "::error::unexpected options outputs on push"; exit 1; }
+      - name: npm-install
+        uses: ./.github/actions/npm-install
+        with:
+          directories: tests/fixtures/npm-smoke
+      - name: publish-test-results
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/publish-test-results
+        with:
+          path: tests/fixtures/junit
+          artifact-name: Smoke_Results
+          junit-file: smoke-junit.xml
+          title: Smoke Tests

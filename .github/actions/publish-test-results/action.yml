@@ -1,0 +1,40 @@
+name: Publish test results
+description: >
+  Port of the PublishBuildArtifacts(test-results) + PublishTestResults@2 pair of the Azure test
+  templates. Uploads the results directory as an artifact and reports the JUnit file as annotations
+  plus a job summary (annotate_only: no checks permission, so it works on fork PRs too). Call it
+  with `if: ${{ !cancelled() }}` - Azure ran these with always() / succeededOrFailed().
+inputs:
+  path:
+    description: Directory to upload, relative to the workspace
+    required: true
+  artifact-name:
+    description: Artifact name - the Azure ArtifactName
+    required: true
+  junit-file:
+    description: JUnit file name inside `path`; empty uploads without a report
+    default: ""
+  title:
+    description: Report title - the Azure testRunTitle
+    default: "Tests"
+runs:
+  using: composite
+  steps:
+    - if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ inputs.path }}
+        if-no-files-found: ignore
+        overwrite: true
+        retention-days: 14
+    - if: ${{ !cancelled() && inputs.junit-file != '' }}
+      uses: mikepenz/action-junit-report@v5
+      with:
+        report_paths: ${{ inputs.path }}/${{ inputs.junit-file }}
+        check_name: ${{ inputs.title }}
+        annotate_only: true
+        detailed_summary: true
+        include_passed: false
+        require_tests: false
+        fail_on_failure: true

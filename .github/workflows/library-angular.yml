@@ -1,0 +1,94 @@
+# Port of templates/library/angular/test.yml (keep in sync while it lives).
+name: Library Angular Test
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: survey-library ref; empty = the triggering commit
+        type: string
+        default: ""
+      pr:
+        description: Companion survey-library PR number, or empty
+        type: string
+        default: ""
+
+defaults:
+  run:
+    shell: bash --noprofile --norc {0}
+
+jobs:
+  a11y-e2e:
+    name: A11Y & E2E
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: surveyjs/azure-pipelines/.github/actions/build-library@gha-migration
+        with:
+          ref: ${{ inputs.ref }}
+          pr: ${{ inputs.pr }}
+          package: survey-angular-ui
+          example: "true"
+          artifact-name: SurveyJSLibraryBuildAngular
+          browsers: "true"
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+      - name: Build Example
+        working-directory: packages/survey-angular-ui
+        run: npm run build:example:prod
+      # the a11y script pins --reporter dot, so junit is appended back here and pointed at
+      # its own file to avoid clobbering the e2e results written in the same job
+      - name: Test A11Y
+        working-directory: packages/survey-angular-ui
+        env:
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: ${{ github.workspace }}/packages/survey-angular-ui/test-results/a11y-junit-results.xml
+        run: npm run accessibility-tests:ci -- --reporter dot,junit
+      - name: Publish A11Y results
+        if: ${{ !cancelled() }}
+        uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
+        with:
+          path: packages/survey-angular-ui/test-results
+          artifact-name: Library_Angular_A11Y
+          junit-file: a11y-junit-results.xml
+          title: Angular A11Y Tests
+      - name: Test E2E
+        working-directory: packages/survey-angular-ui
+        run: npm run e2e:ci
+      - name: Publish E2E results
+        if: ${{ !cancelled() }}
+        uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
+        with:
+          path: packages/survey-angular-ui/test-results
+          artifact-name: Library_Angular_E2E
+          junit-file: e2e-junit-results.xml
+          title: Angular E2E Tests
+
+  markup-scr:
+    name: Markup & SCR
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: surveyjs/azure-pipelines/.github/actions/build-library@gha-migration
+        with:
+          ref: ${{ inputs.ref }}
+          pr: ${{ inputs.pr }}
+          package: survey-angular-ui
+          example: "true"
+          browsers: "true"
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+      - name: Build Example
+        working-directory: packages/survey-angular-ui
+        run: npm run build:example:prod
+      - name: Test Markup
+        working-directory: packages/survey-angular-ui
+        run: npm run test
+      - name: Test SCR
+        working-directory: packages/survey-angular-ui
+        run: npm run scr:ci
+      - name: Publish SCR results
+        if: ${{ !cancelled() }}
+        uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
+        with:
+          path: packages/survey-angular-ui/test-results
+          artifact-name: Library_Angular_SCR
+          junit-file: e2e-junit-results.xml
+          title: Angular SCR Tests

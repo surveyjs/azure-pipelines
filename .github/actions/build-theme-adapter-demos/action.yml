@@ -1,0 +1,143 @@
+# Port of templates/theme-adapter-demos/build.yml (keep in sync while it lives).
+#
+# Checks out theme-adapter-demos plus survey-library / survey-creator, builds all four survey-*
+# packages from those sources and replaces the demos' installed copies with them. Every pipeline
+# that runs the demos does this - the apps are always exercised against the libraries, never
+# against the published packages.
+#
+# The substitution is all-or-nothing: the demos' builder page runs survey-creator-react, and a
+# published creator is compiled against a published survey-core, so mixing a local core with an
+# npm creator risks an API mismatch.
+#
+# Layout matters: the creator packages declare their deps as relative paths
+# (`../../../survey-library/packages/survey-core/build`), which resolve only when survey-library
+# sits next to the survey-creator root - hence survey-library/ and survey-creator/ side by side
+# under the demos checkout.
+#
+# SURVEYJS_LIBV3 is deliberately NOT set: without it the demos resolve survey-* from node_modules,
+# which is exactly what this action overwrites - for the webpack bundle and for the CSS adapters
+# that `prebuild` copies out of node_modules/survey-core alike.
+name: Build theme-adapter-demos
+description: >
+  theme-adapter-demos at the workspace root with survey-library/ and survey-creator/ next to each
+  other, every one switched to its companion PR if one is given; the four survey-* packages are
+  built from source and copied over the demos' installed ones.
+inputs:
+  demos-repository:
+    description: theme-adapter-demos repository
+    default: surveyjs/theme-adapter-demos
+  demos-ref:
+    description: theme-adapter-demos ref; empty = the triggering commit (own repo) or the default branch
+    default: ""
+  demos-pr:
+    description: Companion theme-adapter-demos PR number, or empty
+    default: ""
+  library-repository:
+    description: survey-library repository
+    default: surveyjs/survey-library
+  library-ref:
+    description: survey-library ref; empty = the triggering commit (own repo) or the default branch
+    default: ""
+  library-pr:
+    description: Companion survey-library PR number, or empty
+    default: ""
+  creator-repository:
+    description: survey-creator repository
+    default: surveyjs/survey-creator
+  creator-ref:
+    description: survey-creator ref; empty = the triggering commit (own repo) or the default branch
+    default: ""
+  creator-pr:
+    description: Companion survey-creator PR number, or empty
+    default: ""
+  token:
+    description: PAT (secrets.SURVEYJS_BOT_TOKEN); empty works for everything public
+    default: ""
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v5
+      with:
+        repository: ${{ inputs.demos-repository }}
+        ref: ${{ inputs.demos-ref }}
+        token: ${{ inputs.token || github.token }}
+        persist-credentials: false
+        fetch-depth: 1
+    - uses: surveyjs/azure-pipelines/.github/actions/checkout-pr@gha-migration
+      with:
+        pr: ${{ inputs.demos-pr }}
+        name: theme-adapter-demos
+        token: ${{ inputs.token }}
+    - uses: actions/checkout@v5
+      with:
+        repository: ${{ inputs.library-repository }}
+        ref: ${{ inputs.library-ref }}
+        path: survey-library
+        token: ${{ inputs.token || github.token }}
+        persist-credentials: false
+        fetch-depth: 1
+    - uses: surveyjs/azure-pipelines/.github/actions/checkout-pr@gha-migration
+      with:
+        pr: ${{ inputs.library-pr }}
+        path: survey-library
+        name: survey-library
+        token: ${{ inputs.token }}
+    - uses: actions/checkout@v5
+      with:
+        repository: ${{ inputs.creator-repository }}
+        ref: ${{ inputs.creator-ref }}
+        path: survey-creator
+        token: ${{ inputs.token || github.token }}
+        persist-credentials: false
+        fetch-depth: 1
+    - uses: surveyjs/azure-pipelines/.github/actions/checkout-pr@gha-migration
+      with:
+        pr: ${{ inputs.creator-pr }}
+        path: survey-creator
+        name: survey-creator
+        token: ${{ inputs.token }}
+    - uses: surveyjs/azure-pipelines/.github/actions/npm-install@gha-migration
+      with:
+        directories: |
+          survey-library
+          survey-library/packages/survey-core
+          survey-library/packages/survey-react-ui
+          survey-creator
+          survey-creator/packages/survey-creator-core
+          survey-creator/packages/survey-creator-react
+          .
+        token: ${{ inputs.token }}
+        browsers: "true"
+    - name: Build survey-core
+      shell: bash --noprofile --norc {0}
+      working-directory: survey-library/packages/survey-core
+      run: npm run build:all
+    - name: Build survey-react-ui
+      shell: bash --noprofile --norc {0}
+      working-directory: survey-library/packages/survey-react-ui
+      run: npm run build
+    - name: Copy the survey-library builds into survey-creator
+      shell: bash --noprofile --norc {0}
+      run: |
+        set -e
+        copy() { echo "Copying $1 -> $2"; rm -rf "$2"; cp -r "$1" "$2"; }
+        copy survey-library/packages/survey-core/build survey-creator/packages/survey-creator-core/node_modules/survey-core
+        copy survey-library/packages/survey-core/build survey-creator/packages/survey-creator-react/node_modules/survey-core
+        copy survey-library/packages/survey-react-ui/build survey-creator/packages/survey-creator-react/node_modules/survey-react-ui
+    - name: Build survey-creator-core
+      shell: bash --noprofile --norc {0}
+      working-directory: survey-creator/packages/survey-creator-core
+      run: npm run build:all
+    - name: Build survey-creator-react
+      shell: bash --noprofile --norc {0}
+      working-directory: survey-creator/packages/survey-creator-react
+      run: npm run build
+    - name: Copy the four builds into the demos
+      shell: bash --noprofile --norc {0}
+      run: |
+        set -e
+        copy() { echo "Copying $1 -> $2"; rm -rf "$2"; cp -r "$1" "$2"; }
+        copy survey-library/packages/survey-core/build node_modules/survey-core
+        copy survey-library/packages/survey-react-ui/build node_modules/survey-react-ui
+        copy survey-creator/packages/survey-creator-core/build node_modules/survey-creator-core
+        copy survey-creator/packages/survey-creator-react/build node_modules/survey-creator-react

@@ -1,0 +1,125 @@
+name: Build survey-creator
+description: >
+  Port of templates/creator/<framework>/build.yml (keep in sync while those live): survey-creator
+  at the workspace root, survey-library at survey-library/ next to its packages, each switched to
+  its companion PR if one is given. Builds survey-core (+ the library UI package), copies those
+  builds into the creator packages' node_modules, then builds survey-creator-core (+ the creator
+  UI package).
+inputs:
+  creator-repository:
+    description: survey-creator repository
+    default: surveyjs/survey-creator
+  creator-ref:
+    description: survey-creator ref; empty = the triggering commit (own repo) or the default branch
+    default: ""
+  creator-pr:
+    description: Companion survey-creator PR number, or empty
+    default: ""
+  library-repository:
+    description: survey-library repository
+    default: surveyjs/survey-library
+  library-ref:
+    description: survey-library ref; empty = the triggering commit (own repo) or the default branch
+    default: ""
+  library-pr:
+    description: Companion survey-library PR number, or empty
+    default: ""
+  library-ui:
+    description: Library UI package (survey-react-ui, ...); empty = survey-core only
+    default: ""
+  creator-ui:
+    description: Creator UI package (survey-creator-react, ...); empty = survey-creator-core only
+    default: ""
+  example:
+    description: Example app directory with its own package.json, relative to the workspace
+    default: ""
+  browsers:
+    description: "'true' - install the system libraries of Playwright's Chromium"
+    default: "false"
+  token:
+    description: PAT (secrets.SURVEYJS_BOT_TOKEN); empty works for everything public
+    default: ""
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v5
+      with:
+        repository: ${{ inputs.creator-repository }}
+        ref: ${{ inputs.creator-ref }}
+        token: ${{ inputs.token || github.token }}
+        persist-credentials: false
+        fetch-depth: 1
+    - uses: surveyjs/azure-pipelines/.github/actions/checkout-pr@gha-migration
+      with:
+        pr: ${{ inputs.creator-pr }}
+        name: survey-creator
+        token: ${{ inputs.token }}
+    - uses: actions/checkout@v5
+      with:
+        repository: ${{ inputs.library-repository }}
+        ref: ${{ inputs.library-ref }}
+        path: survey-library
+        token: ${{ inputs.token || github.token }}
+        persist-credentials: false
+        fetch-depth: 1
+    - uses: surveyjs/azure-pipelines/.github/actions/checkout-pr@gha-migration
+      with:
+        pr: ${{ inputs.library-pr }}
+        path: survey-library
+        name: survey-library
+        token: ${{ inputs.token }}
+    - id: dirs
+      shell: bash --noprofile --norc {0}
+      env:
+        LIBRARY_UI: ${{ inputs.library-ui }}
+        CREATOR_UI: ${{ inputs.creator-ui }}
+        EXAMPLE: ${{ inputs.example }}
+      run: |
+        {
+          echo 'list<<EOF'
+          echo survey-library
+          echo survey-library/packages/survey-core
+          if [ -n "$LIBRARY_UI" ]; then echo "survey-library/packages/$LIBRARY_UI"; fi
+          echo .
+          echo packages/survey-creator-core
+          if [ -n "$CREATOR_UI" ]; then echo "packages/$CREATOR_UI"; fi
+          if [ -n "$EXAMPLE" ]; then echo "$EXAMPLE"; fi
+          echo EOF
+        } >> "$GITHUB_OUTPUT"
+    - uses: surveyjs/azure-pipelines/.github/actions/npm-install@gha-migration
+      with:
+        directories: ${{ steps.dirs.outputs.list }}
+        token: ${{ inputs.token }}
+        browsers: ${{ inputs.browsers }}
+    - name: Build survey-core
+      shell: bash --noprofile --norc {0}
+      working-directory: survey-library/packages/survey-core
+      run: npm run build:all
+    - name: Build ${{ inputs.library-ui }}
+      if: inputs.library-ui != ''
+      shell: bash --noprofile --norc {0}
+      working-directory: survey-library/packages/${{ inputs.library-ui }}
+      run: npm run build
+    - name: Copy the survey-library builds into node_modules
+      shell: bash --noprofile --norc {0}
+      env:
+        LIBRARY_UI: ${{ inputs.library-ui }}
+        CREATOR_UI: ${{ inputs.creator-ui }}
+      run: |
+        set -e
+        copy() { echo "Copying $1 -> $2"; rm -rf "$2"; cp -r "$1" "$2"; }
+        CORE=survey-library/packages/survey-core/build
+        copy "$CORE" packages/survey-creator-core/node_modules/survey-core
+        if [ -n "$CREATOR_UI" ]; then
+          copy "$CORE" "packages/$CREATOR_UI/node_modules/survey-core"
+          copy "survey-library/packages/$LIBRARY_UI/build" "packages/$CREATOR_UI/node_modules/$LIBRARY_UI"
+        fi
+    - name: Build Core
+      shell: bash --noprofile --norc {0}
+      working-directory: packages/survey-creator-core
+      run: npm run build:all
+    - name: Build
+      if: inputs.creator-ui != ''
+      shell: bash --noprofile --norc {0}
+      working-directory: packages/${{ inputs.creator-ui }}
+      run: npm run build

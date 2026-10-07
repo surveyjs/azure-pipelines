@@ -1,0 +1,204 @@
+# Port of library.yml (keep in sync while it lives): the survey-library CI. Called by
+# survey-library's .github/workflows/library.yml. Sub-project A: Lint, Options and the test jobs;
+# Staging and Backport come with sub-projects B and C.
+#
+# The needs and conditions copy the Azure stages. GitHub skips a job whose `needs` was skipped
+# unless its `if` says otherwise - hence `!cancelled() && needs.options.result != 'failure'` on
+# the test jobs: options runs on pull_request only and is skipped on a push.
+name: Library
+
+on:
+  workflow_call:
+    inputs:
+      cross-repo-scr-blocking:
+        description: >
+          false - failed screenshot jobs of creator, analytics and theme-adapter-demos do not fail the
+          run: their baselines belong to those repositories' own pipelines until they move here.
+        type: boolean
+        default: true
+
+defaults:
+  run:
+    shell: bash --noprofile --norc {0}
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: surveyjs/azure-pipelines/.github/actions/npm-install@gha-migration
+        with:
+          directories: .
+          # eslint-plugin-surveyjs comes from a git URL (surveyjs/eslint-surveyjs): take its tip
+          update: . eslint-plugin-surveyjs
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+      - name: Lint
+        run: npm run lint
+
+  options:
+    name: Options
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      scr_update: ${{ steps.options.outputs.scr_update }}
+      pr_tags: ${{ steps.options.outputs.pr_tags }}
+    steps:
+      - id: options
+        uses: surveyjs/azure-pipelines/.github/actions/options@gha-migration
+
+  library-core:
+    name: Library Core Test
+    needs: options
+    if: ${{ !cancelled() && needs.options.result != 'failure' && (needs.options.outputs.scr_update || '') == '' }}
+    uses: surveyjs/azure-pipelines/.github/workflows/library-core.yml@gha-migration
+    secrets: inherit
+
+  library-react:
+    name: Library React Test
+    needs: options
+    if: ${{ !cancelled() && needs.options.result != 'failure' }}
+    uses: surveyjs/azure-pipelines/.github/workflows/library-react.yml@gha-migration
+    with:
+      scr-update: ${{ needs.options.outputs.scr_update || '' }}
+    secrets: inherit
+
+  library-angular:
+    name: Library Angular Test
+    needs: options
+    if: ${{ !cancelled() && needs.options.result != 'failure' && (needs.options.outputs.scr_update || '') == '' }}
+    uses: surveyjs/azure-pipelines/.github/workflows/library-angular.yml@gha-migration
+    secrets: inherit
+
+  library-vue:
+    name: Library Vue Test
+    needs: options
+    if: ${{ !cancelled() && needs.options.result != 'failure' && (needs.options.outputs.scr_update || '') == '' }}
+    uses: surveyjs/azure-pipelines/.github/workflows/library-vue.yml@gha-migration
+    secrets: inherit
+
+  library-js:
+    name: Library JS (Preact ShadowDOM BoxSizing) Test
+    needs: options
+    if: ${{ !cancelled() && needs.options.result != 'failure' && (needs.options.outputs.scr_update || '') == '' }}
+    uses: surveyjs/azure-pipelines/.github/workflows/library-js.yml@gha-migration
+    secrets: inherit
+
+  creator-core:
+    name: Creator Core Test
+    needs: options
+    if: ${{ !cancelled() && needs.options.result != 'failure' && (needs.options.outputs.scr_update || '') == '' }}
+    uses: surveyjs/azure-pipelines/.github/workflows/creator-core.yml@gha-migration
+    with:
+      creator-ref: ${{ github.base_ref || github.ref_name }}
+      creator-pr: ${{ fromJSON(needs.options.outputs.pr_tags || '{}').CREATOR || '' }}
+    secrets: inherit
+
+  creator-react:
+    name: Creator React Test
+    needs: options
+    if: ${{ !cancelled() && needs.options.result != 'failure' && (needs.options.outputs.scr_update || '') == '' }}
+    uses: surveyjs/azure-pipelines/.github/workflows/creator-react.yml@gha-migration
+    with:
+      creator-ref: ${{ github.base_ref || github.ref_name }}
+      creator-pr: ${{ fromJSON(needs.options.outputs.pr_tags || '{}').CREATOR || '' }}
+      scr-blocking: ${{ inputs.cross-repo-scr-blocking }}
+    secrets: inherit
+
+  creator-angular:
+    name: Creator Angular Test
+    needs: options
+    if: ${{ !cancelled() && needs.options.result != 'failure' && (needs.options.outputs.scr_update || '') == '' }}
+    uses: surveyjs/azure-pipelines/.github/workflows/creator-angular.yml@gha-migration
+    with:
+      creator-ref: ${{ github.base_ref || github.ref_name }}
+      creator-pr: ${{ fromJSON(needs.options.outputs.pr_tags || '{}').CREATOR || '' }}
+      scr-blocking: ${{ inputs.cross-repo-scr-blocking }}
+    secrets: inherit
+
+  creator-vue:
+    name: Creator Vue Test
+    needs: options
+    if: ${{ !cancelled() && needs.options.result != 'failure' && (needs.options.outputs.scr_update || '') == '' }}
+    uses: surveyjs/azure-pipelines/.github/workflows/creator-vue.yml@gha-migration
+    with:
+      creator-ref: ${{ github.base_ref || github.ref_name }}
+      creator-pr: ${{ fromJSON(needs.options.outputs.pr_tags || '{}').CREATOR || '' }}
+      scr-blocking: ${{ inputs.cross-repo-scr-blocking }}
+    secrets: inherit
+
+  creator-js:
+    name: Creator JS (Preact ShadowDOM BoxSizing) Test
+    needs: options
+    if: ${{ !cancelled() && needs.options.result != 'failure' && (needs.options.outputs.scr_update || '') == '' }}
+    uses: surveyjs/azure-pipelines/.github/workflows/creator-js.yml@gha-migration
+    with:
+      creator-ref: ${{ github.base_ref || github.ref_name }}
+      creator-pr: ${{ fromJSON(needs.options.outputs.pr_tags || '{}').CREATOR || '' }}
+      scr-blocking: ${{ inputs.cross-repo-scr-blocking }}
+    secrets: inherit
+
+  analytics:
+    name: Analytics Test
+    needs: options
+    if: ${{ !cancelled() && needs.options.result != 'failure' && (needs.options.outputs.scr_update || '') == '' }}
+    uses: surveyjs/azure-pipelines/.github/workflows/analytics-test.yml@gha-migration
+    with:
+      analytics-ref: ${{ github.base_ref || github.ref_name }}
+      analytics-pr: ${{ fromJSON(needs.options.outputs.pr_tags || '{}').ANALYTICS || '' }}
+      scr-blocking: ${{ inputs.cross-repo-scr-blocking }}
+    secrets: inherit
+
+  pdf:
+    name: PDF Test
+    needs: options
+    if: ${{ !cancelled() && needs.options.result != 'failure' && (needs.options.outputs.scr_update || '') == '' }}
+    uses: surveyjs/azure-pipelines/.github/workflows/pdf-test.yml@gha-migration
+    with:
+      pdf-ref: ${{ github.base_ref || github.ref_name }}
+      pdf-pr: ${{ fromJSON(needs.options.outputs.pr_tags || '{}').PDF || '' }}
+    secrets: inherit
+
+  theme-adapter-demos:
+    name: Theme Adapter Demos
+    needs: options
+    if: ${{ !cancelled() && needs.options.result != 'failure' && (needs.options.outputs.scr_update || '') == '' && github.event_name == 'pull_request' && github.base_ref == 'master' }}
+    uses: surveyjs/azure-pipelines/.github/workflows/theme-adapter-demos-test.yml@gha-migration
+    with:
+      demos-pr: ${{ fromJSON(needs.options.outputs.pr_tags || '{}').ADAPTERS || '' }}
+      creator-ref: ${{ github.base_ref || github.ref_name }}
+      creator-pr: ${{ fromJSON(needs.options.outputs.pr_tags || '{}').CREATOR || '' }}
+      scr-blocking: ${{ inputs.cross-repo-scr-blocking }}
+    secrets: inherit
+
+  # The single required status check ("library / result" in survey-library's branch protection).
+  result:
+    name: result
+    if: always()
+    needs:
+      - lint
+      - options
+      - library-core
+      - library-react
+      - library-angular
+      - library-vue
+      - library-js
+      - creator-core
+      - creator-react
+      - creator-angular
+      - creator-vue
+      - creator-js
+      - analytics
+      - pdf
+      - theme-adapter-demos
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: surveyjs/azure-pipelines/.github/actions/result@gha-migration
+        with:
+          needs: ${{ toJSON(needs) }}

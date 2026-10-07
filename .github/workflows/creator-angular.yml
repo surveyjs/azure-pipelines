@@ -1,0 +1,131 @@
+# Port of templates/creator/angular/test.yml (keep in sync while it lives).
+name: Creator Angular Test
+
+on:
+  workflow_call:
+    inputs:
+      creator-ref:
+        description: survey-creator ref - the branch the library PR targets
+        type: string
+        default: ""
+      creator-pr:
+        description: Companion survey-creator PR number, or empty
+        type: string
+        default: ""
+      library-ref:
+        description: survey-library ref; empty = the triggering commit
+        type: string
+        default: ""
+      library-pr:
+        description: Companion survey-library PR number, or empty
+        type: string
+        default: ""
+      scr-blocking:
+        description: false - a failed screenshot job does not fail the workflow (the baselines belong to survey-creator's own pipeline)
+        type: boolean
+        default: true
+
+defaults:
+  run:
+    shell: bash --noprofile --norc {0}
+
+jobs:
+  markup-a11y:
+    name: Markup & Example & A11Y
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: surveyjs/azure-pipelines/.github/actions/build-creator@gha-migration
+        with:
+          creator-ref: ${{ inputs.creator-ref }}
+          creator-pr: ${{ inputs.creator-pr }}
+          library-ref: ${{ inputs.library-ref }}
+          library-pr: ${{ inputs.library-pr }}
+          library-ui: survey-angular-ui
+          creator-ui: survey-creator-angular
+          example: packages/survey-creator-angular/example/angular-ui
+          browsers: "true"
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+      - name: Test
+        working-directory: packages/survey-creator-angular
+        run: npm run test:single
+      - name: Build Example
+        working-directory: packages/survey-creator-angular
+        run: npm run build:example:prod
+      # the a11y script pins --reporter dot, so junit is appended back here to get a results file
+      - name: Test A11Y
+        working-directory: packages/survey-creator-angular
+        env:
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: ${{ github.workspace }}/packages/survey-creator-angular/test-results/a11y-junit-results.xml
+        run: npm run test:a11y:ci -- --reporter dot,junit
+      - name: Publish A11Y results
+        if: ${{ !cancelled() }}
+        uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
+        with:
+          path: packages/survey-creator-angular/test-results
+          artifact-name: Creator_Angular_A11Y
+          junit-file: a11y-junit-results.xml
+          title: Creator Angular A11Y Tests
+
+  e2e:
+    name: E2E
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: surveyjs/azure-pipelines/.github/actions/build-creator@gha-migration
+        with:
+          creator-ref: ${{ inputs.creator-ref }}
+          creator-pr: ${{ inputs.creator-pr }}
+          library-ref: ${{ inputs.library-ref }}
+          library-pr: ${{ inputs.library-pr }}
+          library-ui: survey-angular-ui
+          creator-ui: survey-creator-angular
+          example: packages/survey-creator-angular/example/angular-ui
+          browsers: "true"
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+      - name: Build Example
+        working-directory: packages/survey-creator-angular
+        run: npm run build:example:prod
+      - name: Test E2E
+        working-directory: packages/survey-creator-angular
+        run: npm run e2e:ci
+      - name: Publish results
+        if: ${{ !cancelled() }}
+        uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
+        with:
+          path: packages/survey-creator-angular/test-results
+          artifact-name: Creator_Angular_E2E
+          junit-file: e2e-junit-results.xml
+          title: Creator Angular E2E Tests
+
+  scr:
+    name: SCR
+    continue-on-error: ${{ !inputs.scr-blocking }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: surveyjs/azure-pipelines/.github/actions/build-creator@gha-migration
+        with:
+          creator-ref: ${{ inputs.creator-ref }}
+          creator-pr: ${{ inputs.creator-pr }}
+          library-ref: ${{ inputs.library-ref }}
+          library-pr: ${{ inputs.library-pr }}
+          library-ui: survey-angular-ui
+          creator-ui: survey-creator-angular
+          example: packages/survey-creator-angular/example/angular-ui
+          browsers: "true"
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+      - name: Build Example
+        working-directory: packages/survey-creator-angular
+        run: npm run build:example:prod
+      - name: Test SCR
+        working-directory: packages/survey-creator-angular
+        run: npm run test:scr:ci
+      - name: Publish results
+        if: ${{ !cancelled() }}
+        uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
+        with:
+          path: packages/survey-creator-angular/test-results
+          artifact-name: Creator_Angular_SCR
+          junit-file: e2e-junit-results.xml
+          title: Creator Angular SCR Tests

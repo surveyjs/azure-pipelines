@@ -1,0 +1,78 @@
+# Port of templates/analytics/test.yml (keep in sync while it lives), without its "SCR Update"
+# job: the library pipeline never runs it (no SCR_UPDATE in the analytics stage).
+name: Analytics Test
+
+on:
+  workflow_call:
+    inputs:
+      analytics-ref:
+        description: survey-analytics ref - the branch the library PR targets
+        type: string
+        default: ""
+      analytics-pr:
+        description: Companion survey-analytics PR number, or empty
+        type: string
+        default: ""
+      library-ref:
+        description: survey-library ref; empty = the triggering commit
+        type: string
+        default: ""
+      library-pr:
+        description: Companion survey-library PR number, or empty
+        type: string
+        default: ""
+      scr-blocking:
+        description: false - a failed E2E job (it compares screenshots) does not fail the workflow
+        type: boolean
+        default: true
+
+defaults:
+  run:
+    shell: bash --noprofile --norc {0}
+
+jobs:
+  unit:
+    name: Unit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: surveyjs/azure-pipelines/.github/actions/build-core-consumer@gha-migration
+        with:
+          repository: surveyjs/survey-analytics
+          name: survey-analytics
+          ref: ${{ inputs.analytics-ref }}
+          pr: ${{ inputs.analytics-pr }}
+          library-ref: ${{ inputs.library-ref }}
+          library-pr: ${{ inputs.library-pr }}
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+      - name: Test
+        run: npm run test
+
+  e2e:
+    name: E2E
+    continue-on-error: ${{ !inputs.scr-blocking }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: surveyjs/azure-pipelines/.github/actions/build-core-consumer@gha-migration
+        with:
+          repository: surveyjs/survey-analytics
+          name: survey-analytics
+          ref: ${{ inputs.analytics-ref }}
+          pr: ${{ inputs.analytics-pr }}
+          library-ref: ${{ inputs.library-ref }}
+          library-pr: ${{ inputs.library-pr }}
+          browsers: "true"
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+      - name: Playwright install
+        run: npm run pwinst
+      - name: Test
+        run: npm run e2e:ci
+      - name: Publish e2e test results
+        if: ${{ !cancelled() }}
+        uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
+        with:
+          path: test-results
+          artifact-name: Analytics_E2E
+          junit-file: e2e-junit-results.xml
+          title: Publish E2E test results
