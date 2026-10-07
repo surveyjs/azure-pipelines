@@ -106,12 +106,6 @@ stages:
       LIBRARY_PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
     condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
-      - job:
-        displayName: "Build"
-        steps:
-          - template: templates/creator/core/build.yml
-            parameters:
-              store: true
       - template: templates/creator/core/test.yml
 
   - stage: CreatorReactBuild
@@ -122,13 +116,6 @@ stages:
       SCR_UPDATE: $[ stageDependencies.Options.Commit.outputs['data.SCR_UPDATE'] ]
       LIBRARY_PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
     jobs:
-      - job:
-        displayName: "Build"
-        condition: eq(variables['SCR_UPDATE'], '')
-        steps:
-          - template: templates/creator/react/build.yml
-            parameters:
-              store: true
       - template: templates/creator/react/test.yml
 
   - stage: CreatorAngularBuild
@@ -139,12 +126,6 @@ stages:
       LIBRARY_PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
     condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
-      - job:
-        displayName: "Build"
-        steps:
-          - template: templates/creator/angular/build.yml
-            parameters:
-              store: true
       - template: templates/creator/angular/test.yml
 
   - stage: CreatorVueBuild
@@ -155,12 +136,6 @@ stages:
       LIBRARY_PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
     condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
-      - job:
-        displayName: "Build"
-        steps:
-          - template: templates/creator/vue/build.yml
-            parameters:
-              store: true
       - template: templates/creator/vue/test.yml
 
   - stage: CreatorJSBuild
@@ -171,12 +146,6 @@ stages:
       LIBRARY_PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
     condition: eq(dependencies.Options.outputs['Commit.data.SCR_UPDATE'], '')
     jobs:
-      - job:
-        displayName: "Build"
-        steps:
-          - template: templates/creator/js/build.yml
-            parameters:
-              store: true
       - template: templates/creator/js/test.yml
 
   - stage: ThemeAdapterDemosTest

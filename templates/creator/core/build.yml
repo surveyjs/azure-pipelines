@@ -5,9 +5,6 @@ parameters:
   - name: libraryCheckout
     type: string
     default: Library
-  - name: store
-    type: boolean
-    default: false
 
 steps:
   - checkout: ${{ parameters.checkout }}
@@ -81,11 +78,3 @@ steps:
   - script: npm run build:all
     workingDirectory: $(Build.SourcesDirectory)/packages/survey-creator-core
     displayName: "Build Creator Core"
-
-  - ${{ if eq(parameters.store, true) }}:
-    - task: PublishBuildArtifacts@1
-      inputs:
-        PathtoPublish: '$(Build.SourcesDirectory)/packages/survey-creator-core/build/'
-        ArtifactName: '$(ArtifactNameCreatorCore)'
-        publishLocation: 'Container'
-        StoreAsTar: true

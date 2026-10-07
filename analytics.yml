@@ -96,13 +96,6 @@ stages:
       SCR_UPDATE: $[ stageDependencies.Options.Commit.outputs['data.SCR_UPDATE'] ]
       LIBRARY_PR: $[ stageDependencies.Options.PRTitle.outputs['data.LIBRARY'] ]
     jobs:
-      - job:
-        displayName: "Build"
-        condition: eq(variables['SCR_UPDATE'], '')
-        steps:
-          - template: templates/analytics/build.yml
-            parameters:
-              store: true
       - template: templates/analytics/test.yml
 
 
