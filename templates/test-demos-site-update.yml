@@ -46,13 +46,10 @@ resources:
 
 
 
-pool:
-  name: 'main-selfhosted'
-
-
-
 jobs:
 - job: SiteUpdate
+  pool:
+    name: 'main-selfhosted'
   timeoutInMinutes: 120
   steps:
 
