@@ -95,6 +95,7 @@ jobs:
           artifact-name: Creator_React_E2E
           junit-file: e2e-junit-results.xml
           title: Creator React E2E Tests
+          html-report: packages/survey-creator-react/playwright-report
 
   scr:
     name: Creator React · SCR Test
@@ -124,6 +125,8 @@ jobs:
           artifact-name: Creator_React_SCR
           junit-file: e2e-junit-results.xml
           title: Creator React SCR Tests
+          playwright-json: results.json
+          html-report: packages/survey-creator-react/playwright-report
 
   scr-legacy:
     name: Creator React · SCR Legacy
@@ -154,3 +157,5 @@ jobs:
           artifact-name: Creator_React_SCR_Legacy
           junit-file: e2e-junit-results.xml
           title: Creator React SCR Legacy Tests
+          playwright-json: results.json
+          html-report: packages/survey-creator-react/playwright-report

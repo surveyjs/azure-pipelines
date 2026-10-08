@@ -68,7 +68,9 @@ jobs:
           CI: "true"
           PLAYWRIGHT_JUNIT_OUTPUT_FILE: ${{ github.workspace }}/test-results/scr-${{ matrix.app }}-junit.xml
           PLAYWRIGHT_HTML_OUTPUT_DIR: ${{ github.workspace }}/screenshot-tests/.report
-        run: npm run "test:scr:$APP" -- --reporter=list,junit,html --workers=100%
+          # the config has no json reporter - it feeds the screenshot diff page
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/test-results/scr-${{ matrix.app }}-results.json
+        run: npm run "test:scr:$APP" -- --reporter=list,junit,html,json --workers=100%
       - name: Publish SCR results
         if: ${{ !cancelled() }}
         uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
@@ -77,14 +79,5 @@ jobs:
           artifact-name: ThemeAdapterDemos_SCR_${{ matrix.app }}
           junit-file: scr-${{ matrix.app }}-junit.xml
           title: Theme Adapter Demos SCR ${{ matrix.app }}
-      - name: Publish SCR report
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: ThemeAdapterDemos_SCR_Report_${{ matrix.app }}
-          path: screenshot-tests/.report
-          # .report is a hidden directory: upload-artifact skips hidden paths unless told otherwise
-          include-hidden-files: true
-          if-no-files-found: ignore
-          overwrite: true
-          retention-days: 14
+          playwright-json: scr-${{ matrix.app }}-results.json
+          html-report: screenshot-tests/.report

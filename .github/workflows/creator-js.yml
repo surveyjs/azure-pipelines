@@ -91,6 +91,7 @@ jobs:
           artifact-name: Creator_JS_E2E
           junit-file: e2e-junit-results.xml
           title: Creator JS E2E Tests
+          html-report: packages/survey-creator-js/playwright-report
 
   scr:
     name: Creator JS · SCR
@@ -120,3 +121,5 @@ jobs:
           artifact-name: Creator_JS_SCR
           junit-file: e2e-junit-results.xml
           title: Creator JS SCR Tests
+          playwright-json: results.json
+          html-report: packages/survey-creator-js/playwright-report

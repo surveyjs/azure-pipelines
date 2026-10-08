@@ -61,6 +61,7 @@ jobs:
           artifact-name: Library_Angular_E2E
           junit-file: e2e-junit-results.xml
           title: Angular E2E Tests
+          html-report: packages/survey-angular-ui/playwright-report
 
   markup-scr:
     name: Library Angular · Markup & SCR
@@ -92,3 +93,5 @@ jobs:
           artifact-name: Library_Angular_SCR
           junit-file: e2e-junit-results.xml
           title: Angular SCR Tests
+          playwright-json: results.json
+          html-report: packages/survey-angular-ui/playwright-report

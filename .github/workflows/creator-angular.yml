@@ -97,6 +97,7 @@ jobs:
           artifact-name: Creator_Angular_E2E
           junit-file: e2e-junit-results.xml
           title: Creator Angular E2E Tests
+          html-report: packages/survey-creator-angular/playwright-report
 
   scr:
     name: Creator Angular · SCR
@@ -129,3 +130,5 @@ jobs:
           artifact-name: Creator_Angular_SCR
           junit-file: e2e-junit-results.xml
           title: Creator Angular SCR Tests
+          playwright-json: results.json
+          html-report: packages/survey-creator-angular/playwright-report

@@ -78,6 +78,7 @@ jobs:
           artifact-name: Library_React_E2E
           junit-file: e2e-junit-results.xml
           title: React E2E Tests
+          html-report: packages/survey-react-ui/playwright-report
 
   scr:
     name: Library React · SCR Test
@@ -103,6 +104,8 @@ jobs:
           artifact-name: Library_React_SCR
           junit-file: e2e-junit-results.xml
           title: React SCR Tests
+          playwright-json: results.json
+          html-report: packages/survey-react-ui/playwright-report
 
   scr-update:
     name: Library React · SCR Update

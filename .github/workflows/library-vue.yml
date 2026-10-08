@@ -61,6 +61,7 @@ jobs:
           artifact-name: Library_Vue_E2E
           junit-file: e2e-junit-results.xml
           title: Vue3 E2E Tests
+          html-report: packages/survey-vue3-ui/playwright-report
 
   scr:
     name: Library Vue · SCR
@@ -92,3 +93,5 @@ jobs:
           artifact-name: Library_Vue3_SCR
           junit-file: e2e-junit-results.xml
           title: Vue3 SCR Tests
+          playwright-json: results.json
+          html-report: packages/survey-vue3-ui/playwright-report

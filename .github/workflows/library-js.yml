@@ -57,6 +57,7 @@ jobs:
           artifact-name: Library_Preact_E2E
           junit-file: e2e-junit-results.xml
           title: Preact E2E Tests
+          html-report: packages/survey-js-ui/playwright-report
 
   scr:
     name: Library JS · SCR
@@ -81,3 +82,5 @@ jobs:
           artifact-name: Library_Preact_SCR
           junit-file: e2e-junit-results.xml
           title: Preact SCR Tests
+          playwright-json: results.json
+          html-report: packages/survey-js-ui/playwright-report

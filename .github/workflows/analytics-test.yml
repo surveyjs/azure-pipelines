@@ -66,8 +66,15 @@ jobs:
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
       - name: Playwright install
         run: npm run pwinst
+      # The e2e tests compare screenshots, and the config has no json reporter. --reporter replaces the
+      # config's list, so the junit and html outputs are pointed where the config put them.
       - name: Test
-        run: npm run e2e:ci -- --workers=100%
+        env:
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: ${{ github.workspace }}/test-results/e2e-junit-results.xml
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/test-results/results.json
+          PLAYWRIGHT_HTML_OUTPUT_DIR: ${{ github.workspace }}/playwright-report
+          PLAYWRIGHT_HTML_OPEN: never
+        run: npm run e2e:ci -- --reporter=junit,html,json --workers=100%
       - name: Publish e2e test results
         if: ${{ !cancelled() }}
         uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
@@ -76,3 +83,5 @@ jobs:
           artifact-name: Analytics_E2E
           junit-file: e2e-junit-results.xml
           title: Publish E2E test results
+          playwright-json: results.json
+          html-report: playwright-report

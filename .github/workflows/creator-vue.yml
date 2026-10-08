@@ -94,6 +94,7 @@ jobs:
           artifact-name: Creator_Vue_E2E
           junit-file: e2e-junit-results.xml
           title: Creator Vue E2E Tests
+          html-report: packages/survey-creator-vue/playwright-report
 
   scr:
     name: Creator Vue · SCR
@@ -126,3 +127,5 @@ jobs:
           artifact-name: Creator_Vue_SCR
           junit-file: e2e-junit-results.xml
           title: Creator Vue SCR Tests
+          playwright-json: results.json
+          html-report: packages/survey-creator-vue/playwright-report
