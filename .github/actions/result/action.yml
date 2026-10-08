@@ -9,7 +9,8 @@ inputs:
 runs:
   using: composite
   steps:
-    - shell: bash --noprofile --norc {0}
+    - name: Check the needed jobs
+      shell: bash --noprofile --norc {0}
       env:
         # Through the environment, never interpolated: the needs outputs carry PR-title text.
         NEEDS: ${{ inputs.needs }}

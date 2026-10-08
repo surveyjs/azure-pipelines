@@ -35,19 +35,22 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: actions/checkout@v5
+    - name: Check out ${{ inputs.name }}
+      uses: actions/checkout@v5
       with:
         repository: ${{ inputs.repository }}
         ref: ${{ inputs.ref }}
         token: ${{ inputs.token || github.token }}
         persist-credentials: false
         fetch-depth: 1
-    - uses: surveyjs/azure-pipelines/.github/actions/checkout-pr@gha-migration
+    - name: Switch ${{ inputs.name }} to the companion PR
+      uses: surveyjs/azure-pipelines/.github/actions/checkout-pr@gha-migration
       with:
         pr: ${{ inputs.pr }}
         name: ${{ inputs.name }}
         token: ${{ inputs.token }}
-    - uses: actions/checkout@v5
+    - name: Check out survey-library
+      uses: actions/checkout@v5
       with:
         repository: ${{ inputs.library-repository }}
         ref: ${{ inputs.library-ref }}
@@ -55,13 +58,15 @@ runs:
         token: ${{ inputs.token || github.token }}
         persist-credentials: false
         fetch-depth: 1
-    - uses: surveyjs/azure-pipelines/.github/actions/checkout-pr@gha-migration
+    - name: Switch survey-library to the companion PR
+      uses: surveyjs/azure-pipelines/.github/actions/checkout-pr@gha-migration
       with:
         pr: ${{ inputs.library-pr }}
         path: survey-library
         name: survey-library
         token: ${{ inputs.token }}
-    - uses: surveyjs/azure-pipelines/.github/actions/npm-install@gha-migration
+    - name: Install dependencies
+      uses: surveyjs/azure-pipelines/.github/actions/npm-install@gha-migration
       with:
         directories: |
           survey-library

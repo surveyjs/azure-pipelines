@@ -19,7 +19,8 @@ inputs:
 runs:
   using: composite
   steps:
-    - if: inputs.pr != ''
+    - name: Switch ${{ inputs.name }} to PR #${{ inputs.pr }}
+      if: inputs.pr != ''
       shell: bash --noprofile --norc {0}
       env:
         PR_NUMBER: ${{ inputs.pr }}

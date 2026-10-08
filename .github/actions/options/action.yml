@@ -16,13 +16,15 @@ outputs:
 runs:
   using: composite
   steps:
-    - shell: bash --noprofile --norc {0}
+    - name: Fetch the PR title and commit message
+      shell: bash --noprofile --norc {0}
       env:
         GH_TOKEN: ${{ github.token }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       run: bash "$GITHUB_ACTION_PATH/fetch.sh"
-    - id: parse
+    - name: Parse the options
+      id: parse
       shell: bash --noprofile --norc {0}
       env:
         PR_NUMBER: ${{ github.event.pull_request.number }}

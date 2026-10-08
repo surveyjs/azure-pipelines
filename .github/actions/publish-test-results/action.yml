@@ -33,7 +33,8 @@ runs:
   steps:
     # always(): the caller's `if` already decided that the action runs; every step runs then, after
     # a failed test step too. No ${{ }} in the description above - the runner evaluates it there as well.
-    - if: always()
+    - name: Upload test results
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: ${{ inputs.artifact-name }}
@@ -41,7 +42,8 @@ runs:
         if-no-files-found: ignore
         overwrite: true
         retention-days: 14
-    - if: always() && inputs.html-report != ''
+    - name: Upload the Playwright HTML report
+      if: always() && inputs.html-report != ''
       uses: actions/upload-artifact@v4
       with:
         name: ${{ inputs.artifact-name }}_Report
@@ -51,7 +53,8 @@ runs:
         if-no-files-found: ignore
         overwrite: true
         retention-days: 14
-    - if: always() && inputs.playwright-json != ''
+    - name: Build the screenshot diff page
+      if: always() && inputs.playwright-json != ''
       id: diff-page
       shell: bash --noprofile --norc {0}
       env:
@@ -62,7 +65,8 @@ runs:
     # archive: false - a single file, served as it is, so the browser opens it. The artifact is named
     # after the file; `name` repeats the file name because overwrite looks the old artifact up by
     # `name` (actions/upload-artifact#769) - without it a re-run fails with 409.
-    - if: always() && steps.diff-page.outputs.count != '' && steps.diff-page.outputs.count != '0'
+    - name: Upload the screenshot diff page
+      if: always() && steps.diff-page.outputs.count != '' && steps.diff-page.outputs.count != '0'
       id: diff-upload
       uses: actions/upload-artifact@v7
       with:
@@ -72,7 +76,8 @@ runs:
         overwrite: true
         retention-days: 14
     # Before the JUnit report, so the link heads the job summary.
-    - if: always() && steps.diff-upload.outputs.artifact-url != ''
+    - name: Link the diff page in the job summary
+      if: always() && steps.diff-upload.outputs.artifact-url != ''
       shell: bash --noprofile --norc {0}
       env:
         TITLE: ${{ inputs.title }}
@@ -83,7 +88,8 @@ runs:
         TEXT="$FAILED screenshot mismatch(es) in failed tests"
         [ "$FLAKY" = 0 ] || TEXT="$TEXT, $FLAKY in flaky tests"
         printf '### %s — screenshot diffs\n\n[Open the diff page](%s) — %s.\n\n' "$TITLE" "$URL" "$TEXT" >> "$GITHUB_STEP_SUMMARY"
-    - if: always() && inputs.junit-file != ''
+    - name: Report the JUnit results
+      if: always() && inputs.junit-file != ''
       uses: mikepenz/action-junit-report@v5
       with:
         report_paths: ${{ inputs.path }}/${{ inputs.junit-file }}

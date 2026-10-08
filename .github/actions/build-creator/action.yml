@@ -42,19 +42,22 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: actions/checkout@v5
+    - name: Check out survey-creator
+      uses: actions/checkout@v5
       with:
         repository: ${{ inputs.creator-repository }}
         ref: ${{ inputs.creator-ref }}
         token: ${{ inputs.token || github.token }}
         persist-credentials: false
         fetch-depth: 1
-    - uses: surveyjs/azure-pipelines/.github/actions/checkout-pr@gha-migration
+    - name: Switch survey-creator to the companion PR
+      uses: surveyjs/azure-pipelines/.github/actions/checkout-pr@gha-migration
       with:
         pr: ${{ inputs.creator-pr }}
         name: survey-creator
         token: ${{ inputs.token }}
-    - uses: actions/checkout@v5
+    - name: Check out survey-library
+      uses: actions/checkout@v5
       with:
         repository: ${{ inputs.library-repository }}
         ref: ${{ inputs.library-ref }}
@@ -62,13 +65,15 @@ runs:
         token: ${{ inputs.token || github.token }}
         persist-credentials: false
         fetch-depth: 1
-    - uses: surveyjs/azure-pipelines/.github/actions/checkout-pr@gha-migration
+    - name: Switch survey-library to the companion PR
+      uses: surveyjs/azure-pipelines/.github/actions/checkout-pr@gha-migration
       with:
         pr: ${{ inputs.library-pr }}
         path: survey-library
         name: survey-library
         token: ${{ inputs.token }}
-    - id: dirs
+    - name: List the npm directories
+      id: dirs
       shell: bash --noprofile --norc {0}
       env:
         LIBRARY_UI: ${{ inputs.library-ui }}
@@ -86,7 +91,8 @@ runs:
           if [ -n "$EXAMPLE" ]; then echo "$EXAMPLE"; fi
           echo EOF
         } >> "$GITHUB_OUTPUT"
-    - uses: surveyjs/azure-pipelines/.github/actions/npm-install@gha-migration
+    - name: Install dependencies
+      uses: surveyjs/azure-pipelines/.github/actions/npm-install@gha-migration
       with:
         directories: ${{ steps.dirs.outputs.list }}
         token: ${{ inputs.token }}
