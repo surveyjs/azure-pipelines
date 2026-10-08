@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="smoke" tests="1" failures="0" errors="0">
-  <testsuite name="smoke" tests="1" failures="0" errors="0">
-    <testcase classname="smoke" name="passes" time="0.001"/>
-  </testsuite>
-</testsuites>

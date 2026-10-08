@@ -2,9 +2,8 @@ name: npm install
 description: >
   Port of templates/utils/npm.yml (keep in sync while it lives): sets Node up and runs
   `npm install` in every listed directory in parallel, then the optional `npm update`s. With
-  `cache`, restores ~/.npm from the family's cache first; with `cache-save` as well, saves it
-  afterwards (the cache-warm jobs). Azure cached node_modules tarballs in /tmp of its agents
-  instead.
+  `cache`, restores ~/.npm first and, after a miss, saves it once the installs succeed (see
+  cache-key.sh). Azure cached node_modules tarballs in /tmp of its agents instead.
 inputs:
   directories:
     description: Directories to install, one per line, relative to the workspace
@@ -21,9 +20,6 @@ inputs:
   cache:
     description: Cache family (survey-library, survey-creator, ...); empty = no ~/.npm cache
     default: ""
-  cache-save:
-    description: "'true' - save ~/.npm under this install's key (cache-warm jobs only); see cache-key.sh"
-    default: "false"
   node-version:
     # 24, not 22: the creator and analytics packages depend on survey-library through file: paths
     # (../../../survey-library/packages/survey-core/build) that do not exist yet at install time.
@@ -48,7 +44,6 @@ runs:
       env:
         NPM_DIRS: ${{ inputs.directories }}
         CACHE_FAMILY: ${{ inputs.cache }}
-        CACHE_SAVE: ${{ inputs.cache-save }}
       run: bash "$GITHUB_ACTION_PATH/cache-key.sh"
     - name: Restore the npm cache
       id: cache-restore
@@ -66,7 +61,7 @@ runs:
         GITHUB_TOKEN: ${{ inputs.token }}
       run: bash "$GITHUB_ACTION_PATH/install.sh"
     - name: Save the npm cache
-      if: inputs.cache != '' && inputs.cache-save == 'true' && steps.cache-restore.outputs.cache-hit != 'true'
+      if: inputs.cache != '' && steps.cache-restore.outputs.cache-hit != 'true'
       uses: actions/cache/save@v4
       with:
         path: ~/.npm/_cacache

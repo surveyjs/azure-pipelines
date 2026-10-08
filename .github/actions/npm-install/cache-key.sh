@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # Usage (env): NPM_DIRS - as in install.sh; CACHE_FAMILY - the cache family (survey-library, ...);
-# CACHE_SAVE - 'true' in a cache-warm job; NPM_CACHE_WEEK - overrides the ISO week (tests).
+# NPM_CACHE_WEEK - overrides the ISO week (tests).
 # Writes `key` and `restore-keys` of the ~/.npm cache to $GITHUB_OUTPUT.
 #
-# Key: npm-<family>-<ISO week>-<hash of the listed package.json files>. Cache entries are
-# immutable and, without lock files, the dependency versions move on - the week bounds that.
-# A test job lists a subset of its family's directories, so it never hits exactly and restores
-# the family's newest entry, this week's first. A cache-warm job falls back within the week only:
-# each week starts from an empty cache instead of piling up the tarballs nobody uses any more.
+# Key: npm-<family>-<ISO week>-<hash of the listed package.json files>. Every job saves under its
+# own key after a miss, so the next job with the same directories hits exactly; a PR that leaves
+# the package.json files alone hits its base branch's entry. Cache entries are immutable and,
+# without lock files, the dependency versions move on - the week bounds that. A miss falls back
+# to the family's newest entry of the same week only: each week starts from an empty cache
+# instead of piling up the tarballs nobody uses any more.
 set -euo pipefail
 
 [ -n "${CACHE_FAMILY:-}" ] || exit 0
@@ -31,11 +32,7 @@ HASH="$(
 # An install that downloads nothing leaves no cache directory, and the save would only warn.
 mkdir -p "$HOME/.npm/_cacache"
 
-PREFIX="npm-$CACHE_FAMILY-"
 {
-  echo "key=$PREFIX$WEEK-$HASH"
-  echo 'restore-keys<<EOF'
-  echo "$PREFIX$WEEK-"
-  if [ "${CACHE_SAVE:-false}" != true ]; then echo "$PREFIX"; fi
-  echo EOF
+  echo "key=npm-$CACHE_FAMILY-$WEEK-$HASH"
+  echo "restore-keys=npm-$CACHE_FAMILY-$WEEK-"
 } >> "$GITHUB_OUTPUT"
