@@ -545,7 +545,7 @@ jobs:
         az webapp config appsettings set `
           --name $app `
           --resource-group $rg `
-          --settings "AppSettings__SurveyJSVersion=$version" `
+          --slot-settings "AppSettings__SurveyJSVersion=$version" `
           --output none
         if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set AppSettings__SurveyJSVersion on $app" }
 
