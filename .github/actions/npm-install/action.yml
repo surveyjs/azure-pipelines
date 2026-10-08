@@ -17,8 +17,12 @@ inputs:
     description: "'true' - also install the system libraries of Playwright's Chromium"
     default: "false"
   node-version:
-    description: Node.js version - the one the Azure agents run (see the inventory)
-    default: "22"
+    # 24, not 22: the creator and analytics packages depend on survey-library through file: paths
+    # (../../../survey-library/packages/survey-core/build) that do not exist yet at install time.
+    # npm 11 (Node 24) links them anyway and the build copy replaces the link; npm 10 (Node 22)
+    # crashes with "Cannot read properties of null (reading 'edgesOut')".
+    description: Node.js version (npm 11 is required - see the comment above)
+    default: "24"
 runs:
   using: composite
   steps:

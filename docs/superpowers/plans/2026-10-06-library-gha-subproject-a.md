@@ -42,7 +42,7 @@
 
 **Окружение:**
 - `npm install` всегда выполняется с `PUPPETEER_SKIP_DOWNLOAD=true`.
-- Node: input `node-version` action'а `npm-install`, по умолчанию `"22"`. Если инвентаризация (Task 0) показала другую мажорную версию на агентах Azure, ставим её.
+- Node: input `node-version` action'а `npm-install`, по умолчанию `"24"`. Нужен npm 11: npm 10 (Node 22) падает с `edgesOut` на `file:`-путях creator и analytics к ещё не собранному survey-library (воспроизведено локально). Инвентаризация (Task 0) должна это подтвердить.
 - Кэша нет: это подпроект D.
 
 **Коммиты** делает пользователь. Задачи оставляют изменения незакоммиченными.
@@ -822,7 +822,7 @@ runs:
   - `update` — строки `<каталог> <пакет>`: `npm update` после установки, по умолчанию пусто;
   - `token`, по умолчанию пусто;
   - `browsers` — `"true"` или `"false"`, по умолчанию `"false"`;
-  - `node-version` — по умолчанию `"22"`.
+  - `node-version` — по умолчанию `"24"` (нужен npm 11, см. Global Constraints).
 
 - [ ] **Step 1: Написать падающий тест `tests/npm-install.test.sh`.**
 
@@ -1023,8 +1023,12 @@ inputs:
     description: "'true' - also install the system libraries of Playwright's Chromium"
     default: "false"
   node-version:
-    description: Node.js version - the one the Azure agents run (see the inventory)
-    default: "22"
+    # 24, not 22: the creator and analytics packages depend on survey-library through file: paths
+    # (../../../survey-library/packages/survey-core/build) that do not exist yet at install time.
+    # npm 11 (Node 24) links them anyway and the build copy replaces the link; npm 10 (Node 22)
+    # crashes with "Cannot read properties of null (reading 'edgesOut')".
+    description: Node.js version (npm 11 is required - see the comment above)
+    default: "24"
 runs:
   using: composite
   steps:
@@ -1054,7 +1058,7 @@ runs:
 }
 ```
 
-- [ ] **Step 6: Если в Task 0 `NODE_MAJOR` оказался не 22, заменить default `"22"` в `action.yml` на `NODE_MAJOR`.**
+- [ ] **Step 6: Сверить `NODE_MAJOR` из Task 0 с default `"24"`.** Ниже 24 не опускаться: npm 10 падает на `file:`-путях creator и analytics. Если агенты Azure на Node 22, расхождение окружений записать в инвентаризацию.
 
 - [ ] **Step 7: Добавить smoke-шаг в конец джоба `smoke` в `ci.yml`.**
 
@@ -3430,7 +3434,7 @@ jobs:
    Вне подпроекта A остаются кэш (D), Staging (B), Backport и claude (C), переключение, README, release.yml, ai-flaky-fix (E).
 
    **Уточнение к спецификации.** По спецификации временно неблокирующие кросс-репо SCR «передаются списком и в result игнорируются». Но `needs.<job>.result` у джоба, вызывающего reusable workflow, не различает, упал ли SCR-джоб или E2E внутри. Поэтому в плане неблокирующим делается сам SCR-джоб через `continue-on-error: ${{ !inputs.scr-blocking }}`, а оркестратор управляет этим одним input'ом `cross-repo-scr-blocking`.
-2. **Плейсхолдеры:** нет. Единственное значение из инвентаризации — Node, у него задан default `"22"` и явный шаг замены (Task 4, Step 6).
+2. **Плейсхолдеры:** нет. Единственное значение из инвентаризации — Node, у него задан default `"24"` (минимум из-за npm 11) и шаг сверки (Task 4, Step 6).
 3. **Согласованность имён:**
    - inputs actions и workflows одинаковы во всех задачах: `ref`/`pr`, `creator-ref`/`creator-pr`, `library-ref`/`library-pr`, `analytics-*`, `pdf-*`, `demos-*`, `scr-blocking`, `scr-update`;
    - выходы options — `pr_tags`, `commit_tags`, `scr_update`;
