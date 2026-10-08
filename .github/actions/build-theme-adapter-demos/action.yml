@@ -113,6 +113,7 @@ runs:
           survey-creator/packages/survey-creator-core
           survey-creator/packages/survey-creator-react
           .
+        cache: theme-adapter-demos
         token: ${{ inputs.token }}
         browsers: "true"
     - name: Build survey-core

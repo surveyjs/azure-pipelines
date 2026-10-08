@@ -16,6 +16,13 @@ on:
           run: their baselines belong to those repositories' own pipelines until they move here.
         type: boolean
         default: true
+      # SHADOW-ONLY: remove at the switch (sub-project E). The shadow runs on a PR only, and a PR
+      # sees the caches of its base branch and of its own merge ref - so the first shadow run warms
+      # the PR's own caches and the later ones restore them.
+      cache-warm-on-pr:
+        description: true - also run the npm cache-warm jobs on a pull request, not only on a push
+        type: boolean
+        default: false
 
 defaults:
   run:
@@ -35,11 +42,19 @@ jobs:
         uses: surveyjs/azure-pipelines/.github/actions/npm-install@gha-migration
         with:
           directories: .
+          cache: survey-library
           # eslint-plugin-surveyjs comes from a git URL (surveyjs/eslint-surveyjs): take its tip
           update: . eslint-plugin-surveyjs
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
       - name: Lint
         run: npm run lint
+
+  # Not in result's needs: a failed cache warm only makes the next runs slower.
+  cache-warm:
+    name: npm cache warm
+    if: github.event_name == 'push' || inputs.cache-warm-on-pr
+    uses: surveyjs/azure-pipelines/.github/workflows/npm-cache-warm.yml@gha-migration
+    secrets: inherit
 
   options:
     name: Options

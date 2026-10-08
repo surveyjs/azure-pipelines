@@ -67,6 +67,9 @@ jobs:
         uses: ./.github/actions/npm-install
         with:
           directories: tests/fixtures/npm-smoke
+          # Runs the restore and save steps for real: the first run of a week saves, the rest hit.
+          cache: smoke
+          cache-save: "true"
       - name: publish-test-results
         if: ${{ !cancelled() }}
         uses: ./.github/actions/publish-test-results

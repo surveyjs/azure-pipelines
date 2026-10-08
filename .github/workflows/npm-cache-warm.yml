@@ -1,0 +1,161 @@
+# Saves the ~/.npm caches the test jobs restore (see .github/actions/npm-install/cache-key.sh): one
+# job per cache family, checking its repositories out in the test jobs' layout and installing the
+# union of every directory its test jobs install. Nothing is built.
+#
+# Called on pushes to master, V2 and V3: those caches are what every PR into the branch sees. A
+# test job never saves - the first one to finish would freeze its own subset of the family.
+name: npm cache warm
+
+on:
+  workflow_call:
+
+defaults:
+  run:
+    shell: bash --noprofile --norc {0}
+
+jobs:
+  survey-library:
+    name: Cache warm · survey-library
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Install
+        uses: surveyjs/azure-pipelines/.github/actions/npm-install@gha-migration
+        with:
+          directories: |
+            .
+            packages/survey-core
+            packages/survey-react-ui
+            packages/survey-angular-ui
+            packages/survey-angular-ui/example
+            packages/survey-vue3-ui
+            packages/survey-vue3-ui/example
+            packages/survey-js-ui
+          cache: survey-library
+          cache-save: "true"
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+
+  survey-creator:
+    name: Cache warm · survey-creator
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out survey-creator
+        uses: actions/checkout@v5
+        with:
+          repository: surveyjs/survey-creator
+          ref: ${{ github.base_ref || github.ref_name }}
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN || github.token }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Check out survey-library
+        uses: actions/checkout@v5
+        with:
+          path: survey-library
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Install
+        uses: surveyjs/azure-pipelines/.github/actions/npm-install@gha-migration
+        with:
+          directories: |
+            survey-library
+            survey-library/packages/survey-core
+            survey-library/packages/survey-react-ui
+            survey-library/packages/survey-angular-ui
+            survey-library/packages/survey-vue3-ui
+            survey-library/packages/survey-js-ui
+            .
+            packages/survey-creator-core
+            packages/survey-creator-react
+            packages/survey-creator-react/example
+            packages/survey-creator-angular
+            packages/survey-creator-angular/example/angular-ui
+            packages/survey-creator-vue
+            packages/survey-creator-vue/example
+            packages/survey-creator-js
+            packages/survey-creator-js/example
+          cache: survey-creator
+          cache-save: "true"
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+
+  core-consumer:
+    name: Cache warm · ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        name: [survey-analytics, survey-pdf]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out ${{ matrix.name }}
+        uses: actions/checkout@v5
+        with:
+          repository: surveyjs/${{ matrix.name }}
+          ref: ${{ github.base_ref || github.ref_name }}
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN || github.token }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Check out survey-library
+        uses: actions/checkout@v5
+        with:
+          path: survey-library
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Install
+        uses: surveyjs/azure-pipelines/.github/actions/npm-install@gha-migration
+        with:
+          directories: |
+            survey-library
+            survey-library/packages/survey-core
+            .
+          cache: ${{ matrix.name }}
+          cache-save: "true"
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+
+  theme-adapter-demos:
+    name: Cache warm · theme-adapter-demos
+    # The demos run on PRs into master only.
+    if: (github.base_ref || github.ref_name) == 'master'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out theme-adapter-demos
+        uses: actions/checkout@v5
+        with:
+          repository: surveyjs/theme-adapter-demos
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN || github.token }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Check out survey-library
+        uses: actions/checkout@v5
+        with:
+          path: survey-library
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Check out survey-creator
+        uses: actions/checkout@v5
+        with:
+          repository: surveyjs/survey-creator
+          ref: ${{ github.base_ref || github.ref_name }}
+          path: survey-creator
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN || github.token }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Install
+        uses: surveyjs/azure-pipelines/.github/actions/npm-install@gha-migration
+        with:
+          directories: |
+            survey-library
+            survey-library/packages/survey-core
+            survey-library/packages/survey-react-ui
+            survey-creator
+            survey-creator/packages/survey-creator-core
+            survey-creator/packages/survey-creator-react
+            .
+          cache: theme-adapter-demos
+          cache-save: "true"
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN }}

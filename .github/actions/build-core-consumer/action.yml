@@ -72,6 +72,7 @@ runs:
           survey-library
           survey-library/packages/survey-core
           .
+        cache: ${{ inputs.name }}
         token: ${{ inputs.token }}
         browsers: ${{ inputs.browsers }}
     - name: Build survey-core

@@ -95,6 +95,7 @@ runs:
       uses: surveyjs/azure-pipelines/.github/actions/npm-install@gha-migration
       with:
         directories: ${{ steps.dirs.outputs.list }}
+        cache: survey-creator
         token: ${{ inputs.token }}
         browsers: ${{ inputs.browsers }}
     - name: Build survey-core
