@@ -31,7 +31,8 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 1
-      - uses: surveyjs/azure-pipelines/.github/actions/npm-install@gha-migration
+      - name: Install
+        uses: surveyjs/azure-pipelines/.github/actions/npm-install@gha-migration
         with:
           directories: .
           # eslint-plugin-surveyjs comes from a git URL (surveyjs/eslint-surveyjs): take its tip
@@ -199,6 +200,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: surveyjs/azure-pipelines/.github/actions/result@gha-migration
+      - name: Result
+        uses: surveyjs/azure-pipelines/.github/actions/result@gha-migration
         with:
           needs: ${{ toJSON(needs) }}

@@ -49,7 +49,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: surveyjs/azure-pipelines/.github/actions/build-theme-adapter-demos@gha-migration
+      - name: Build theme adapter demos
+        uses: surveyjs/azure-pipelines/.github/actions/build-theme-adapter-demos@gha-migration
         with:
           demos-ref: ${{ inputs.demos-ref }}
           demos-pr: ${{ inputs.demos-pr }}

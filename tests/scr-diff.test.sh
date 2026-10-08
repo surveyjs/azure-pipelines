@@ -53,6 +53,12 @@ MSYS2_ARG_CONV_EXCL='*' jq --arg d "$TMP/fx/" \
 run "$TMP/absolute.json"
 assert_eq "absolute attachment paths are read as they are" 11 "$(grep -o 'data:image/png' <<< "$PAGE" | wc -l | tr -d ' ')"
 
+# survey-creator runs Playwright from packages/<pkg> with the tests at the repository root.
+jq 'walk(if type == "object" and has("specs") then .specs |= map(.file = "../../screenshotTests/" + .file) else . end)' \
+  "$TMP/fx/results.json" > "$TMP/fx/upward.json"
+run "$TMP/fx/upward.json"
+assert_contains "the spec path loses its leading ../" "$PAGE" "<h2>screenshotTests/panel.spec.js:7 › Panel"
+
 rm "$TMP/fx/screenshots/panel-flaky.png"
 run "$TMP/fx/results.json"
 assert_contains "a missing image file is named, not fatal" "$PAGE" "not found: panel-flaky-expected.png"

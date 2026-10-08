@@ -81,7 +81,7 @@ def fig($cls; $caption; $kind):
     "H \(if $cls == "a" then "</div>" else "" end)</figure>"
   else empty end;
 def heading:
-  "\(.file | h):\(.line) › \(.path | map(h) | join(" › "))"
+  "\(.file | sub("^(\\.\\./)+"; "") | h):\(.line) › \(.path | map(h) | join(" › "))"
   + (if .project != "" then " <span class=\"tag\">[\(.project | h)]</span>" else "" end)
   + (if .retry > 0 then " <span class=\"tag\">retry #\(.retry)</span>" else "" end);
 def shot($i):

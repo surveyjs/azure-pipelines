@@ -36,7 +36,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: surveyjs/azure-pipelines/.github/actions/build-core-consumer@gha-migration
+      - name: Build survey-analytics
+        uses: surveyjs/azure-pipelines/.github/actions/build-core-consumer@gha-migration
         with:
           repository: surveyjs/survey-analytics
           name: survey-analytics
@@ -54,7 +55,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: surveyjs/azure-pipelines/.github/actions/build-core-consumer@gha-migration
+      - name: Build survey-analytics
+        uses: surveyjs/azure-pipelines/.github/actions/build-core-consumer@gha-migration
         with:
           repository: surveyjs/survey-analytics
           name: survey-analytics

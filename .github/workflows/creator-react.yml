@@ -36,7 +36,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: surveyjs/azure-pipelines/.github/actions/build-creator@gha-migration
+      - name: Build survey-creator
+        uses: surveyjs/azure-pipelines/.github/actions/build-creator@gha-migration
         with:
           creator-ref: ${{ inputs.creator-ref }}
           creator-pr: ${{ inputs.creator-pr }}
@@ -73,7 +74,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: surveyjs/azure-pipelines/.github/actions/build-creator@gha-migration
+      - name: Build survey-creator
+        uses: surveyjs/azure-pipelines/.github/actions/build-creator@gha-migration
         with:
           creator-ref: ${{ inputs.creator-ref }}
           creator-pr: ${{ inputs.creator-pr }}
@@ -103,7 +105,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: surveyjs/azure-pipelines/.github/actions/build-creator@gha-migration
+      - name: Build survey-creator
+        uses: surveyjs/azure-pipelines/.github/actions/build-creator@gha-migration
         with:
           creator-ref: ${{ inputs.creator-ref }}
           creator-pr: ${{ inputs.creator-pr }}
@@ -135,7 +138,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: surveyjs/azure-pipelines/.github/actions/build-creator@gha-migration
+      - name: Build survey-creator
+        uses: surveyjs/azure-pipelines/.github/actions/build-creator@gha-migration
         with:
           creator-ref: ${{ inputs.creator-ref }}
           creator-pr: ${{ inputs.creator-pr }}

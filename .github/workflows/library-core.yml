@@ -23,7 +23,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: surveyjs/azure-pipelines/.github/actions/build-library@gha-migration
+      - name: Build survey-library
+        uses: surveyjs/azure-pipelines/.github/actions/build-library@gha-migration
         with:
           ref: ${{ inputs.ref }}
           pr: ${{ inputs.pr }}
