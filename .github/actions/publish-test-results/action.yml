@@ -4,7 +4,11 @@ description: >
   templates. Uploads the results directory as an artifact and reports the JUnit file as annotations
   plus a job summary (annotate_only: no checks permission, so it works on fork PRs too). Call it
   with an `if` that keeps it running after a failed test step unless the run was cancelled - Azure
-  ran these with always() / succeededOrFailed().
+  ran these with always() / succeededOrFailed(). With playwright-json it also publishes the
+  screenshot diff page - one HTML file with the expected / actual / diff images of every mismatch,
+  linked from the job summary and opened right in the browser (a non-zipped artifact: signed-in
+  users with access to the repository, 14 days). With html-report it uploads the Playwright HTML
+  report as <artifact-name>_Report, for `npx playwright show-report`.
 inputs:
   path:
     description: Directory to upload, relative to the workspace
@@ -18,11 +22,17 @@ inputs:
   title:
     description: Report title - the Azure testRunTitle
     default: "Tests"
+  playwright-json:
+    description: Playwright JSON report file name inside `path`; empty - no screenshot diff page
+    default: ""
+  html-report:
+    description: Playwright HTML report directory, relative to the workspace; empty - not uploaded
+    default: ""
 runs:
   using: composite
   steps:
-    # always(): the caller's `if` already decided that the action runs; both steps run then, after a
-    # failed test step too. No ${{ }} in the description above - the runner evaluates it there as well.
+    # always(): the caller's `if` already decided that the action runs; every step runs then, after
+    # a failed test step too. No ${{ }} in the description above - the runner evaluates it there as well.
     - if: always()
       uses: actions/upload-artifact@v4
       with:
@@ -31,6 +41,48 @@ runs:
         if-no-files-found: ignore
         overwrite: true
         retention-days: 14
+    - if: always() && inputs.html-report != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}_Report
+        path: ${{ inputs.html-report }}
+        # theme-adapter-demos writes its report to the hidden screenshot-tests/.report
+        include-hidden-files: true
+        if-no-files-found: ignore
+        overwrite: true
+        retention-days: 14
+    - if: always() && inputs.playwright-json != ''
+      id: diff-page
+      shell: bash --noprofile --norc {0}
+      env:
+        RESULTS_JSON: ${{ inputs.path }}/${{ inputs.playwright-json }}
+        OUT_FILE: ${{ runner.temp }}/scr-diff/${{ inputs.artifact-name }}-diff.html
+        TITLE: ${{ inputs.title }}
+      run: bash "$GITHUB_ACTION_PATH/scr-diff.sh"
+    # archive: false - a single file, served as it is, so the browser opens it. The artifact is named
+    # after the file; `name` repeats the file name because overwrite looks the old artifact up by
+    # `name` (actions/upload-artifact#769) - without it a re-run fails with 409.
+    - if: always() && steps.diff-page.outputs.count != '' && steps.diff-page.outputs.count != '0'
+      id: diff-upload
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ inputs.artifact-name }}-diff.html
+        path: ${{ runner.temp }}/scr-diff/${{ inputs.artifact-name }}-diff.html
+        archive: false
+        overwrite: true
+        retention-days: 14
+    # Before the JUnit report, so the link heads the job summary.
+    - if: always() && steps.diff-upload.outputs.artifact-url != ''
+      shell: bash --noprofile --norc {0}
+      env:
+        TITLE: ${{ inputs.title }}
+        FAILED: ${{ steps.diff-page.outputs.failed }}
+        FLAKY: ${{ steps.diff-page.outputs.flaky }}
+        URL: ${{ steps.diff-upload.outputs.artifact-url }}
+      run: |
+        TEXT="$FAILED screenshot mismatch(es) in failed tests"
+        [ "$FLAKY" = 0 ] || TEXT="$TEXT, $FLAKY in flaky tests"
+        printf '### %s — screenshot diffs\n\n[Open the diff page](%s) — %s.\n\n' "$TITLE" "$URL" "$TEXT" >> "$GITHUB_STEP_SUMMARY"
     - if: always() && inputs.junit-file != ''
       uses: mikepenz/action-junit-report@v5
       with:

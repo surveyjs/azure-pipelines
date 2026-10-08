@@ -19,7 +19,7 @@ defaults:
 
 jobs:
   a11y-e2e:
-    name: A11Y & E2E
+    name: Library Angular · A11Y & E2E
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -52,7 +52,7 @@ jobs:
           title: Angular A11Y Tests
       - name: Test E2E
         working-directory: packages/survey-angular-ui
-        run: npm run e2e:ci
+        run: npm run e2e:ci -- --workers=100%
       - name: Publish E2E results
         if: ${{ !cancelled() }}
         uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
@@ -63,7 +63,7 @@ jobs:
           title: Angular E2E Tests
 
   markup-scr:
-    name: Markup & SCR
+    name: Library Angular · Markup & SCR
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -83,7 +83,7 @@ jobs:
         run: npm run test
       - name: Test SCR
         working-directory: packages/survey-angular-ui
-        run: npm run scr:ci
+        run: npm run scr:ci -- --workers=100%
       - name: Publish SCR results
         if: ${{ !cancelled() }}
         uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration

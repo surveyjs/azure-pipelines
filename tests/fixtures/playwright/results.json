@@ -1,0 +1,404 @@
+{
+  "config": {},
+  "suites": [
+    {
+      "title": "panel.spec.js",
+      "file": "panel.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Panel",
+          "file": "panel.spec.js",
+          "line": 5,
+          "column": 6,
+          "specs": [
+            {
+              "title": "stable",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "vrt",
+                  "projectName": "vrt",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 178,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-08T08:27:40.189Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "766d4a0812f6ccb5928b-61868e7282f77275b703",
+              "file": "panel.spec.js",
+              "line": 14,
+              "column": 3
+            },
+            {
+              "title": "no baseline",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "vrt",
+                  "projectName": "vrt",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 295,
+                      "error": {
+                        "message": "Error: A snapshot doesn't exist at screenshots\\panel-new.png, writing actual.",
+                        "stack": "Error: A snapshot doesn't exist at screenshots\\panel-new.png, writing actual.\n    at panel.spec.js:20:5",
+                        "location": {
+                          "file": "panel.spec.js",
+                          "column": 5,
+                          "line": 20
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 18 |\u001b[39m   test(\u001b[32m\"no baseline\"\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n \u001b[90m 19 |\u001b[39m     \u001b[36mawait\u001b[39m box(page\u001b[33m,\u001b[39m \u001b[32m\"blue\"\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 20 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m\"div\"\u001b[39m))\u001b[33m.\u001b[39mtoHaveScreenshot(\u001b[33mB\u001b[39m \u001b[33m?\u001b[39m \u001b[32m\"panel-new.png\"\u001b[39m \u001b[33m:\u001b[39m \u001b[32m\"panel-old.png\"\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m     \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 21 |\u001b[39m   })\u001b[33m;\u001b[39m\n \u001b[90m 22 |\u001b[39m   test(\u001b[32m\"flaky\"\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }\u001b[33m,\u001b[39m testInfo) \u001b[33m=>\u001b[39m {\n \u001b[90m 23 |\u001b[39m     \u001b[36mawait\u001b[39m box(page\u001b[33m,\u001b[39m \u001b[33mB\u001b[39m \u001b[33m&&\u001b[39m testInfo\u001b[33m.\u001b[39mretry \u001b[33m===\u001b[39m \u001b[35m0\u001b[39m \u001b[33m?\u001b[39m \u001b[32m\"red\"\u001b[39m \u001b[33m:\u001b[39m \u001b[32m\"blue\"\u001b[39m)\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "panel.spec.js",
+                            "column": 5,
+                            "line": 20
+                          },
+                          "message": "Error: A snapshot doesn't exist at screenshots\\panel-new.png, writing actual.\n\n  18 |   test(\"no baseline\", async ({ page }) => {\n  19 |     await box(page, \"blue\");\n> 20 |     await expect(page.locator(\"div\")).toHaveScreenshot(B ? \"panel-new.png\" : \"panel-old.png\");\n     |     ^\n  21 |   });\n  22 |   test(\"flaky\", async ({ page }, testInfo) => {\n  23 |     await box(page, B && testInfo.retry === 0 ? \"red\" : \"blue\");\n    at panel.spec.js:20:5"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-08T08:27:40.469Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "panel-new-expected.png",
+                          "contentType": "image/png",
+                          "path": "screenshots/panel-new.png"
+                        },
+                        {
+                          "name": "panel-new-actual.png",
+                          "contentType": "image/png",
+                          "path": "test-results/panel-Panel-no-baseline/panel-new-actual.png"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "panel.spec.js",
+                        "column": 5,
+                        "line": 20
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "766d4a0812f6ccb5928b-dc3507dd6fb325b21708",
+              "file": "panel.spec.js",
+              "line": 18,
+              "column": 3
+            },
+            {
+              "title": "flaky",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "vrt",
+                  "projectName": "vrt",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 382,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveScreenshot\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('div')\n  384 pixels (ratio 1.00 of all image pixels) are different.\n\n  Snapshot: panel-flaky.png\n\nCall log:\n\u001b[2m  - Expect \"toHaveScreenshot(panel-flaky.png)\" with timeout 5000ms\u001b[22m\n\u001b[2m    - verifying given screenshot expectation\u001b[22m\n\u001b[2m  - waiting for locator('div')\u001b[22m\n\u001b[2m    - locator resolved to <div></div>\u001b[22m\n\u001b[2m  - taking element screenshot\u001b[22m\n\u001b[2m    - disabled all CSS animations\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n\u001b[2m  - attempting scroll into view action\u001b[22m\n\u001b[2m    - waiting for element to be stable\u001b[22m\n\u001b[2m  - 384 pixels (ratio 1.00 of all image pixels) are different.\u001b[22m\n\u001b[2m  - waiting 100ms before taking screenshot\u001b[22m\n\u001b[2m  - waiting for locator('div')\u001b[22m\n\u001b[2m    - locator resolved to <div></div>\u001b[22m\n\u001b[2m  - taking element screenshot\u001b[22m\n\u001b[2m    - disabled all CSS animations\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n\u001b[2m  - attempting scroll into view action\u001b[22m\n\u001b[2m    - waiting for element to be stable\u001b[22m\n\u001b[2m  - captured a stable screenshot\u001b[22m\n\u001b[2m  - 384 pixels (ratio 1.00 of all image pixels) are different.\u001b[22m\n",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveScreenshot\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('div')\n  384 pixels (ratio 1.00 of all image pixels) are different.\n\n  Snapshot: panel-flaky.png\n\nCall log:\n\u001b[2m  - Expect \"toHaveScreenshot(panel-flaky.png)\" with timeout 5000ms\u001b[22m\n\u001b[2m    - verifying given screenshot expectation\u001b[22m\n\u001b[2m  - waiting for locator('div')\u001b[22m\n\u001b[2m    - locator resolved to <div></div>\u001b[22m\n\u001b[2m  - taking element screenshot\u001b[22m\n\u001b[2m    - disabled all CSS animations\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n\u001b[2m  - attempting scroll into view action\u001b[22m\n\u001b[2m    - waiting for element to be stable\u001b[22m\n\u001b[2m  - 384 pixels (ratio 1.00 of all image pixels) are different.\u001b[22m\n\u001b[2m  - waiting 100ms before taking screenshot\u001b[22m\n\u001b[2m  - waiting for locator('div')\u001b[22m\n\u001b[2m    - locator resolved to <div></div>\u001b[22m\n\u001b[2m  - taking element screenshot\u001b[22m\n\u001b[2m    - disabled all CSS animations\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n\u001b[2m  - attempting scroll into view action\u001b[22m\n\u001b[2m    - waiting for element to be stable\u001b[22m\n\u001b[2m  - captured a stable screenshot\u001b[22m\n\u001b[2m  - 384 pixels (ratio 1.00 of all image pixels) are different.\u001b[22m\n\n    at panel.spec.js:24:39",
+                        "location": {
+                          "file": "panel.spec.js",
+                          "column": 39,
+                          "line": 24
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 22 |\u001b[39m   test(\u001b[32m\"flaky\"\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }\u001b[33m,\u001b[39m testInfo) \u001b[33m=>\u001b[39m {\n \u001b[90m 23 |\u001b[39m     \u001b[36mawait\u001b[39m box(page\u001b[33m,\u001b[39m \u001b[33mB\u001b[39m \u001b[33m&&\u001b[39m testInfo\u001b[33m.\u001b[39mretry \u001b[33m===\u001b[39m \u001b[35m0\u001b[39m \u001b[33m?\u001b[39m \u001b[32m\"red\"\u001b[39m \u001b[33m:\u001b[39m \u001b[32m\"blue\"\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 24 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m\"div\"\u001b[39m))\u001b[33m.\u001b[39mtoHaveScreenshot(\u001b[32m\"panel-flaky.png\"\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                       \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 25 |\u001b[39m   })\u001b[33m;\u001b[39m\n \u001b[90m 26 |\u001b[39m })\u001b[33m;\u001b[39m\n \u001b[90m 27 |\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "panel.spec.js",
+                            "column": 39,
+                            "line": 24
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveScreenshot\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('div')\n  384 pixels (ratio 1.00 of all image pixels) are different.\n\n  Snapshot: panel-flaky.png\n\nCall log:\n\u001b[2m  - Expect \"toHaveScreenshot(panel-flaky.png)\" with timeout 5000ms\u001b[22m\n\u001b[2m    - verifying given screenshot expectation\u001b[22m\n\u001b[2m  - waiting for locator('div')\u001b[22m\n\u001b[2m    - locator resolved to <div></div>\u001b[22m\n\u001b[2m  - taking element screenshot\u001b[22m\n\u001b[2m    - disabled all CSS animations\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n\u001b[2m  - attempting scroll into view action\u001b[22m\n\u001b[2m    - waiting for element to be stable\u001b[22m\n\u001b[2m  - 384 pixels (ratio 1.00 of all image pixels) are different.\u001b[22m\n\u001b[2m  - waiting 100ms before taking screenshot\u001b[22m\n\u001b[2m  - waiting for locator('div')\u001b[22m\n\u001b[2m    - locator resolved to <div></div>\u001b[22m\n\u001b[2m  - taking element screenshot\u001b[22m\n\u001b[2m    - disabled all CSS animations\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n\u001b[2m  - attempting scroll into view action\u001b[22m\n\u001b[2m    - waiting for element to be stable\u001b[22m\n\u001b[2m  - captured a stable screenshot\u001b[22m\n\u001b[2m  - 384 pixels (ratio 1.00 of all image pixels) are different.\u001b[22m\n\n\n  22 |   test(\"flaky\", async ({ page }, testInfo) => {\n  23 |     await box(page, B && testInfo.retry === 0 ? \"red\" : \"blue\");\n> 24 |     await expect(page.locator(\"div\")).toHaveScreenshot(\"panel-flaky.png\");\n     |                                       ^\n  25 |   });\n  26 | });\n  27 |\n    at panel.spec.js:24:39"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-08T08:27:41.214Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "panel-flaky-expected.png",
+                          "contentType": "image/png",
+                          "path": "screenshots/panel-flaky.png"
+                        },
+                        {
+                          "name": "panel-flaky-actual.png",
+                          "contentType": "image/png",
+                          "path": "test-results/panel-Panel-flaky/panel-flaky-actual.png"
+                        },
+                        {
+                          "name": "panel-flaky-diff.png",
+                          "contentType": "image/png",
+                          "path": "test-results/panel-Panel-flaky/panel-flaky-diff.png"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "panel.spec.js",
+                        "column": 39,
+                        "line": 24
+                      }
+                    },
+                    {
+                      "workerIndex": 4,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 194,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 1,
+                      "startTime": "2026-10-08T08:27:42.182Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "flaky"
+                }
+              ],
+              "id": "766d4a0812f6ccb5928b-4ab006b065fb3e4cab55",
+              "file": "panel.spec.js",
+              "line": 22,
+              "column": 3
+            }
+          ],
+          "suites": [
+            {
+              "title": "title <b>",
+              "file": "panel.spec.js",
+              "line": 6,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "two soft mismatches <script>x</script>",
+                  "ok": false,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 30000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "vrt",
+                      "projectName": "vrt",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "failed",
+                          "duration": 582,
+                          "error": {
+                            "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveScreenshot\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('div')\n  384 pixels (ratio 1.00 of all image pixels) are different.\n\n  Snapshot: panel-first.png\n\nCall log:\n\u001b[2m  - Expect \"soft toHaveScreenshot(panel-first.png)\" with timeout 5000ms\u001b[22m\n\u001b[2m    - verifying given screenshot expectation\u001b[22m\n\u001b[2m  - waiting for locator('div')\u001b[22m\n\u001b[2m    - locator resolved to <div></div>\u001b[22m\n\u001b[2m  - taking element screenshot\u001b[22m\n\u001b[2m    - disabled all CSS animations\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n\u001b[2m  - attempting scroll into view action\u001b[22m\n\u001b[2m    - waiting for element to be stable\u001b[22m\n\u001b[2m  - 384 pixels (ratio 1.00 of all image pixels) are different.\u001b[22m\n\u001b[2m  - waiting 100ms before taking screenshot\u001b[22m\n\u001b[2m  - waiting for locator('div')\u001b[22m\n\u001b[2m    - locator resolved to <div></div>\u001b[22m\n\u001b[2m  - taking element screenshot\u001b[22m\n\u001b[2m    - disabled all CSS animations\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n\u001b[2m  - attempting scroll into view action\u001b[22m\n\u001b[2m    - waiting for element to be stable\u001b[22m\n\u001b[2m  - captured a stable screenshot\u001b[22m\n\u001b[2m  - 384 pixels (ratio 1.00 of all image pixels) are different.\u001b[22m\n",
+                            "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveScreenshot\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('div')\n  384 pixels (ratio 1.00 of all image pixels) are different.\n\n  Snapshot: panel-first.png\n\nCall log:\n\u001b[2m  - Expect \"soft toHaveScreenshot(panel-first.png)\" with timeout 5000ms\u001b[22m\n\u001b[2m    - verifying given screenshot expectation\u001b[22m\n\u001b[2m  - waiting for locator('div')\u001b[22m\n\u001b[2m    - locator resolved to <div></div>\u001b[22m\n\u001b[2m  - taking element screenshot\u001b[22m\n\u001b[2m    - disabled all CSS animations\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n\u001b[2m  - attempting scroll into view action\u001b[22m\n\u001b[2m    - waiting for element to be stable\u001b[22m\n\u001b[2m  - 384 pixels (ratio 1.00 of all image pixels) are different.\u001b[22m\n\u001b[2m  - waiting 100ms before taking screenshot\u001b[22m\n\u001b[2m  - waiting for locator('div')\u001b[22m\n\u001b[2m    - locator resolved to <div></div>\u001b[22m\n\u001b[2m  - taking element screenshot\u001b[22m\n\u001b[2m    - disabled all CSS animations\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n\u001b[2m  - attempting scroll into view action\u001b[22m\n\u001b[2m    - waiting for element to be stable\u001b[22m\n\u001b[2m  - captured a stable screenshot\u001b[22m\n\u001b[2m  - 384 pixels (ratio 1.00 of all image pixels) are different.\u001b[22m\n\n    at panel.spec.js:9:46",
+                            "location": {
+                              "file": "panel.spec.js",
+                              "column": 46,
+                              "line": 9
+                            },
+                            "snippet": "\u001b[0m \u001b[90m  7 |\u001b[39m     test(\u001b[32m\"two soft mismatches <script>x</script>\"\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n \u001b[90m  8 |\u001b[39m       \u001b[36mawait\u001b[39m box(page\u001b[33m,\u001b[39m \u001b[33mB\u001b[39m \u001b[33m?\u001b[39m \u001b[32m\"red\"\u001b[39m \u001b[33m:\u001b[39m \u001b[32m\"blue\"\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m  9 |\u001b[39m       \u001b[36mawait\u001b[39m expect\u001b[33m.\u001b[39msoft(page\u001b[33m.\u001b[39mlocator(\u001b[32m\"div\"\u001b[39m))\u001b[33m.\u001b[39mtoHaveScreenshot(\u001b[32m\"panel-first.png\"\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                              \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 10 |\u001b[39m       \u001b[36mawait\u001b[39m box(page\u001b[33m,\u001b[39m \u001b[33mB\u001b[39m \u001b[33m?\u001b[39m \u001b[32m\"green\"\u001b[39m \u001b[33m:\u001b[39m \u001b[32m\"blue\"\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 11 |\u001b[39m       \u001b[36mawait\u001b[39m expect\u001b[33m.\u001b[39msoft(page\u001b[33m.\u001b[39mlocator(\u001b[32m\"div\"\u001b[39m))\u001b[33m.\u001b[39mtoHaveScreenshot(\u001b[32m\"panel-second.png\"\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 12 |\u001b[39m     })\u001b[33m;\u001b[39m\u001b[0m"
+                          },
+                          "errors": [
+                            {
+                              "location": {
+                                "file": "panel.spec.js",
+                                "column": 46,
+                                "line": 9
+                              },
+                              "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveScreenshot\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('div')\n  384 pixels (ratio 1.00 of all image pixels) are different.\n\n  Snapshot: panel-first.png\n\nCall log:\n\u001b[2m  - Expect \"soft toHaveScreenshot(panel-first.png)\" with timeout 5000ms\u001b[22m\n\u001b[2m    - verifying given screenshot expectation\u001b[22m\n\u001b[2m  - waiting for locator('div')\u001b[22m\n\u001b[2m    - locator resolved to <div></div>\u001b[22m\n\u001b[2m  - taking element screenshot\u001b[22m\n\u001b[2m    - disabled all CSS animations\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n\u001b[2m  - attempting scroll into view action\u001b[22m\n\u001b[2m    - waiting for element to be stable\u001b[22m\n\u001b[2m  - 384 pixels (ratio 1.00 of all image pixels) are different.\u001b[22m\n\u001b[2m  - waiting 100ms before taking screenshot\u001b[22m\n\u001b[2m  - waiting for locator('div')\u001b[22m\n\u001b[2m    - locator resolved to <div></div>\u001b[22m\n\u001b[2m  - taking element screenshot\u001b[22m\n\u001b[2m    - disabled all CSS animations\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n\u001b[2m  - attempting scroll into view action\u001b[22m\n\u001b[2m    - waiting for element to be stable\u001b[22m\n\u001b[2m  - captured a stable screenshot\u001b[22m\n\u001b[2m  - 384 pixels (ratio 1.00 of all image pixels) are different.\u001b[22m\n\n\n   7 |     test(\"two soft mismatches <script>x</script>\", async ({ page }) => {\n   8 |       await box(page, B ? \"red\" : \"blue\");\n>  9 |       await expect.soft(page.locator(\"div\")).toHaveScreenshot(\"panel-first.png\");\n     |                                              ^\n  10 |       await box(page, B ? \"green\" : \"blue\");\n  11 |       await expect.soft(page.locator(\"div\")).toHaveScreenshot(\"panel-second.png\");\n  12 |     });\n    at panel.spec.js:9:46"
+                            },
+                            {
+                              "location": {
+                                "file": "panel.spec.js",
+                                "column": 46,
+                                "line": 11
+                              },
+                              "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveScreenshot\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('div')\n  384 pixels (ratio 1.00 of all image pixels) are different.\n\n  Snapshot: panel-second.png\n\nCall log:\n\u001b[2m  - Expect \"soft toHaveScreenshot(panel-second.png)\" with timeout 5000ms\u001b[22m\n\u001b[2m    - verifying given screenshot expectation\u001b[22m\n\u001b[2m  - waiting for locator('div')\u001b[22m\n\u001b[2m    - locator resolved to <div></div>\u001b[22m\n\u001b[2m  - taking element screenshot\u001b[22m\n\u001b[2m    - disabled all CSS animations\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n\u001b[2m  - attempting scroll into view action\u001b[22m\n\u001b[2m    - waiting for element to be stable\u001b[22m\n\u001b[2m  - 384 pixels (ratio 1.00 of all image pixels) are different.\u001b[22m\n\u001b[2m  - waiting 100ms before taking screenshot\u001b[22m\n\u001b[2m  - waiting for locator('div')\u001b[22m\n\u001b[2m    - locator resolved to <div></div>\u001b[22m\n\u001b[2m  - taking element screenshot\u001b[22m\n\u001b[2m    - disabled all CSS animations\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n\u001b[2m  - attempting scroll into view action\u001b[22m\n\u001b[2m    - waiting for element to be stable\u001b[22m\n\u001b[2m  - captured a stable screenshot\u001b[22m\n\u001b[2m  - 384 pixels (ratio 1.00 of all image pixels) are different.\u001b[22m\n\n\n   9 |       await expect.soft(page.locator(\"div\")).toHaveScreenshot(\"panel-first.png\");\n  10 |       await box(page, B ? \"green\" : \"blue\");\n> 11 |       await expect.soft(page.locator(\"div\")).toHaveScreenshot(\"panel-second.png\");\n     |                                              ^\n  12 |     });\n  13 |   });\n  14 |   test(\"stable\", async ({ page }) => {\n    at panel.spec.js:11:46"
+                            }
+                          ],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2026-10-08T08:27:38.011Z",
+                          "annotations": [],
+                          "attachments": [
+                            {
+                              "name": "panel-first-expected.png",
+                              "contentType": "image/png",
+                              "path": "screenshots/panel-first.png"
+                            },
+                            {
+                              "name": "panel-first-actual.png",
+                              "contentType": "image/png",
+                              "path": "test-results/panel-Panel-title-b-two-soft-mismatches-script-x-script-/panel-first-actual.png"
+                            },
+                            {
+                              "name": "panel-first-diff.png",
+                              "contentType": "image/png",
+                              "path": "test-results/panel-Panel-title-b-two-soft-mismatches-script-x-script-/panel-first-diff.png"
+                            },
+                            {
+                              "name": "panel-second-expected.png",
+                              "contentType": "image/png",
+                              "path": "screenshots/panel-second.png"
+                            },
+                            {
+                              "name": "panel-second-actual.png",
+                              "contentType": "image/png",
+                              "path": "test-results/panel-Panel-title-b-two-soft-mismatches-script-x-script-/panel-second-actual.png"
+                            },
+                            {
+                              "name": "panel-second-diff.png",
+                              "contentType": "image/png",
+                              "path": "test-results/panel-Panel-title-b-two-soft-mismatches-script-x-script-/panel-second-diff.png"
+                            }
+                          ],
+                          "errorLocation": {
+                            "file": "panel.spec.js",
+                            "column": 46,
+                            "line": 9
+                          }
+                        },
+                        {
+                          "workerIndex": 1,
+                          "parallelIndex": 0,
+                          "status": "failed",
+                          "duration": 545,
+                          "error": {
+                            "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveScreenshot\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('div')\n  384 pixels (ratio 1.00 of all image pixels) are different.\n\n  Snapshot: panel-first.png\n\nCall log:\n\u001b[2m  - Expect \"soft toHaveScreenshot(panel-first.png)\" with timeout 5000ms\u001b[22m\n\u001b[2m    - verifying given screenshot expectation\u001b[22m\n\u001b[2m  - waiting for locator('div')\u001b[22m\n\u001b[2m    - locator resolved to <div></div>\u001b[22m\n\u001b[2m  - taking element screenshot\u001b[22m\n\u001b[2m    - disabled all CSS animations\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n\u001b[2m  - attempting scroll into view action\u001b[22m\n\u001b[2m    - waiting for element to be stable\u001b[22m\n\u001b[2m  - 384 pixels (ratio 1.00 of all image pixels) are different.\u001b[22m\n\u001b[2m  - waiting 100ms before taking screenshot\u001b[22m\n\u001b[2m  - waiting for locator('div')\u001b[22m\n\u001b[2m    - locator resolved to <div></div>\u001b[22m\n\u001b[2m  - taking element screenshot\u001b[22m\n\u001b[2m    - disabled all CSS animations\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n\u001b[2m  - attempting scroll into view action\u001b[22m\n\u001b[2m    - waiting for element to be stable\u001b[22m\n\u001b[2m  - captured a stable screenshot\u001b[22m\n\u001b[2m  - 384 pixels (ratio 1.00 of all image pixels) are different.\u001b[22m\n",
+                            "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveScreenshot\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('div')\n  384 pixels (ratio 1.00 of all image pixels) are different.\n\n  Snapshot: panel-first.png\n\nCall log:\n\u001b[2m  - Expect \"soft toHaveScreenshot(panel-first.png)\" with timeout 5000ms\u001b[22m\n\u001b[2m    - verifying given screenshot expectation\u001b[22m\n\u001b[2m  - waiting for locator('div')\u001b[22m\n\u001b[2m    - locator resolved to <div></div>\u001b[22m\n\u001b[2m  - taking element screenshot\u001b[22m\n\u001b[2m    - disabled all CSS animations\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n\u001b[2m  - attempting scroll into view action\u001b[22m\n\u001b[2m    - waiting for element to be stable\u001b[22m\n\u001b[2m  - 384 pixels (ratio 1.00 of all image pixels) are different.\u001b[22m\n\u001b[2m  - waiting 100ms before taking screenshot\u001b[22m\n\u001b[2m  - waiting for locator('div')\u001b[22m\n\u001b[2m    - locator resolved to <div></div>\u001b[22m\n\u001b[2m  - taking element screenshot\u001b[22m\n\u001b[2m    - disabled all CSS animations\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n\u001b[2m  - attempting scroll into view action\u001b[22m\n\u001b[2m    - waiting for element to be stable\u001b[22m\n\u001b[2m  - captured a stable screenshot\u001b[22m\n\u001b[2m  - 384 pixels (ratio 1.00 of all image pixels) are different.\u001b[22m\n\n    at panel.spec.js:9:46",
+                            "location": {
+                              "file": "panel.spec.js",
+                              "column": 46,
+                              "line": 9
+                            },
+                            "snippet": "\u001b[0m \u001b[90m  7 |\u001b[39m     test(\u001b[32m\"two soft mismatches <script>x</script>\"\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n \u001b[90m  8 |\u001b[39m       \u001b[36mawait\u001b[39m box(page\u001b[33m,\u001b[39m \u001b[33mB\u001b[39m \u001b[33m?\u001b[39m \u001b[32m\"red\"\u001b[39m \u001b[33m:\u001b[39m \u001b[32m\"blue\"\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m  9 |\u001b[39m       \u001b[36mawait\u001b[39m expect\u001b[33m.\u001b[39msoft(page\u001b[33m.\u001b[39mlocator(\u001b[32m\"div\"\u001b[39m))\u001b[33m.\u001b[39mtoHaveScreenshot(\u001b[32m\"panel-first.png\"\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                              \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 10 |\u001b[39m       \u001b[36mawait\u001b[39m box(page\u001b[33m,\u001b[39m \u001b[33mB\u001b[39m \u001b[33m?\u001b[39m \u001b[32m\"green\"\u001b[39m \u001b[33m:\u001b[39m \u001b[32m\"blue\"\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 11 |\u001b[39m       \u001b[36mawait\u001b[39m expect\u001b[33m.\u001b[39msoft(page\u001b[33m.\u001b[39mlocator(\u001b[32m\"div\"\u001b[39m))\u001b[33m.\u001b[39mtoHaveScreenshot(\u001b[32m\"panel-second.png\"\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 12 |\u001b[39m     })\u001b[33m;\u001b[39m\u001b[0m"
+                          },
+                          "errors": [
+                            {
+                              "location": {
+                                "file": "panel.spec.js",
+                                "column": 46,
+                                "line": 9
+                              },
+                              "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveScreenshot\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('div')\n  384 pixels (ratio 1.00 of all image pixels) are different.\n\n  Snapshot: panel-first.png\n\nCall log:\n\u001b[2m  - Expect \"soft toHaveScreenshot(panel-first.png)\" with timeout 5000ms\u001b[22m\n\u001b[2m    - verifying given screenshot expectation\u001b[22m\n\u001b[2m  - waiting for locator('div')\u001b[22m\n\u001b[2m    - locator resolved to <div></div>\u001b[22m\n\u001b[2m  - taking element screenshot\u001b[22m\n\u001b[2m    - disabled all CSS animations\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n\u001b[2m  - attempting scroll into view action\u001b[22m\n\u001b[2m    - waiting for element to be stable\u001b[22m\n\u001b[2m  - 384 pixels (ratio 1.00 of all image pixels) are different.\u001b[22m\n\u001b[2m  - waiting 100ms before taking screenshot\u001b[22m\n\u001b[2m  - waiting for locator('div')\u001b[22m\n\u001b[2m    - locator resolved to <div></div>\u001b[22m\n\u001b[2m  - taking element screenshot\u001b[22m\n\u001b[2m    - disabled all CSS animations\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n\u001b[2m  - attempting scroll into view action\u001b[22m\n\u001b[2m    - waiting for element to be stable\u001b[22m\n\u001b[2m  - captured a stable screenshot\u001b[22m\n\u001b[2m  - 384 pixels (ratio 1.00 of all image pixels) are different.\u001b[22m\n\n\n   7 |     test(\"two soft mismatches <script>x</script>\", async ({ page }) => {\n   8 |       await box(page, B ? \"red\" : \"blue\");\n>  9 |       await expect.soft(page.locator(\"div\")).toHaveScreenshot(\"panel-first.png\");\n     |                                              ^\n  10 |       await box(page, B ? \"green\" : \"blue\");\n  11 |       await expect.soft(page.locator(\"div\")).toHaveScreenshot(\"panel-second.png\");\n  12 |     });\n    at panel.spec.js:9:46"
+                            },
+                            {
+                              "location": {
+                                "file": "panel.spec.js",
+                                "column": 46,
+                                "line": 11
+                              },
+                              "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveScreenshot\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('div')\n  384 pixels (ratio 1.00 of all image pixels) are different.\n\n  Snapshot: panel-second.png\n\nCall log:\n\u001b[2m  - Expect \"soft toHaveScreenshot(panel-second.png)\" with timeout 5000ms\u001b[22m\n\u001b[2m    - verifying given screenshot expectation\u001b[22m\n\u001b[2m  - waiting for locator('div')\u001b[22m\n\u001b[2m    - locator resolved to <div></div>\u001b[22m\n\u001b[2m  - taking element screenshot\u001b[22m\n\u001b[2m    - disabled all CSS animations\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n\u001b[2m  - attempting scroll into view action\u001b[22m\n\u001b[2m    - waiting for element to be stable\u001b[22m\n\u001b[2m  - 384 pixels (ratio 1.00 of all image pixels) are different.\u001b[22m\n\u001b[2m  - waiting 100ms before taking screenshot\u001b[22m\n\u001b[2m  - waiting for locator('div')\u001b[22m\n\u001b[2m    - locator resolved to <div></div>\u001b[22m\n\u001b[2m  - taking element screenshot\u001b[22m\n\u001b[2m    - disabled all CSS animations\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n\u001b[2m  - attempting scroll into view action\u001b[22m\n\u001b[2m    - waiting for element to be stable\u001b[22m\n\u001b[2m  - captured a stable screenshot\u001b[22m\n\u001b[2m  - 384 pixels (ratio 1.00 of all image pixels) are different.\u001b[22m\n\n\n   9 |       await expect.soft(page.locator(\"div\")).toHaveScreenshot(\"panel-first.png\");\n  10 |       await box(page, B ? \"green\" : \"blue\");\n> 11 |       await expect.soft(page.locator(\"div\")).toHaveScreenshot(\"panel-second.png\");\n     |                                              ^\n  12 |     });\n  13 |   });\n  14 |   test(\"stable\", async ({ page }) => {\n    at panel.spec.js:11:46"
+                            }
+                          ],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 1,
+                          "startTime": "2026-10-08T08:27:39.134Z",
+                          "annotations": [],
+                          "attachments": [
+                            {
+                              "name": "panel-first-expected.png",
+                              "contentType": "image/png",
+                              "path": "screenshots/panel-first.png"
+                            },
+                            {
+                              "name": "panel-first-actual.png",
+                              "contentType": "image/png",
+                              "path": "test-results/panel-Panel-title-b-two-soft-mismatches-script-x-script--retry1/panel-first-actual.png"
+                            },
+                            {
+                              "name": "panel-first-diff.png",
+                              "contentType": "image/png",
+                              "path": "test-results/panel-Panel-title-b-two-soft-mismatches-script-x-script--retry1/panel-first-diff.png"
+                            },
+                            {
+                              "name": "panel-second-expected.png",
+                              "contentType": "image/png",
+                              "path": "screenshots/panel-second.png"
+                            },
+                            {
+                              "name": "panel-second-actual.png",
+                              "contentType": "image/png",
+                              "path": "test-results/panel-Panel-title-b-two-soft-mismatches-script-x-script--retry1/panel-second-actual.png"
+                            },
+                            {
+                              "name": "panel-second-diff.png",
+                              "contentType": "image/png",
+                              "path": "test-results/panel-Panel-title-b-two-soft-mismatches-script-x-script--retry1/panel-second-diff.png"
+                            }
+                          ],
+                          "errorLocation": {
+                            "file": "panel.spec.js",
+                            "column": 46,
+                            "line": 9
+                          }
+                        }
+                      ],
+                      "status": "unexpected"
+                    }
+                  ],
+                  "id": "766d4a0812f6ccb5928b-1297ec82e8c9f5bf77be",
+                  "file": "panel.spec.js",
+                  "line": 7,
+                  "column": 5
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-08T00:00:00.000Z",
+    "duration": 4923.289,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 2,
+    "flaky": 1
+  }
+}

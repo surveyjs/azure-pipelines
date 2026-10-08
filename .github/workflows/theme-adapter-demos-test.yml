@@ -40,7 +40,7 @@ defaults:
 
 jobs:
   scr:
-    name: "SCR: ${{ matrix.app }}"
+    name: "Theme Adapter Demos · SCR: ${{ matrix.app }}"
     strategy:
       fail-fast: false
       matrix:
@@ -68,7 +68,7 @@ jobs:
           CI: "true"
           PLAYWRIGHT_JUNIT_OUTPUT_FILE: ${{ github.workspace }}/test-results/scr-${{ matrix.app }}-junit.xml
           PLAYWRIGHT_HTML_OUTPUT_DIR: ${{ github.workspace }}/screenshot-tests/.report
-        run: npm run "test:scr:$APP" -- --reporter=list,junit,html
+        run: npm run "test:scr:$APP" -- --reporter=list,junit,html --workers=100%
       - name: Publish SCR results
         if: ${{ !cancelled() }}
         uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration

@@ -31,7 +31,7 @@ defaults:
 
 jobs:
   example-a11y:
-    name: Example & A11Y
+    name: Creator JS · Example & A11Y
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -65,7 +65,7 @@ jobs:
           title: Creator JS A11Y Tests
 
   e2e:
-    name: E2E
+    name: Creator JS · E2E
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -82,7 +82,7 @@ jobs:
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
       - name: Test E2E
         working-directory: packages/survey-creator-js
-        run: npm run e2e:ci
+        run: npm run e2e:ci -- --workers=100%
       - name: Publish results
         if: ${{ !cancelled() }}
         uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
@@ -93,7 +93,7 @@ jobs:
           title: Creator JS E2E Tests
 
   scr:
-    name: SCR
+    name: Creator JS · SCR
     continue-on-error: ${{ !inputs.scr-blocking }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -111,7 +111,7 @@ jobs:
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
       - name: Test SCR
         working-directory: packages/survey-creator-js
-        run: npm run test:scr:ci
+        run: npm run test:scr:ci -- --workers=100%
       - name: Publish results
         if: ${{ !cancelled() }}
         uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration

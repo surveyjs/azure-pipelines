@@ -23,7 +23,7 @@ defaults:
 
 jobs:
   markup:
-    name: Markup
+    name: Library React · Markup
     if: inputs.scr-update == ''
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -40,7 +40,7 @@ jobs:
         run: npm run test
 
   a11y-e2e:
-    name: A11Y & E2E
+    name: Library React · A11Y & E2E
     if: inputs.scr-update == ''
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -69,7 +69,7 @@ jobs:
           title: React A11Y Tests
       - name: Test E2E
         working-directory: packages/survey-react-ui
-        run: npm run e2e:ci
+        run: npm run e2e:ci -- --workers=100%
       - name: Publish E2E results
         if: ${{ !cancelled() }}
         uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
@@ -80,7 +80,7 @@ jobs:
           title: React E2E Tests
 
   scr:
-    name: SCR Test
+    name: Library React · SCR Test
     if: inputs.scr-update == ''
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -94,7 +94,7 @@ jobs:
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
       - name: Test SCR
         working-directory: packages/survey-react-ui
-        run: npm run scr:ci
+        run: npm run scr:ci -- --workers=100%
       - name: Publish SCR results
         if: ${{ !cancelled() }}
         uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
@@ -105,7 +105,7 @@ jobs:
           title: React SCR Tests
 
   scr-update:
-    name: SCR Update
+    name: Library React · SCR Update
     # Pushes back to the PR branch, so only for a PR from this repository.
     if: inputs.scr-update != '' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
@@ -120,7 +120,7 @@ jobs:
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
       - name: Update SCR
         working-directory: packages/survey-react-ui
-        run: npm run scr:update
+        run: npm run scr:update -- --workers=100%
       - name: Commit updated screenshots
         env:
           HEAD_REF: ${{ github.head_ref }}

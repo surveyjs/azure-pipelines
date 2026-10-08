@@ -32,7 +32,7 @@ defaults:
 
 jobs:
   unit:
-    name: Unit
+    name: Analytics · Unit
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -49,7 +49,7 @@ jobs:
         run: npm run test
 
   e2e:
-    name: E2E
+    name: Analytics · E2E
     continue-on-error: ${{ !inputs.scr-blocking }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -67,7 +67,7 @@ jobs:
       - name: Playwright install
         run: npm run pwinst
       - name: Test
-        run: npm run e2e:ci
+        run: npm run e2e:ci -- --workers=100%
       - name: Publish e2e test results
         if: ${{ !cancelled() }}
         uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration

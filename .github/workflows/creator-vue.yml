@@ -31,7 +31,7 @@ defaults:
 
 jobs:
   example-a11y:
-    name: Example & A11Y
+    name: Creator Vue · Example & A11Y
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -65,7 +65,7 @@ jobs:
           title: Creator Vue A11Y Tests
 
   e2e:
-    name: E2E
+    name: Creator Vue · E2E
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -85,7 +85,7 @@ jobs:
         run: npm run build:example:prod
       - name: Test E2E
         working-directory: packages/survey-creator-vue
-        run: npm run e2e:ci
+        run: npm run e2e:ci -- --workers=100%
       - name: Publish results
         if: ${{ !cancelled() }}
         uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
@@ -96,7 +96,7 @@ jobs:
           title: Creator Vue E2E Tests
 
   scr:
-    name: SCR
+    name: Creator Vue · SCR
     continue-on-error: ${{ !inputs.scr-blocking }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -117,7 +117,7 @@ jobs:
         run: npm run build:example:prod
       - name: Test SCR
         working-directory: packages/survey-creator-vue
-        run: npm run test:scr:ci
+        run: npm run test:scr:ci -- --workers=100%
       - name: Publish results
         if: ${{ !cancelled() }}
         uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration

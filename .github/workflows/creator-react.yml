@@ -32,7 +32,7 @@ defaults:
 
 jobs:
   example-a11y:
-    name: Example & A11Y
+    name: Creator React · Example & A11Y
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -69,7 +69,7 @@ jobs:
           title: Creator React A11Y Tests
 
   e2e:
-    name: E2E
+    name: Creator React · E2E
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -86,7 +86,7 @@ jobs:
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
       - name: Test E2E
         working-directory: packages/survey-creator-react
-        run: npm run e2e:ci
+        run: npm run e2e:ci -- --workers=100%
       - name: Publish results
         if: ${{ !cancelled() }}
         uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
@@ -97,7 +97,7 @@ jobs:
           title: Creator React E2E Tests
 
   scr:
-    name: SCR Test
+    name: Creator React · SCR Test
     continue-on-error: ${{ !inputs.scr-blocking }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -115,7 +115,7 @@ jobs:
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
       - name: Test SCR
         working-directory: packages/survey-creator-react
-        run: npm run test:scr:ci
+        run: npm run test:scr:ci -- --workers=100%
       - name: Publish results
         if: ${{ !cancelled() }}
         uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
@@ -126,7 +126,7 @@ jobs:
           title: Creator React SCR Tests
 
   scr-legacy:
-    name: SCR Legacy
+    name: Creator React · SCR Legacy
     if: github.base_ref == 'V2' || github.ref_name == 'V2'
     continue-on-error: ${{ !inputs.scr-blocking }}
     runs-on: ubuntu-24.04
@@ -145,7 +145,7 @@ jobs:
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
       - name: Test SCR Legacy
         working-directory: packages/survey-creator-react
-        run: npm run test:scr:legacy:ci
+        run: npm run test:scr:legacy:ci -- --workers=100%
       - name: Publish results
         if: ${{ !cancelled() }}
         uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration

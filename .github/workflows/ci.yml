@@ -75,3 +75,15 @@ jobs:
           artifact-name: Smoke_Results
           junit-file: smoke-junit.xml
           title: Smoke Tests
+      # The fixture report has mismatches, so the diff page is built, uploaded and linked; open it
+      # from the summary to see what a real SCR failure looks like. The fixture directory stands in
+      # for an HTML report - the smoke only checks that the upload runs.
+      - name: publish-test-results (Playwright)
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/publish-test-results
+        with:
+          path: tests/fixtures/playwright
+          artifact-name: Smoke_SCR
+          title: Smoke SCR Tests
+          playwright-json: results.json
+          html-report: tests/fixtures/playwright
