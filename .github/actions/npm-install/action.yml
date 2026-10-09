@@ -50,7 +50,7 @@ runs:
     - name: Restore the npm cache
       id: cache-restore
       if: inputs.cache != ''
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@v5
       with:
         path: ${{ steps.cache-key.outputs.paths }}
         key: ${{ steps.cache-key.outputs.key }}
@@ -63,7 +63,7 @@ runs:
       run: bash "$GITHUB_ACTION_PATH/install.sh"
     - name: Save the npm cache
       if: inputs.cache != '' && steps.cache-restore.outputs.cache-hit != 'true'
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@v5
       with:
         path: ${{ steps.cache-key.outputs.paths }}
         key: ${{ steps.cache-key.outputs.key }}
