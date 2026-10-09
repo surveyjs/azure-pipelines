@@ -2,8 +2,9 @@ name: npm install
 description: >
   Port of templates/utils/npm.yml (keep in sync while it lives): sets Node up and runs
   `npm install` in every listed directory in parallel, then the optional `npm update`s. With
-  `cache`, restores ~/.npm first and, after a miss, saves it once the installs succeed (see
-  cache-key.sh). Azure cached node_modules tarballs in /tmp of its agents instead.
+  `cache`, restores the directories' node_modules and Playwright's browsers first and, after a
+  miss, saves them once the installs succeed (see cache-key.sh) - the /tmp tarballs of the Azure
+  agents.
 inputs:
   directories:
     description: Directories to install, one per line, relative to the workspace
@@ -18,7 +19,7 @@ inputs:
     description: "'true' - also install the system libraries of Playwright's Chromium"
     default: "false"
   cache:
-    description: Cache family (survey-library, survey-creator, ...); empty = no ~/.npm cache
+    description: Cache family (survey-library, survey-creator, ...); empty = no node_modules cache
     default: ""
   node-version:
     # 24, not 22: the creator and analytics packages depend on survey-library through file: paths
@@ -44,15 +45,15 @@ runs:
       env:
         NPM_DIRS: ${{ inputs.directories }}
         CACHE_FAMILY: ${{ inputs.cache }}
+        NODE_VERSION: ${{ inputs.node-version }}
       run: bash "$GITHUB_ACTION_PATH/cache-key.sh"
     - name: Restore the npm cache
       id: cache-restore
       if: inputs.cache != ''
       uses: actions/cache/restore@v4
       with:
-        path: ~/.npm/_cacache
+        path: ${{ steps.cache-key.outputs.paths }}
         key: ${{ steps.cache-key.outputs.key }}
-        restore-keys: ${{ steps.cache-key.outputs.restore-keys }}
     - name: npm install
       shell: bash --noprofile --norc {0}
       env:
@@ -64,7 +65,7 @@ runs:
       if: inputs.cache != '' && steps.cache-restore.outputs.cache-hit != 'true'
       uses: actions/cache/save@v4
       with:
-        path: ~/.npm/_cacache
+        path: ${{ steps.cache-key.outputs.paths }}
         key: ${{ steps.cache-key.outputs.key }}
     - name: Install the Chromium system libraries
       if: inputs.browsers == 'true'

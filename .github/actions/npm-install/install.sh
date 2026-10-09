@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Port of templates/utils/npm.yml (keep in sync while it lives), minus its /tmp tarball cache -
-# hosted runners start clean; the action caches ~/.npm instead (cache-key.sh).
+# Port of templates/utils/npm.yml (keep in sync while it lives); its /tmp node_modules tarballs
+# are the action's actions/cache entries here (cache-key.sh).
 # Usage (env): NPM_DIRS - directories, one per line, relative to GITHUB_WORKSPACE or absolute;
 # NPM_UPDATE - optional "<directory> <package>" lines, `npm update`d after the installs;
 # GITHUB_TOKEN - optional PAT.

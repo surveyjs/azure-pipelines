@@ -62,25 +62,27 @@ OUT="$(NPM_DIRS='a' bash .github/actions/npm-install/browser-deps.sh 2>&1)"
 assert_eq "no Playwright CLI - nothing runs" "" "$(cat "$NPX_LOG")"
 assert_contains "but it warns" "$OUT" "::warning::No Playwright CLI"
 
-key() { # <directories> [family] [week]
+key() { # <directories> [family] [node version]
   : > "$TMP/out"
-  HOME="$TMP/home" GITHUB_OUTPUT="$TMP/out" NPM_DIRS="$1" CACHE_FAMILY="${2-fam}" \
-    NPM_CACHE_WEEK="${3:-2026-W41}" bash .github/actions/npm-install/cache-key.sh
+  GITHUB_OUTPUT="$TMP/out" NPM_DIRS="$1" CACHE_FAMILY="${2-fam}" NODE_VERSION="${3:-24}" \
+    bash .github/actions/npm-install/cache-key.sh
   STATUS=$?
   KEY="$(sed -n 's/^key=//p' "$TMP/out")"
-  RESTORE="$(sed -n 's/^restore-keys=//p' "$TMP/out")"
+  PATHS="$(sed -n '/^paths<<EOF$/,/^EOF$/{/^paths<<EOF$/d;/^EOF$/d;p}' "$TMP/out")"
 }
 
 key $'a\nb'
 assert_eq "cache-key succeeds" 0 "$STATUS"
-assert_contains "the key is npm-<family>-<week>-<hash>" "$KEY" "npm-fam-2026-W41-"
-assert_eq "and the hash has 16 hex digits" 16 "$(printf '%s' "${KEY#npm-fam-2026-W41-}" | tr -dc '0-9a-f' | wc -c | tr -d ' ')"
-assert_eq "a miss falls back to the family's entries of the same week only" "npm-fam-2026-W41-" "$RESTORE"
-assert_eq "the npm cache directory exists for the save" true "$([ -d "$TMP/home/.npm/_cacache" ] && echo true)"
+assert_contains "the key is npm-<family>-node<version>-<hash>" "$KEY" "npm-fam-node24-"
+assert_eq "and the hash has 16 hex digits" 16 "$(printf '%s' "${KEY#npm-fam-node24-}" | tr -dc '0-9a-f' | wc -c | tr -d ' ')"
+assert_eq "the entry holds every directory's node_modules and Playwright's browsers" \
+  "$(printf 'a/node_modules\nb/node_modules\n~/.cache/ms-playwright')" "$PATHS"
+assert_not_contains "no restore-keys: a miss installs from scratch, as in Azure" "$(cat "$TMP/out")" "restore-keys"
 AB="$KEY"
 
 key $'b\r\n\na'
-assert_eq "order, blank lines and CRs do not change the key" "$AB" "$KEY"
+assert_eq "order, blank lines and CRs change neither the key" "$AB" "$KEY"
+assert_eq "nor the paths" "$(printf 'a/node_modules\nb/node_modules\n~/.cache/ms-playwright')" "$PATHS"
 
 key 'a'
 assert_not_contains "a different set of directories changes the key" "$KEY" "$AB"
@@ -90,8 +92,12 @@ key $'a\nb'
 assert_not_contains "an edited package.json changes the key" "$KEY" "$AB"
 echo '{}' > "$TMP/ws/b/package.json"
 
-key $'a\nb' fam 2026-W42
-assert_contains "a new week changes the key" "$KEY" "npm-fam-2026-W42-"
+key $'a\nb' fam 22
+assert_contains "another Node.js version changes the key" "$KEY" "npm-fam-node22-"
+
+key $'.\n/abs/dir/'
+assert_eq "the workspace root and absolute directories map to their node_modules" \
+  "$(printf 'node_modules\n/abs/dir/node_modules\n~/.cache/ms-playwright')" "$PATHS"
 
 key $'a\nnopkg'
 assert_eq "a missing package.json does not fail the key (install.sh reports it)" 0 "$STATUS"
