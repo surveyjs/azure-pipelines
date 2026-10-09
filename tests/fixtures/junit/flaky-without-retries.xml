@@ -1,0 +1,13 @@
+<testsuites id="" name="" tests="2" failures="0" skipped="0" errors="0" time="0.7873770000000001">
+<testsuite name="flaky/flaky.spec.js" timestamp="2026-10-09T10:19:38.592Z" hostname="" tests="2" failures="0" skipped="0" time="0.011" errors="0">
+<testcase name="stable" classname="flaky/flaky.spec.js" time="0.004">
+</testcase>
+<testcase name="flaky" classname="flaky/flaky.spec.js" time="0.007">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/flaky-flaky-flaky/error-context.md]]
+]]>
+</system-out>
+</testcase>
+</testsuite>
+</testsuites>

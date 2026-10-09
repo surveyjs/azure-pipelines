@@ -2,8 +2,8 @@ name: Build survey-library
 description: >
   Port of templates/library/<framework>/build.yml (keep in sync while those live): checks
   survey-library out at the workspace root, switches to a companion PR if one is given, installs,
-  builds survey-core and, with `package`, one UI package; with `artifact-name` uploads that build
-  (the Azure `store: true`).
+  builds survey-core and, with `package`, one UI package. The Azure `store: true` build upload is
+  not ported: nothing downloads those builds.
 inputs:
   repository:
     description: survey-library repository; the triggering commit when it is the run's own repo
@@ -20,9 +20,6 @@ inputs:
   example:
     description: "'true' - packages/<package>/example has a package.json of its own"
     default: "false"
-  artifact-name:
-    description: Upload packages/<package or survey-core>/build under this name; empty = no upload
-    default: ""
   browsers:
     description: "'true' - install the system libraries of Playwright's Chromium"
     default: "false"
@@ -77,11 +74,3 @@ runs:
       shell: bash --noprofile --norc {0}
       working-directory: packages/${{ inputs.package }}
       run: npm run build
-    - name: Publish build artifacts
-      if: inputs.artifact-name != ''
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ inputs.artifact-name }}
-        path: packages/${{ inputs.package || 'survey-core' }}/build
-        overwrite: true
-        retention-days: 14

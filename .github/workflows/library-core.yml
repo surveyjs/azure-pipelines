@@ -28,7 +28,6 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
           pr: ${{ inputs.pr }}
-          artifact-name: SurveyJSLibraryBuildCore
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
       - name: Tests Unit
         working-directory: packages/survey-core

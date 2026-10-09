@@ -1,0 +1,22 @@
+<testsuites id="" name="" tests="2" failures="0" skipped="0" errors="0" time="0.907904">
+<testsuite name="flaky/flaky.spec.js" timestamp="2026-10-09T10:19:35.528Z" hostname="" tests="2" failures="0" skipped="0" time="0.012" errors="0">
+<testcase name="stable" classname="flaky/flaky.spec.js" time="0.006">
+</testcase>
+<testcase name="flaky" classname="flaky/flaky.spec.js" time="0.004">
+<flakyFailure message="expect(received).toBe(expected) // Object.is equality" type="expect.toBe" time="0.002">
+<stackTrace>
+<![CDATA[Error: expect(received).toBe(expected) // Object.is equality
+
+Expected: 1
+Received: 0
+    at flaky/flaky.spec.js:3:58]]>
+</stackTrace>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/flaky-flaky-flaky/error-context.md]]
+]]>
+</system-out>
+</flakyFailure>
+</testcase>
+</testsuite>
+</testsuites>

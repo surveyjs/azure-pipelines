@@ -17,6 +17,11 @@ defaults:
   run:
     shell: bash --noprofile --norc {0}
 
+# The JUnit reports keep the failed attempts of flaky tests (<flakyFailure>) - publish-test-results
+# lists those tests and uploads their results.
+env:
+  PLAYWRIGHT_JUNIT_INCLUDE_RETRIES: "1"
+
 jobs:
   a11y-e2e:
     name: Library JS · A11Y & E2E
@@ -29,7 +34,6 @@ jobs:
           ref: ${{ inputs.ref }}
           pr: ${{ inputs.pr }}
           package: survey-js-ui
-          artifact-name: SurveyJSLibraryBuildSurveyUI
           browsers: "true"
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
       # the a11y script pins --reporter dot, so junit is appended back here and pointed at

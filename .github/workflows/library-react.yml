@@ -21,6 +21,11 @@ defaults:
   run:
     shell: bash --noprofile --norc {0}
 
+# The JUnit reports keep the failed attempts of flaky tests (<flakyFailure>) - publish-test-results
+# lists those tests and uploads their results.
+env:
+  PLAYWRIGHT_JUNIT_INCLUDE_RETRIES: "1"
+
 jobs:
   markup:
     name: Library React · Markup
@@ -34,7 +39,6 @@ jobs:
           ref: ${{ inputs.ref }}
           pr: ${{ inputs.pr }}
           package: survey-react-ui
-          artifact-name: SurveyJSLibraryBuildReact
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
       - name: Test Markup
         working-directory: packages/survey-react-ui
