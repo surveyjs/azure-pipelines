@@ -93,12 +93,10 @@ steps:
       git checkout -B $branch origin/$branch
       git reset --hard origin/$branch
 
-      Copy-Item -Force "$(Build.SourcesDirectory)/surveyjs-site-data/DocsPdf/classes.json" "surveyjs.io/App_Data/DocsPdf/"
-      Copy-Item -Force "$(Build.SourcesDirectory)/surveyjs-site-data/DocsPdf/pmes.json" "surveyjs.io/App_Data/DocsPdf/"
       Copy-Item -Force "$(Build.SourcesDirectory)/surveyjs-site-data/DocsPdf/classes.json" "surveyjs.io.web/App_Data/DocsPdf/"
       Copy-Item -Force "$(Build.SourcesDirectory)/surveyjs-site-data/DocsPdf/pmes.json" "surveyjs.io.web/App_Data/DocsPdf/"
 
-      git add surveyjs.io/App_Data/DocsPdf/classes.json surveyjs.io/App_Data/DocsPdf/pmes.json surveyjs.io.web/App_Data/DocsPdf/classes.json surveyjs.io.web/App_Data/DocsPdf/pmes.json
+      git add surveyjs.io.web/App_Data/DocsPdf/classes.json surveyjs.io.web/App_Data/DocsPdf/pmes.json
 
       if (git status --porcelain) {
           echo "There are changes in classes.json and pmes.json. Committing and pushing to GitHub..."
