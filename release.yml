@@ -323,7 +323,7 @@ jobs:
 
   # Copy builds to DevBuilds (just all builds in a single folder)
   - pwsh: |
-      $devBuilds = "$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds"
+      $devBuilds = "$(Agent.TempDirectory)/DevBuilds"
 
       if (Test-Path $devBuilds) {
         Remove-Item -Path $devBuilds -Recurse -Force
@@ -361,7 +361,7 @@ jobs:
   # Publish DevBuilds artifact for review
   - task: PublishBuildArtifacts@1
     inputs:
-      PathtoPublish: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds'
+      PathtoPublish: '$(Agent.TempDirectory)/DevBuilds'
       ArtifactName: 'DevBuilds'
       publishLocation: 'Container'
       StoreAsTar: true
@@ -388,7 +388,7 @@ jobs:
         az storage blob upload-batch `
           --account-name surveyjsdocsstorage `
           --destination "$(azureBlobContainer)" `
-          --source "$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/" `
+          --source "$(Agent.TempDirectory)/DevBuilds/" `
           --auth-mode login `
           --overwrite true
 
@@ -399,7 +399,7 @@ jobs:
     - task: Npm@1
       inputs:
         command: "custom"
-        workingDir: '$(Build.SourcesDirectory)/service/surveyjs.io/DevBuilds/${{ pkg }}'
+        workingDir: '$(Agent.TempDirectory)/DevBuilds/${{ pkg }}'
         customCommand: "publish $(npmPublishArgs)"
         customEndpoint: 'NPM Registry V2'
         verbose: true
@@ -449,7 +449,7 @@ jobs:
 
 
 
-  # Update Web.config
+  # Update appsettings.json
   - pwsh: |
       $branch = "$(projectsBranch)"
 
@@ -469,15 +469,16 @@ jobs:
       git checkout -B $branch origin/$branch
       git reset --hard origin/$branch
 
-      $path = "$(Build.SourcesDirectory)/service/surveyjs.io/Web.config"
-      $xml = New-Object System.Xml.XmlDocument
-      $xml.PreserveWhitespace = $true
-      $xml.Load($path)
-      $key = $xml.SelectSingleNode("//appSettings/add[@key = 'SurveyJSVersion']")
-      $key.SetAttribute('value', $surveyJSVersion)
-      $xml.Save((Resolve-Path $path))
+      $path = (Resolve-Path "$(Build.SourcesDirectory)/service/surveyjs.io.web/appsettings.json").Path
+      $json = [System.IO.File]::ReadAllText($path)
+      $pattern = '("SurveyJSVersion"\s*:\s*")[^"]*(")'
+      if ($json -notmatch $pattern) {
+          Write-Error "SurveyJSVersion not found in $path"
+      }
+      $json = $json -replace $pattern, "`${1}$surveyJSVersion`${2}"
+      [System.IO.File]::WriteAllText($path, $json, (New-Object System.Text.UTF8Encoding $false))
 
-      git add surveyjs.io/Web.config
+      git add surveyjs.io.web/appsettings.json
       if (git status --porcelain) {
           git commit -m "released $surveyJSVersion"
 
@@ -486,16 +487,16 @@ jobs:
               git pull origin $branch -X ours --no-rebase
               git push origin $branch
               if ($LASTEXITCODE -eq 0) { $pushed = $true; break }
-              Write-Host "Web.config push rejected (attempt $attempt of 3), retrying"
+              Write-Host "appsettings.json push rejected (attempt $attempt of 3), retrying"
               Start-Sleep -Seconds 5
           }
 
           if (-not $pushed) {
-              Write-Host "##vso[task.logissue type=error]Failed to push Web.config to $branch after 3 attempts"
+              Write-Host "##vso[task.logissue type=error]Failed to push appsettings.json to $branch after 3 attempts"
               exit 1
           }
       }
-    displayName: 'Update Web.config and push'
+    displayName: 'Update appsettings.json and push'
 
 
 
