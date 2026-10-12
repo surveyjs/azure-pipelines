@@ -1,0 +1,12 @@
+name: Wait for the Chromium system libraries
+description: >
+  Waits for the system libraries of Playwright's Chromium and fonts-ubuntu that npm-install with
+  browsers 'true' installs in the background, prints that install's log and fails when it failed
+  or ran longer than 10 minutes. The build actions run it as their last step, so the install
+  overlaps with the builds.
+runs:
+  using: composite
+  steps:
+    - name: Wait for the Chromium system libraries and fonts-ubuntu
+      shell: bash --noprofile --norc {0}
+      run: bash "$GITHUB_ACTION_PATH/wait.sh"

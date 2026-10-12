@@ -4,7 +4,8 @@ description: >
   `npm install` in every listed directory in parallel, then the optional `npm update`s. With
   `cache`, restores the directories' node_modules and Playwright's browsers first and, after a
   miss, saves them once the installs succeed (see cache-key.sh) - the /tmp tarballs of the Azure
-  agents.
+  agents. With `browsers`, the Chromium system libraries install in the background, unlike
+  Azure: the caller builds meanwhile and runs the browser-deps-wait action before the tests.
 inputs:
   directories:
     description: Directories to install, one per line, relative to the workspace
@@ -16,7 +17,7 @@ inputs:
     description: PAT for the git dependencies; empty installs anonymously
     default: ""
   browsers:
-    description: "'true' - also install the system libraries of Playwright's Chromium and fonts-ubuntu"
+    description: "'true' - also start installing the system libraries of Playwright's Chromium and fonts-ubuntu in the background; browser-deps-wait waits for them"
     default: "false"
   cache:
     description: Cache family (survey-library, survey-creator, ...); empty = no node_modules cache
@@ -67,9 +68,9 @@ runs:
       with:
         path: ${{ steps.cache-key.outputs.paths }}
         key: ${{ steps.cache-key.outputs.key }}
-    - name: Install the Chromium system libraries and fonts-ubuntu
+    - name: Start installing the Chromium system libraries and fonts-ubuntu
       if: inputs.browsers == 'true'
       shell: bash --noprofile --norc {0}
       env:
         NPM_DIRS: ${{ inputs.directories }}
-      run: bash "$GITHUB_ACTION_PATH/browser-deps.sh"
+      run: bash "$GITHUB_ACTION_PATH/browser-deps-start.sh"

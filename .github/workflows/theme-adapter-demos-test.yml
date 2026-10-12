@@ -1,5 +1,6 @@
 # Port of templates/theme-adapter-demos/test.yml (keep in sync while it lives): screenshot tests
 # of the theme-adapter-demos apps, one job per app, against locally built survey-* packages.
+# Unlike Azure, the two longest apps run in two Playwright shards - one job per shard.
 name: Theme Adapter Demos
 
 on:
@@ -45,11 +46,16 @@ env:
 
 jobs:
   scr:
-    name: "SCR: ${{ matrix.app }}"
+    name: "SCR: ${{ matrix.app }}${{ matrix.shards > 1 && format(' ({0}/{1})', matrix.shard, matrix.shards) || '' }}"
     strategy:
       fail-fast: false
       matrix:
-        app: [bootstrap, shadcn, mui]
+        include:
+          - { app: bootstrap, shard: 1, shards: 2 }
+          - { app: bootstrap, shard: 2, shards: 2 }
+          - { app: shadcn, shard: 1, shards: 2 }
+          - { app: shadcn, shard: 2, shards: 2 }
+          - { app: mui, shard: 1, shards: 1 }
     continue-on-error: ${{ !inputs.scr-blocking }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -71,19 +77,20 @@ jobs:
       - name: Test SCR ${{ matrix.app }}
         env:
           APP: ${{ matrix.app }}
+          SHARD: ${{ matrix.shard }}/${{ matrix.shards }}
           CI: "true"
           PLAYWRIGHT_JUNIT_OUTPUT_FILE: ${{ github.workspace }}/test-results/scr-${{ matrix.app }}-junit.xml
           PLAYWRIGHT_HTML_OUTPUT_DIR: ${{ github.workspace }}/screenshot-tests/.report
           # the config has no json reporter - it feeds the screenshot diff page
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/test-results/scr-${{ matrix.app }}-results.json
-        run: npm run "test:scr:$APP" -- --reporter=list,junit,html,json --workers=100%
+        run: npm run "test:scr:$APP" -- --reporter=list,junit,html,json --workers=100% --shard="$SHARD"
       - name: Publish SCR results
         if: ${{ !cancelled() }}
         uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
         with:
           path: test-results
-          artifact-name: ThemeAdapterDemos_SCR_${{ matrix.app }}
+          artifact-name: ThemeAdapterDemos_SCR_${{ matrix.app }}_${{ matrix.shard }}
           junit-file: scr-${{ matrix.app }}-junit.xml
-          title: Theme Adapter Demos SCR ${{ matrix.app }}
+          title: Theme Adapter Demos SCR ${{ matrix.app }}${{ matrix.shards > 1 && format(' ({0}/{1})', matrix.shard, matrix.shards) || '' }}
           playwright-json: scr-${{ matrix.app }}-results.json
           html-report: screenshot-tests/.report

@@ -16,4 +16,15 @@ IN_RUNS="$(awk 'FNR == 1 { section = "" } /^[a-z]+:/ { section = $1 }
   section == "runs:" && /cancelled\(/ { print FILENAME ":" FNR ": " $0 }' .github/actions/*/action.yml)"
 assert_eq "no composite step uses cancelled()" "" "$IN_RUNS"
 
+# npm-install only starts the browser install (in the background): an action that asks it for
+# browsers must wait for them after it, or the tests race apt.
+NO_WAIT=""
+for F in .github/actions/*/action.yml; do
+  INSTALL="$(grep -n 'actions/npm-install@' "$F" | head -1 | cut -d: -f1)"
+  [ -n "$INSTALL" ] && grep -q '^        browsers:' "$F" || continue
+  WAIT="$(grep -n 'actions/browser-deps-wait@' "$F" | tail -1 | cut -d: -f1)"
+  [ -n "$WAIT" ] && [ "$WAIT" -gt "$INSTALL" ] || NO_WAIT="$NO_WAIT $F"
+done
+assert_eq "every action that installs browsers waits for them" "" "$NO_WAIT"
+
 finish

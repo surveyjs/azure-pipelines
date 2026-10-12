@@ -59,6 +59,39 @@ done
 BLOCKING="$(grep -c 'scr-blocking: ${{ inputs.scr-blocking }}' .github/workflows/creator-test.yml 2>/dev/null)"
 assert_eq "creator-test.yml passes scr-blocking to the four screenshot workflows" 4 "${BLOCKING:-0}"
 
+# The long suites run in Playwright / Vitest shards, one job per shard. A shard job must not cancel
+# its sibling on failure, must name its shard in the check, and must upload under a name of its own:
+# publish-test-results overwrites an artifact of the same name.
+SHARDS="$(awk '
+  function flush() {
+    if (job != "" && body ~ /--shard=/) {
+      print "sharded " job
+      if (body !~ /fail-fast: false/) print "issue " job ": no fail-fast: false"
+      if (name !~ /matrix\.shard/) print "issue " job ": the name does not show matrix.shard"
+      n = split(body, lines, "\n")
+      for (i = 1; i <= n; i++)
+        if (lines[i] ~ /artifact-name:/ && lines[i] !~ /matrix\.shard/) print "issue " job ": " lines[i]
+    }
+    job = ""; body = ""; name = ""
+  }
+  FNR == 1 { flush(); injobs = 0; file = FILENAME; sub(/.*\//, "", file) }
+  /^jobs:/ { injobs = 1; next }
+  injobs && /^  [a-z0-9_-]+:[[:space:]]*$/ { flush(); job = file ":" substr($1, 1, length($1) - 1); next }
+  job != "" && /^    name:/ { name = $0 }
+  job != "" { body = body "\n" $0 }
+  END { flush() }
+' .github/workflows/*.yml)"
+assert_eq "the long suites are sharded" \
+  "$(printf 'sharded %s\n' creator-angular.yml:e2e creator-angular.yml:scr creator-core.yml:unit \
+    creator-js.yml:e2e creator-js.yml:scr creator-react.yml:e2e creator-react.yml:scr \
+    creator-vue.yml:e2e creator-vue.yml:scr theme-adapter-demos-test.yml:scr)" \
+  "$(printf '%s\n' "$SHARDS" | grep '^sharded ' | LC_ALL=C sort)"
+assert_eq "every shard job keeps its sibling, names its shard and uploads under its own name" "" \
+  "$(printf '%s\n' "$SHARDS" | grep '^issue ')"
+# vitest run already runs the presets project; npm run test:presets ran it a second time.
+assert_eq "creator-core runs the presets once, inside npm run test" "" \
+  "$(grep -n 'test:presets' .github/workflows/creator-core.yml)"
+
 # Afterparty carries the single required check. The orchestrator is gone: the graph lives in
 # survey-library's caller workflow, where its top-level jobs become the run's groups.
 assert_contains "afterparty.yml runs the result action" \

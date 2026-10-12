@@ -74,3 +74,6 @@ runs:
       shell: bash --noprofile --norc {0}
       working-directory: packages/${{ inputs.package }}
       run: npm run build
+    - name: Wait for the Chromium system libraries
+      if: inputs.browsers == 'true'
+      uses: surveyjs/azure-pipelines/.github/actions/browser-deps-wait@gha-migration

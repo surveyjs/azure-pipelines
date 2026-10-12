@@ -149,3 +149,5 @@ runs:
         copy survey-library/packages/survey-react-ui/build node_modules/survey-react-ui
         copy survey-creator/packages/survey-creator-core/build node_modules/survey-creator-core
         copy survey-creator/packages/survey-creator-react/build node_modules/survey-creator-react
+    - name: Wait for the Chromium system libraries
+      uses: surveyjs/azure-pipelines/.github/actions/browser-deps-wait@gha-migration

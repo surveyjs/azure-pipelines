@@ -1,4 +1,5 @@
 # Port of templates/creator/js/test.yml (keep in sync while it lives).
+# Unlike Azure, E2E and SCR run in two Playwright shards each - one job per shard.
 name: Creator JS (Preact ShadowDOM BoxSizing) Test
 
 on:
@@ -71,7 +72,11 @@ jobs:
           title: Creator JS A11Y Tests
 
   e2e:
-    name: E2E
+    name: "E2E (${{ matrix.shard }}/2)"
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -89,19 +94,23 @@ jobs:
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
       - name: Test E2E
         working-directory: packages/survey-creator-js
-        run: npm run e2e:ci -- --workers=100%
+        run: npm run e2e:ci -- --workers=100% --shard=${{ matrix.shard }}/2
       - name: Publish results
         if: ${{ !cancelled() }}
         uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
         with:
           path: packages/survey-creator-js/test-results
-          artifact-name: Creator_JS_E2E
+          artifact-name: Creator_JS_E2E_${{ matrix.shard }}
           junit-file: e2e-junit-results.xml
-          title: Creator JS E2E Tests
+          title: Creator JS E2E Tests (${{ matrix.shard }}/2)
           html-report: packages/survey-creator-js/playwright-report
 
   scr:
-    name: SCR
+    name: "SCR (${{ matrix.shard }}/2)"
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     continue-on-error: ${{ !inputs.scr-blocking }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -120,14 +129,14 @@ jobs:
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
       - name: Test SCR
         working-directory: packages/survey-creator-js
-        run: npm run test:scr:ci -- --workers=100%
+        run: npm run test:scr:ci -- --workers=100% --shard=${{ matrix.shard }}/2
       - name: Publish results
         if: ${{ !cancelled() }}
         uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
         with:
           path: packages/survey-creator-js/test-results
-          artifact-name: Creator_JS_SCR
+          artifact-name: Creator_JS_SCR_${{ matrix.shard }}
           junit-file: e2e-junit-results.xml
-          title: Creator JS SCR Tests
+          title: Creator JS SCR Tests (${{ matrix.shard }}/2)
           playwright-json: results.json
           html-report: packages/survey-creator-js/playwright-report
