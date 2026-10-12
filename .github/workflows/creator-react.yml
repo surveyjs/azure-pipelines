@@ -38,7 +38,7 @@ env:
 
 jobs:
   example-a11y:
-    name: Example & A11Y
+    name: React · Example & A11Y
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -76,7 +76,7 @@ jobs:
           title: Creator React A11Y Tests
 
   e2e:
-    name: "E2E (${{ matrix.shard }}/2)"
+    name: "React · E2E (${{ matrix.shard }}/2)"
     strategy:
       fail-fast: false
       matrix:
@@ -110,7 +110,7 @@ jobs:
           html-report: packages/survey-creator-react/playwright-report
 
   scr:
-    name: "SCR Test (${{ matrix.shard }}/2)"
+    name: "React · SCR Test (${{ matrix.shard }}/2)"
     strategy:
       fail-fast: false
       matrix:
@@ -146,7 +146,7 @@ jobs:
           html-report: packages/survey-creator-react/playwright-report
 
   scr-legacy:
-    name: SCR Legacy
+    name: React · SCR Legacy
     if: github.base_ref == 'V2' || github.ref_name == 'V2'
     continue-on-error: ${{ !inputs.scr-blocking }}
     runs-on: ubuntu-24.04

@@ -1,6 +1,8 @@
 # The Library group of the survey-library CI run. GitHub groups the run's sidebar by the top-level
 # jobs of the caller workflow, so the library-* workflows are called from here. Port of the
 # Library*Test stages of library.yml (keep in sync while it lives).
+# The sidebar shows the group and the leaf job's name only, not the Core / React / ... jobs below:
+# so the leaf jobs name their framework themselves ("React · Markup").
 name: Library
 
 on: workflow_call

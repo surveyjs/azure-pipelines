@@ -37,7 +37,7 @@ env:
 
 jobs:
   markup-a11y:
-    name: Markup & Example & A11Y
+    name: Angular · Markup & Example & A11Y
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -75,7 +75,7 @@ jobs:
           title: Creator Angular A11Y Tests
 
   e2e:
-    name: "E2E (${{ matrix.shard }}/3)"
+    name: "Angular · E2E (${{ matrix.shard }}/3)"
     strategy:
       fail-fast: false
       matrix:
@@ -112,7 +112,7 @@ jobs:
           html-report: packages/survey-creator-angular/playwright-report
 
   scr:
-    name: "SCR (${{ matrix.shard }}/2)"
+    name: "Angular · SCR (${{ matrix.shard }}/2)"
     strategy:
       fail-fast: false
       matrix:

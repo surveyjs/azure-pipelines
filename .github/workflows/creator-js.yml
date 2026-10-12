@@ -37,7 +37,7 @@ env:
 
 jobs:
   example-a11y:
-    name: Example & A11Y
+    name: JS · Example & A11Y
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -72,7 +72,7 @@ jobs:
           title: Creator JS A11Y Tests
 
   e2e:
-    name: "E2E (${{ matrix.shard }}/2)"
+    name: "JS · E2E (${{ matrix.shard }}/2)"
     strategy:
       fail-fast: false
       matrix:
@@ -106,7 +106,7 @@ jobs:
           html-report: packages/survey-creator-js/playwright-report
 
   scr:
-    name: "SCR (${{ matrix.shard }}/2)"
+    name: "JS · SCR (${{ matrix.shard }}/2)"
     strategy:
       fail-fast: false
       matrix:

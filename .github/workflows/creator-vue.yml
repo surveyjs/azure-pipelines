@@ -37,7 +37,7 @@ env:
 
 jobs:
   example-a11y:
-    name: Example & A11Y
+    name: Vue · Example & A11Y
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -72,7 +72,7 @@ jobs:
           title: Creator Vue A11Y Tests
 
   e2e:
-    name: "E2E (${{ matrix.shard }}/2)"
+    name: "Vue · E2E (${{ matrix.shard }}/2)"
     strategy:
       fail-fast: false
       matrix:
@@ -109,7 +109,7 @@ jobs:
           html-report: packages/survey-creator-vue/playwright-report
 
   scr:
-    name: "SCR (${{ matrix.shard }}/2)"
+    name: "Vue · SCR (${{ matrix.shard }}/2)"
     strategy:
       fail-fast: false
       matrix:

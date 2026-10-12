@@ -25,7 +25,7 @@ env:
 
 jobs:
   markup:
-    name: Markup
+    name: React · Markup
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -41,7 +41,7 @@ jobs:
         run: npm run test
 
   a11y-e2e:
-    name: A11Y & E2E
+    name: React · A11Y & E2E
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -82,7 +82,7 @@ jobs:
           html-report: packages/survey-react-ui/playwright-report
 
   scr:
-    name: SCR Test
+    name: React · SCR Test
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:

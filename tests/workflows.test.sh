@@ -43,10 +43,20 @@ GUARD="$(grep -c "if: github.event_name == 'pull_request' && github.event.pull_r
   .github/workflows/library-scr-update.yml 2>/dev/null)"
 assert_eq "SCR Update pushes only to a PR branch of this repository" 1 "${GUARD:-0}"
 
-# Job names carry no area prefix: the group in the run's sidebar already names the area, so the
-# check reads "Library / React / Markup", not "Library / React / Library React · Markup".
-PREFIXED="$(grep -n '^    name: .*·' .github/workflows/*.yml)"
-assert_eq "no job name repeats its area" "" "$PREFIXED"
+# The run's sidebar shows only the group (Library, Creator) and the leaf job's name - not the
+# React / Angular / ... level between them, which only the check name carries. So every leaf job of
+# library-* and creator-* names its framework: "React · E2E (1/2)" in the sidebar, check
+# "Creator / React / React · E2E (1/2)".
+UNNAMED="$(for F in .github/workflows/{library,creator}-{core,react,angular,vue,js}.yml; do
+  PART="$(basename "$F" .yml)"; PART="${PART#*-}"
+  case "$PART" in
+    core) FW=Core ;;
+    js) FW=JS ;;
+    *) FW="$(printf '%s' "${PART:0:1}" | tr '[:lower:]' '[:upper:]')${PART:1}" ;;
+  esac
+  grep -n '^    name:' "$F" | grep -v "^[0-9]*:    name: \"\{0,1\}$FW · " | sed "s|^|$F:|"
+done)"
+assert_eq "every leaf job of library-* and creator-* names its framework" "" "$UNNAMED"
 
 # The Library and Creator groups call every workflow of their area.
 for AREA in library creator; do
