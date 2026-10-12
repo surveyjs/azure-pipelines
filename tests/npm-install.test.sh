@@ -1,4 +1,4 @@
-# Tests of .github/actions/npm-install/{install,browser-deps}.sh with npm and npx stubbed out.
+# Tests of .github/actions/npm-install/{install,browser-deps}.sh with npm, npx and sudo stubbed out.
 source tests/lib.sh
 
 TMP="$(mktemp -d)"
@@ -14,7 +14,12 @@ cat > "$TMP/bin/npx" <<'EOF'
 #!/usr/bin/env bash
 printf '%s|%s\n' "$(basename "$PWD")" "$*" >> "$NPX_LOG"
 EOF
-chmod +x "$TMP/bin/npm" "$TMP/bin/npx"
+# the same log as npx: install-deps refreshes the apt lists, so the font must come after it
+cat > "$TMP/bin/sudo" <<'EOF'
+#!/usr/bin/env bash
+printf 'sudo|%s\n' "$*" >> "$NPX_LOG"
+EOF
+chmod +x "$TMP/bin/npm" "$TMP/bin/npx" "$TMP/bin/sudo"
 export PATH="$TMP/bin:$PATH" GITHUB_WORKSPACE="$TMP/ws" NPM_LOG="$TMP/npm.log" NPX_LOG="$TMP/npx.log"
 INSTALL='install --no-audit --no-fund --no-update-notifier --no-package-lock'
 
@@ -55,7 +60,9 @@ printf '#!/bin/sh\n' > "$TMP/ws/b/node_modules/.bin/playwright"
 chmod +x "$TMP/ws/b/node_modules/.bin/playwright"
 : > "$NPX_LOG"
 OUT="$(NPM_DIRS=$'a\nb' bash .github/actions/npm-install/browser-deps.sh 2>&1)"
-assert_eq "install-deps runs with the first Playwright CLI found" "b|--no-install playwright install-deps chromium" "$(cat "$NPX_LOG")"
+assert_eq "install-deps runs with the first Playwright CLI found, then fonts-ubuntu installs" \
+  "$(printf 'b|--no-install playwright install-deps chromium\nsudo|apt-get install -y --no-install-recommends fonts-ubuntu')" \
+  "$(cat "$NPX_LOG")"
 
 : > "$NPX_LOG"
 OUT="$(NPM_DIRS='a' bash .github/actions/npm-install/browser-deps.sh 2>&1)"

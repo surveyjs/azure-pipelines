@@ -16,7 +16,7 @@ inputs:
     description: PAT for the git dependencies; empty installs anonymously
     default: ""
   browsers:
-    description: "'true' - also install the system libraries of Playwright's Chromium"
+    description: "'true' - also install the system libraries of Playwright's Chromium and fonts-ubuntu"
     default: "false"
   cache:
     description: Cache family (survey-library, survey-creator, ...); empty = no node_modules cache
@@ -67,7 +67,7 @@ runs:
       with:
         path: ${{ steps.cache-key.outputs.paths }}
         key: ${{ steps.cache-key.outputs.key }}
-    - name: Install the Chromium system libraries
+    - name: Install the Chromium system libraries and fonts-ubuntu
       if: inputs.browsers == 'true'
       shell: bash --noprofile --norc {0}
       env:

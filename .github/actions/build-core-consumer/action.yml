@@ -27,7 +27,7 @@ inputs:
     description: Companion survey-library PR number, or empty
     default: ""
   browsers:
-    description: "'true' - install the system libraries of Playwright's Chromium"
+    description: "'true' - install the system libraries of Playwright's Chromium and fonts-ubuntu"
     default: "false"
   token:
     description: PAT (secrets.SURVEYJS_BOT_TOKEN); empty works for everything public
