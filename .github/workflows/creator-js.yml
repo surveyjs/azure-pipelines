@@ -36,7 +36,7 @@ env:
 
 jobs:
   example-a11y:
-    name: Creator JS · Example & A11Y
+    name: Example & A11Y
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -71,7 +71,7 @@ jobs:
           title: Creator JS A11Y Tests
 
   e2e:
-    name: Creator JS · E2E
+    name: E2E
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -101,7 +101,7 @@ jobs:
           html-report: packages/survey-creator-js/playwright-report
 
   scr:
-    name: Creator JS · SCR
+    name: SCR
     continue-on-error: ${{ !inputs.scr-blocking }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60

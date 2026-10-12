@@ -37,7 +37,7 @@ env:
 
 jobs:
   example-a11y:
-    name: Creator React · Example & A11Y
+    name: Example & A11Y
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -75,7 +75,7 @@ jobs:
           title: Creator React A11Y Tests
 
   e2e:
-    name: Creator React · E2E
+    name: E2E
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -105,7 +105,7 @@ jobs:
           html-report: packages/survey-creator-react/playwright-report
 
   scr:
-    name: Creator React · SCR Test
+    name: SCR Test
     continue-on-error: ${{ !inputs.scr-blocking }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -137,7 +137,7 @@ jobs:
           html-report: packages/survey-creator-react/playwright-report
 
   scr-legacy:
-    name: Creator React · SCR Legacy
+    name: SCR Legacy
     if: github.base_ref == 'V2' || github.ref_name == 'V2'
     continue-on-error: ${{ !inputs.scr-blocking }}
     runs-on: ubuntu-24.04

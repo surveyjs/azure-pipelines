@@ -1,0 +1,61 @@
+# Port of the "SCR Update" job of templates/library/react/test.yml (keep in sync while it lives).
+# A group of its own in the survey-library CI run: with [scr_update] in the commit message the
+# caller workflow skips the test groups, and this is the only thing that runs.
+name: SCR Update
+
+on: workflow_call
+
+defaults:
+  run:
+    shell: bash --noprofile --norc {0}
+
+jobs:
+  scr-update:
+    name: Library React
+    # Pushes back to the PR branch, so only for a PR from this repository.
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Build survey-library
+        uses: surveyjs/azure-pipelines/.github/actions/build-library@gha-migration
+        with:
+          package: survey-react-ui
+          browsers: "true"
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+      - name: Update SCR
+        working-directory: packages/survey-react-ui
+        run: npm run scr:update -- --workers=100%
+      - name: Commit updated screenshots
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          TOKEN: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.email "surveyjs.org@gmail.com"
+          git config user.name "surveyjsdeveloper"
+          git add screenshots
+          TOTAL="$(git diff --cached --name-only | wc -l | tr -d ' ')"
+          git commit --allow-empty -m "updated $TOTAL screenshots" --no-verify
+          # The PAT goes to git through the environment only - never into .git/config. The push
+          # must be the PAT's: a push with the workflow token would not start a new CI run.
+          AUTH="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)"
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.https://github.com/.extraheader" GIT_CONFIG_VALUE_0="$AUTH"
+          git fetch origin "$HEAD_REF"
+          git rebase --onto "origin/$HEAD_REF" HEAD~1
+          # The new baselines, for review and - in the shadow period - to take them from here.
+          mkdir -p "$RUNNER_TEMP/scr-update"
+          git diff --name-only --diff-filter=AM HEAD~1 HEAD -- screenshots | while IFS= read -r F; do
+            mkdir -p "$RUNNER_TEMP/scr-update/$(dirname "$F")"
+            cp "$F" "$RUNNER_TEMP/scr-update/$F"
+          done
+          # SHADOW-OFF: git push --no-verify origin "HEAD:$HEAD_REF"
+      - name: Publish updated screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Library_SCR_Update
+          path: ${{ runner.temp }}/scr-update
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 14

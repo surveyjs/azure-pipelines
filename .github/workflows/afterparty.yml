@@ -1,0 +1,26 @@
+# The Afterparty group of the survey-library CI run: everything after the tests. result - the single
+# required status check, "Afterparty / result" - runs on every run; Staging and Backport
+# (sub-projects B and C) will follow it on pushes, so they run only when everything passed.
+name: Afterparty
+
+on:
+  workflow_call:
+    inputs:
+      needs:
+        description: toJSON(needs) of the calling job - every top-level job of the caller workflow before it
+        type: string
+        required: true
+
+jobs:
+  result:
+    name: result
+    # Explicit: the caller's always() does not settle how the implicit success() of a job in a called
+    # workflow counts the caller's skipped needs - and a skipped required check counts as passed.
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Result
+        uses: surveyjs/azure-pipelines/.github/actions/result@gha-migration
+        with:
+          needs: ${{ inputs.needs }}

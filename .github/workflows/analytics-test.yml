@@ -37,7 +37,7 @@ env:
 
 jobs:
   unit:
-    name: Analytics · Unit
+    name: Unit
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -55,7 +55,7 @@ jobs:
         run: npm run test
 
   e2e:
-    name: Analytics · E2E
+    name: E2E
     continue-on-error: ${{ !inputs.scr-blocking }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60

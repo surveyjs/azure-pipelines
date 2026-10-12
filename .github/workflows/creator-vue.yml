@@ -36,7 +36,7 @@ env:
 
 jobs:
   example-a11y:
-    name: Creator Vue · Example & A11Y
+    name: Example & A11Y
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -71,7 +71,7 @@ jobs:
           title: Creator Vue A11Y Tests
 
   e2e:
-    name: Creator Vue · E2E
+    name: E2E
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -104,7 +104,7 @@ jobs:
           html-report: packages/survey-creator-vue/playwright-report
 
   scr:
-    name: Creator Vue · SCR
+    name: SCR
     continue-on-error: ${{ !inputs.scr-blocking }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60

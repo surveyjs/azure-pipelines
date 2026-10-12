@@ -24,7 +24,7 @@ env:
 
 jobs:
   a11y-e2e:
-    name: Library Vue · A11Y & E2E
+    name: A11Y & E2E
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -69,7 +69,7 @@ jobs:
           html-report: packages/survey-vue3-ui/playwright-report
 
   scr:
-    name: Library Vue · SCR
+    name: SCR
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:

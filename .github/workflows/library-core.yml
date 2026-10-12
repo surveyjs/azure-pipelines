@@ -19,7 +19,7 @@ defaults:
 
 jobs:
   unit-postcss:
-    name: Library Core · Unit PostCSS
+    name: Unit PostCSS
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:

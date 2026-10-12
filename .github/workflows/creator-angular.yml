@@ -36,7 +36,7 @@ env:
 
 jobs:
   markup-a11y:
-    name: Creator Angular · Markup & Example & A11Y
+    name: Markup & Example & A11Y
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -74,7 +74,7 @@ jobs:
           title: Creator Angular A11Y Tests
 
   e2e:
-    name: Creator Angular · E2E
+    name: E2E
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -107,7 +107,7 @@ jobs:
           html-report: packages/survey-creator-angular/playwright-report
 
   scr:
-    name: Creator Angular · SCR
+    name: SCR
     continue-on-error: ${{ !inputs.scr-blocking }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60

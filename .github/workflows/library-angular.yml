@@ -24,7 +24,7 @@ env:
 
 jobs:
   a11y-e2e:
-    name: Library Angular · A11Y & E2E
+    name: A11Y & E2E
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -69,7 +69,7 @@ jobs:
           html-report: packages/survey-angular-ui/playwright-report
 
   markup-scr:
-    name: Library Angular · Markup & SCR
+    name: Markup & SCR
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:

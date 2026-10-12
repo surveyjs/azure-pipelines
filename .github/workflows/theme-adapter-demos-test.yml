@@ -45,7 +45,7 @@ env:
 
 jobs:
   scr:
-    name: "Theme Adapter Demos · SCR: ${{ matrix.app }}"
+    name: "SCR: ${{ matrix.app }}"
     strategy:
       fail-fast: false
       matrix:
