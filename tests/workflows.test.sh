@@ -71,6 +71,18 @@ SHARDS="$(awk '
       n = split(body, lines, "\n")
       for (i = 1; i <= n; i++)
         if (lines[i] ~ /artifact-name:/ && lines[i] !~ /matrix\.shard/) print "issue " job ": " lines[i]
+      # A literal count must agree everywhere: --shard=k/2 next to [1, 2, 3] never runs a third of
+      # the tests (or fails with shard 3/2). Jobs that take the count from matrix.shards agree by
+      # construction.
+      if (body !~ /matrix\.shards/) {
+        listed = 0
+        if (match(body, /shard: \[[0-9, ]*\]/)) { list = substr(body, RSTART, RLENGTH); listed = gsub(/[0-9]+/, "", list) }
+        flag = match(body, /--shard=[$][{][{] matrix[.]shard [}][}][/][0-9]+/) ? substr(body, RSTART, RLENGTH) : ""
+        sub(/.*\//, "", flag)
+        named = match(name, /\/[0-9]+\)/) ? substr(name, RSTART + 1, RLENGTH - 2) : ""
+        if (listed != flag || listed != named)
+          print "issue " job ": " listed " shards in the matrix, /" flag " in --shard, /" named " in the name"
+      }
     }
     job = ""; body = ""; name = ""
   }

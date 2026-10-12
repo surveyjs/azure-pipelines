@@ -1,5 +1,5 @@
 # Port of templates/creator/angular/test.yml (keep in sync while it lives).
-# Unlike Azure, E2E and SCR run in two Playwright shards each - one job per shard.
+# Unlike Azure, E2E runs in three Playwright shards and SCR in two - one job per shard.
 name: Creator Angular Test
 
 on:
@@ -75,11 +75,11 @@ jobs:
           title: Creator Angular A11Y Tests
 
   e2e:
-    name: "E2E (${{ matrix.shard }}/2)"
+    name: "E2E (${{ matrix.shard }}/3)"
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -100,7 +100,7 @@ jobs:
         run: npm run build:example:prod
       - name: Test E2E
         working-directory: packages/survey-creator-angular
-        run: npm run e2e:ci -- --workers=100% --shard=${{ matrix.shard }}/2
+        run: npm run e2e:ci -- --workers=100% --shard=${{ matrix.shard }}/3
       - name: Publish results
         if: ${{ !cancelled() }}
         uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
@@ -108,7 +108,7 @@ jobs:
           path: packages/survey-creator-angular/test-results
           artifact-name: Creator_Angular_E2E_${{ matrix.shard }}
           junit-file: e2e-junit-results.xml
-          title: Creator Angular E2E Tests (${{ matrix.shard }}/2)
+          title: Creator Angular E2E Tests (${{ matrix.shard }}/3)
           html-report: packages/survey-creator-angular/playwright-report
 
   scr:
