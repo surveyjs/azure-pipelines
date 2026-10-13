@@ -3,15 +3,17 @@ description: >
   Port of the PublishBuildArtifacts(test-results) + PublishTestResults@2 pair of the Azure test
   templates. Reports the JUnit file as annotations plus a job summary (annotate_only: no checks
   permission, so it works on fork PRs too), flaky tests in a table of their own, and, unlike Azure,
-  uploads the results directory as an artifact only when the job has failed or the report has a
-  flaky test - a clean green run leaves no artifacts. Flaky tests are visible in the report only
-  with PLAYWRIGHT_JUNIT_INCLUDE_RETRIES=1 (see flaky.sh). Call it with an `if` that keeps it
+  uploads the results directory as an artifact only when the job has failed - a green run, flaky
+  tests or not, leaves no results. Playwright writes the failed attempts of a flaky test to the
+  JUnit report (<flakyFailure> / <flakyError>) only with PLAYWRIGHT_JUNIT_INCLUDE_RETRIES=1, which
+  the test workflows set; without it a flaky test looks passed. Call it with an `if` that keeps it
   running after a failed test step unless the run was cancelled - Azure ran these with always() /
   succeededOrFailed(). With playwright-json it also publishes the screenshot diff page - one HTML
   file with the expected / actual / diff images of every mismatch, flaky ones included, linked
   from the job summary and opened right in the browser (a non-zipped artifact: signed-in users
-  with access to the repository, 14 days). With html-report the uploads also include the
-  Playwright HTML report as <artifact-name>_Report, for `npx playwright show-report`.
+  with access to the repository, 14 days); it is the only upload of a green job, made when its
+  flaky tests had a mismatch. With html-report a failed job also uploads the Playwright HTML
+  report as <artifact-name>_Report, for `npx playwright show-report`.
 inputs:
   path:
     description: Directory to upload, relative to the workspace
@@ -36,17 +38,10 @@ runs:
   steps:
     # always(): the caller's `if` already decided that the action runs; every step runs then, after
     # a failed test step too. No ${{ }} in the description above - the runner evaluates it there as well.
-    - name: Look for flaky tests
-      if: always() && inputs.junit-file != ''
-      id: flaky
-      shell: bash --noprofile --norc {0}
-      env:
-        JUNIT_FILE: ${{ inputs.path }}/${{ inputs.junit-file }}
-      run: bash "$GITHUB_ACTION_PATH/flaky.sh"
     # The uploads check job.status, not failure(): inside a composite action failure() sees only the
     # action's own steps, never the failed test step before it.
     - name: Upload test results
-      if: always() && (job.status == 'failure' || steps.flaky.outputs.found == 'true')
+      if: always() && job.status == 'failure'
       uses: actions/upload-artifact@v4
       with:
         name: ${{ inputs.artifact-name }}
@@ -55,7 +50,7 @@ runs:
         overwrite: true
         retention-days: 14
     - name: Upload the Playwright HTML report
-      if: always() && (job.status == 'failure' || steps.flaky.outputs.found == 'true') && inputs.html-report != ''
+      if: always() && job.status == 'failure' && inputs.html-report != ''
       uses: actions/upload-artifact@v4
       with:
         name: ${{ inputs.artifact-name }}_Report
