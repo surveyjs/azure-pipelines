@@ -1,5 +1,7 @@
 # Port of templates/library/react/test.yml (keep in sync while it lives), without its "SCR Update"
-# job: that one is library-scr-update.yml, a group of its own in the survey-library CI run.
+# job: that one is library-scr-update.yml, a group of its own in the survey-library CI run. Its
+# "A11Y & E2E" job is split in two: a job publishes one report, so the summary of a failed job is
+# about one suite.
 name: Library React Test
 
 on:
@@ -19,7 +21,7 @@ defaults:
     shell: bash --noprofile --norc {0}
 
 # The JUnit reports keep the failed attempts of flaky tests (<flakyFailure>) - publish-test-results
-# lists those tests in the job summary.
+# lists those tests in the summary of a failed job.
 env:
   PLAYWRIGHT_JUNIT_INCLUDE_RETRIES: "1"
 
@@ -40,8 +42,8 @@ jobs:
         working-directory: packages/survey-react-ui
         run: npm run test
 
-  a11y-e2e:
-    name: React · A11Y & E2E
+  a11y:
+    name: React · A11Y
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -53,8 +55,8 @@ jobs:
           package: survey-react-ui
           browsers: "true"
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
-      # the a11y script pins --reporter dot, so junit is appended back here and pointed at
-      # its own file to avoid clobbering the e2e results written in the same job
+      # the a11y script pins --reporter dot, so junit is appended back here; a junit reporter
+      # given on the command line writes to stdout unless pointed at a file
       - name: Test A11Y
         working-directory: packages/survey-react-ui
         env:
@@ -68,6 +70,20 @@ jobs:
           artifact-name: Library_React_A11Y
           junit-file: a11y-junit-results.xml
           title: React A11Y Tests
+
+  e2e:
+    name: React · E2E
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Build survey-library
+        uses: surveyjs/azure-pipelines/.github/actions/build-library@gha-migration
+        with:
+          ref: ${{ inputs.ref }}
+          pr: ${{ inputs.pr }}
+          package: survey-react-ui
+          browsers: "true"
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
       - name: Test E2E
         working-directory: packages/survey-react-ui
         run: npm run e2e:ci -- --workers=100%

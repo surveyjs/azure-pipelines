@@ -32,7 +32,7 @@ defaults:
     shell: bash --noprofile --norc {0}
 
 # The JUnit reports keep the failed attempts of flaky tests (<flakyFailure>) - publish-test-results
-# lists those tests in the job summary.
+# lists those tests in the summary of a failed job.
 env:
   PLAYWRIGHT_JUNIT_INCLUDE_RETRIES: "1"
 

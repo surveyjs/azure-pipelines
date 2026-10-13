@@ -1,19 +1,20 @@
 name: Publish test results
 description: >
   Port of the PublishBuildArtifacts(test-results) + PublishTestResults@2 pair of the Azure test
-  templates. Reports the JUnit file as annotations plus a job summary (annotate_only: no checks
-  permission, so it works on fork PRs too), flaky tests in a table of their own, and, unlike Azure,
-  uploads the results directory as an artifact only when the job has failed - a green run, flaky
-  tests or not, leaves no results. Playwright writes the failed attempts of a flaky test to the
-  JUnit report (<flakyFailure> / <flakyError>) only with PLAYWRIGHT_JUNIT_INCLUDE_RETRIES=1, which
-  the test workflows set; without it a flaky test looks passed. Call it with an `if` that keeps it
-  running after a failed test step unless the run was cancelled - Azure ran these with always() /
-  succeededOrFailed(). With playwright-json it also publishes the screenshot diff page - one HTML
-  file with the expected / actual / diff images of every mismatch, flaky ones included, linked
-  from the job summary and opened right in the browser (a non-zipped artifact: signed-in users
-  with access to the repository, 14 days); it is the only upload of a green job, made when its
-  flaky tests had a mismatch. With html-report a failed job also uploads the Playwright HTML
-  report as <artifact-name>_Report, for `npx playwright show-report`.
+  templates. Reports the failed tests of the JUnit file as annotations (annotate_only: no checks
+  permission, so it works on fork PRs too) and, unlike Azure, keeps a green job quiet: the job
+  summary - the totals, the failed tests, the flaky ones in a table of their own, the link to the
+  screenshot diff page - and the results directory as an artifact come only from a failed job.
+  Playwright writes the failed attempts of a flaky test to the JUnit report (<flakyFailure> /
+  <flakyError>) only with PLAYWRIGHT_JUNIT_INCLUDE_RETRIES=1, which the test workflows set; without
+  it a flaky test looks passed. Call it with an `if` that keeps it running after a failed test step
+  unless the run was cancelled - Azure ran these with always() / succeededOrFailed(). With
+  playwright-json it also publishes the screenshot diff page - one HTML file with the expected /
+  actual / diff images of every mismatch, flaky ones included, opened right in the browser (a
+  non-zipped artifact: signed-in users with access to the repository, 14 days); it is the only
+  upload of a green job, made when its flaky tests had a mismatch, and is listed with the run's
+  artifacts only. With html-report a failed job also uploads the Playwright HTML report as
+  <artifact-name>_Report, for `npx playwright show-report`.
 inputs:
   path:
     description: Directory to upload, relative to the workspace
@@ -38,11 +39,11 @@ runs:
   steps:
     # always(): the caller's `if` already decided that the action runs; every step runs then, after
     # a failed test step too. No ${{ }} in the description above - the runner evaluates it there as well.
-    # The uploads check job.status, not failure(): inside a composite action failure() sees only the
-    # action's own steps, never the failed test step before it.
+    # The uploads and the summary check job.status, not failure(): inside a composite action
+    # failure() sees only the action's own steps, never the failed test step before it.
     - name: Upload test results
       if: always() && job.status == 'failure'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ inputs.artifact-name }}
         path: ${{ inputs.path }}
@@ -51,7 +52,7 @@ runs:
         retention-days: 14
     - name: Upload the Playwright HTML report
       if: always() && job.status == 'failure' && inputs.html-report != ''
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ inputs.artifact-name }}_Report
         path: ${{ inputs.html-report }}
@@ -84,7 +85,7 @@ runs:
         retention-days: 14
     # Before the JUnit report, so the link heads the job summary.
     - name: Link the diff page in the job summary
-      if: always() && steps.diff-upload.outputs.artifact-url != ''
+      if: always() && job.status == 'failure' && steps.diff-upload.outputs.artifact-url != ''
       shell: bash --noprofile --norc {0}
       env:
         TITLE: ${{ inputs.title }}
@@ -97,13 +98,19 @@ runs:
         printf '### %s — screenshot diffs\n\n[Open the diff page](%s) — %s.\n\n' "$TITLE" "$URL" "$TEXT" >> "$GITHUB_STEP_SUMMARY"
     - name: Report the JUnit results
       if: always() && inputs.junit-file != ''
-      uses: mikepenz/action-junit-report@v5
+      uses: mikepenz/action-junit-report@v6
       with:
         report_paths: ${{ inputs.path }}/${{ inputs.junit-file }}
         check_name: ${{ inputs.title }}
         annotate_only: true
+        # Not skip_success_summary: with it the summary still gets a separator, and GitHub shows a
+        # card for every job with a non-empty summary.
+        job_summary: ${{ job.status == 'failure' }}
         detailed_summary: true
+        # v6.1+: v5 dropped a passed flaky test before counting its retries, so the table was empty.
         flaky_summary: true
+        # No "No test annotations available" row for a report without failed tests
+        verbose_summary: false
         include_passed: false
         require_tests: false
         fail_on_failure: true
