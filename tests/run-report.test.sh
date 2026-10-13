@@ -26,6 +26,8 @@ collect() { # <card> <new> <old>
   NAMES="$(sed -n '/^names<</,/^EOF_RUN_REPORT/p' "$TMP/output" | sed '1d;$d')"
   PATHS="$(sed -n '/^paths<</,/^EOF_RUN_REPORT/p' "$TMP/output" | sed '1d;$d')"
   FOUND="$(sed -n 's/^found=//p' "$TMP/output")"
+  FAILED="$(sed -n 's/^failed=//p' "$TMP/output")"
+  FLAKY="$(sed -n 's/^flaky=//p' "$TMP/output")"
   MERGED="$(sed -n 's/^merged=//p' "$TMP/output")"
   SUMMARY="$(cat "$TMP/summary")"
 }
@@ -47,7 +49,8 @@ assert_eq "every suite with a report, products in order, the shards of one suite
   "$(printf '%s\n' "Library Core Unit Tests" "Library React E2E Tests" "Library React SCR Tests" \
     "Creator Angular E2E Tests" "Analytics E2E Tests" "Theme Adapter Demos SCR shadcn")" "$NAMES"
 assert_eq "a glob per suite" "$TMP/out/04/*.xml" "$(sed -n 4p <<< "$PATHS")"
-assert_eq "the suite folder holds all its shards" "Creator_Angular_E2E_1.xml Creator_Angular_E2E_2.xml Creator_Angular_E2E_3.xml" \
+assert_eq "the suite folder holds all its shards" \
+  "Creator_Angular_E2E_1.passed.xml Creator_Angular_E2E_2.failed.xml Creator_Angular_E2E_3.flaky.xml" \
   "$(cd "$TMP/out/04" && echo *)"
 assert_eq "every report of this attempt is found" 9 "$FOUND"
 assert_eq "the merged artifact of the first attempt" "Test Results" "$MERGED"
@@ -65,7 +68,28 @@ assert_contains "a job that failed without a report is named" "$SUMMARY" \
 assert_contains "and one that failed with a clean report" "$SUMMARY" \
   "- **Analytics E2E Tests** — the job failed, but its report has no failed test: see the job log"
 assert_not_contains "a failed job with a failed test is in the tables only" "$SUMMARY" "Creator Angular E2E Tests (2/3)"
-assert_contains "the tables get a heading after the lists" "$SUMMARY" "### Failed and flaky tests"
+assert_contains "the card opens with the failed and flaky tests of each suite, the shards summed" "$SUMMARY" \
+  "$(printf '%s\n' "### Failed and flaky tests" "" "| Suite | Failed | Flaky |" "| --- | ---: | ---: |" \
+    "| Library React SCR Tests | 0 | 1 |" "| Creator Angular E2E Tests | 1 | 1 |")"
+assert_eq "the table comes first, the diff links after it" "### Failed and flaky tests" "$(head -1 "$TMP/summary")"
+assert_eq "the failed tests of the card are counted" 1 "$FAILED"
+assert_eq "and the flaky ones" 2 "$FLAKY"
+
+# A report on one line, the way some reporters write it: a test counts once, retries or not.
+printf '%s' '<testsuites><testsuite name="s" tests="3"><testcase name="a"><failure message="x"/><rerunFailure message="x"/></testcase><testcase name="b"><flakyFailure message="y"/><flakyError message="y"/></testcase><testcase name="c"><error message="z"/></testcase></testsuite></testsuites>' \
+  > "$TMP/oneline.xml"
+stage "$TMP/new3" PDF_Test "PDF Tests" failure "$TMP/oneline.xml"
+collect fails "$TMP/new3" "$TMP/none"
+assert_contains "the tags are counted wherever they are" "$SUMMARY" "| PDF Tests | 2 | 1 |"
+
+# A test script of a few runs, a JUnit file each: junit-file is a glob.
+mkdir -p "$TMP/runs" && cp "$FX/failed.xml" "$FX/flaky.xml" "$TMP/runs/"
+stage "$TMP/new4" Analytics_Unit "Analytics Unit Tests" failure "$TMP/runs/*.xml"
+assert_eq "every file of the glob is staged" "failed.xml flaky.xml meta.json" \
+  "$(cd "$TMP/new4/JUnit_Analytics_Unit/Analytics_Unit" && echo *)"
+collect fails "$TMP/new4" "$TMP/none"
+assert_contains "and counted" "$SUMMARY" "| Analytics Unit Tests | 1 | 1 |"
+assert_eq "and laid out for the card" "Analytics_Unit.failed.xml Analytics_Unit.flaky.xml" "$(cd "$TMP/out/01" && echo *)"
 
 # A re-run: earlier attempts left their reports merged, a single artifact right in the path and
 # several in a folder each; the re-run jobs left theirs in this attempt.
@@ -97,6 +121,26 @@ assert_eq "no reports pass" 0 "$STATUS"
 assert_eq "with no suites" "" "$NAMES$PATHS"
 assert_eq "no text" "" "$SUMMARY"
 assert_eq "and nothing to merge" 0 "$FOUND"
+
+# details.sh: the failed and flaky tests out of the outputs of action-junit-report
+details() { # <detailed_summary> <flaky_summary> <flaky>
+  : > "$TMP/summary"
+  DETAILED="$1" FLAKY_TABLE="$2" FLAKY="$3" GITHUB_STEP_SUMMARY="$TMP/summary" \
+    bash .github/actions/run-report/details.sh
+  STATUS=$?
+  SUMMARY="$(cat "$TMP/summary")"
+}
+FAILED_BLOCKS='<p><strong>Failed tests</strong></p>
+<details><summary>❌ <strong>PDF Tests</strong> › a</summary><br><pre>x</pre></details>'
+FLAKY_ROWS='<table><tr><th>Test</th><th>Retries</th></tr><tr><td>b</td><td>1</td></tr></table>'
+details "<table></table>$FAILED_BLOCKS" "$FLAKY_ROWS" 1
+assert_eq "details pass" 0 "$STATUS"
+assert_eq "the failed tests with their logs, then the flaky ones, without the empty details table" \
+  "$(printf '%s\n\n%s\n%s' "$FAILED_BLOCKS" "<p><strong>Flaky tests</strong></p>" "$FLAKY_ROWS")" "$SUMMARY"
+details "<table></table>" '<table><tr><th>Test</th><th>Retries</th></tr></table>' 0
+assert_eq "without failed and flaky tests nothing is written" "" "$SUMMARY"
+details "" "$FLAKY_ROWS" 1
+assert_eq "flaky tests alone" "$(printf '%s\n%s' "<p><strong>Flaky tests</strong></p>" "$FLAKY_ROWS")" "$SUMMARY"
 
 rm -rf "$TMP"
 finish

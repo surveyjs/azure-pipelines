@@ -23,7 +23,9 @@ inputs:
     description: Artifact name - the Azure ArtifactName
     required: true
   junit-file:
-    description: JUnit file name inside `path`; empty uploads without a report
+    description: >
+      JUnit file name inside `path`, or a glob for several (a test script of a few runs writes a
+      file each); empty uploads without a report
     default: ""
   title:
     description: Report title - the Azure testRunTitle

@@ -2,8 +2,9 @@ name: Run report
 description: >
   The test cards of the survey-library CI run, made in Afterparty from the JUnit_<artifact-name>
   artifacts publish-test-results uploads in every test job - the jobs themselves write no job
-  summary. card fails - the suites with a failed or flaky test, the links to the screenshot diff
-  pages and the jobs that failed without a failed test; nothing at all on a clean run. card all -
+  summary. card fails - nothing at all on a clean run, else a table of the failed and flaky tests of
+  each suite that has some, the links to the screenshot diff pages, the jobs that failed without a
+  failed test, then the failed tests with their logs and the flaky ones. card all -
   every suite of the run, a line each, the shards of a suite together. The all card comes last: it
   merges the JUnit_* artifacts into one, Test Results, and deletes them. A re-run job leaves its
   report in a JUnit_* artifact of the new attempt and the others are in the merged one, so the cards
@@ -37,15 +38,19 @@ runs:
         OUT: ${{ runner.temp }}/run-report/suites
         CARD: ${{ inputs.card }}
       run: bash "$GITHUB_ACTION_PATH/collect.sh"
-    # The annotations come from the test jobs already; the result job decides the run.
+    # The annotations come from the test jobs already; the result job decides the run. The all card
+    # is the summary of the action; the fails card takes only its failed and flaky tests, from the
+    # outputs, without the totals table.
     - name: Write the card
       if: steps.collect.outputs.paths != ''
+      id: report
       uses: mikepenz/action-junit-report@v6
       with:
         report_paths: ${{ steps.collect.outputs.paths }}
         check_name: ${{ steps.collect.outputs.names }}
         annotate_only: true
         skip_annotations: true
+        job_summary: ${{ inputs.card == 'all' }}
         include_passed: false
         require_tests: false
         fail_on_failure: false
@@ -54,6 +59,15 @@ runs:
         flaky_summary: ${{ inputs.card == 'fails' }}
         failed_summary_logs: ${{ inputs.card == 'fails' }}
         include_time_in_summary: ${{ inputs.card == 'all' }}
+    # Through the environment, never interpolated: the outputs carry test titles and logs.
+    - name: Add the failed and flaky tests
+      if: inputs.card == 'fails' && steps.collect.outputs.paths != ''
+      shell: bash --noprofile --norc {0}
+      env:
+        DETAILED: ${{ steps.report.outputs.detailed_summary }}
+        FLAKY_TABLE: ${{ steps.report.outputs.flaky_summary }}
+        FLAKY: ${{ steps.collect.outputs.flaky }}
+      run: bash "$GITHUB_ACTION_PATH/details.sh"
     # Fails without a match, hence found.
     - name: Merge the reports into one artifact
       if: inputs.card == 'all' && steps.collect.outputs.found != '0'

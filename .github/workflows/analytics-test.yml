@@ -51,18 +51,25 @@ jobs:
           library-ref: ${{ inputs.library-ref }}
           library-pr: ${{ inputs.library-pr }}
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
-      # the config writes JUnit already, into the repository; the run cards take it from runner.temp
+      # `npm run test` is a few Vitest runs - every test in UTC, then one in a far time zone - and the
+      # config writes JUnit to ./junit.xml in each. Arguments after `--` reach the last run only: it
+      # writes its report to runner.temp, and the one of the run before is moved there after it.
       - name: Test
         env:
-          JUNIT_FILE: ${{ runner.temp }}/junit/unit/junit.xml
-        run: npm run test -- --outputFile.junit="$JUNIT_FILE"
+          JUNIT_DIR: ${{ runner.temp }}/junit/unit
+        run: |
+          mkdir -p "$JUNIT_DIR"
+          npm run test -- --outputFile.junit="$JUNIT_DIR/last-run.xml"
+          STATUS=$?
+          [ ! -f junit.xml ] || mv junit.xml "$JUNIT_DIR/"
+          exit "$STATUS"
       - name: Publish Unit results
         if: ${{ !cancelled() }}
         uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
         with:
           path: ${{ runner.temp }}/junit/unit
           artifact-name: Analytics_Unit
-          junit-file: junit.xml
+          junit-file: "*.xml"
           title: Analytics Unit Tests
 
   e2e:
