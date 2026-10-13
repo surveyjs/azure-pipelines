@@ -526,7 +526,7 @@ jobs:
     condition: and(succeeded(), eq(variables['projectsBranch'], 'master'))
     displayName: 'Set AppSettings__SurveyJSVersion on surveyjs-io'
     inputs:
-      azureSubscription: 'SurveyJS Azure V3'
+      azureSubscription: '$(azureBlobSubscription)'
       scriptType: pscore
       scriptLocation: inlineScript
       workingDirectory: $(Build.SourcesDirectory)/survey-library/packages/survey-core
