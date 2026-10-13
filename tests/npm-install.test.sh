@@ -10,17 +10,34 @@ cat > "$TMP/bin/npm" <<'EOF'
 printf '%s|%s|%s|%s\n' "$(basename "$PWD")" "$*" "${GIT_CONFIG_VALUE_0:-}" "${PUPPETEER_SKIP_DOWNLOAD:-}" >> "$NPM_LOG"
 [ ! -f fail-install ] || exit 1
 EOF
+# install-deps --dry-run lists the missing packages the way Playwright 1.60-1.62 does, unless
+# $TMP/dry-all (everything installed) or $TMP/dry-odd (an output it does not recognize) exists
 cat > "$TMP/bin/npx" <<'EOF'
 #!/usr/bin/env bash
 printf '%s|%s\n' "$(basename "$PWD")" "$*" >> "$NPX_LOG"
+case "$*" in
+  *--dry-run*)
+    if [ -f "$STUB_DIR/dry-all" ]; then echo "All system dependencies are installed."; exit 0; fi
+    if [ -f "$STUB_DIR/dry-odd" ]; then echo "sudo -- sh -c \"apt-get install fonts-a\""; exit 0; fi
+    printf 'Missing system dependencies (2):\n  fonts-a\n  libfreetype6\n'
+    exit 1 ;;
+esac
 EOF
-# the same log as npx: install-deps refreshes the apt lists, so the font must come after it
+# The same log as npx, to keep the order. sed really runs (on the scratch mirror list); a
+# --download-only times out (124) while $TMP/slow holds a count above zero, one per call.
 cat > "$TMP/bin/sudo" <<'EOF'
 #!/usr/bin/env bash
 printf 'sudo|%s\n' "$*" >> "$NPX_LOG"
+[ "$1" != sed ] || exec "$@"
+case "$*" in
+  *--download-only*)
+    N="$(cat "$STUB_DIR/slow" 2>/dev/null || echo 0)"
+    if [ "$N" -gt 0 ]; then echo $((N - 1)) > "$STUB_DIR/slow"; exit 124; fi ;;
+esac
 EOF
 chmod +x "$TMP/bin/npm" "$TMP/bin/npx" "$TMP/bin/sudo"
-export PATH="$TMP/bin:$PATH" GITHUB_WORKSPACE="$TMP/ws" NPM_LOG="$TMP/npm.log" NPX_LOG="$TMP/npx.log"
+export PATH="$TMP/bin:$PATH" GITHUB_WORKSPACE="$TMP/ws" NPM_LOG="$TMP/npm.log" NPX_LOG="$TMP/npx.log" \
+  STUB_DIR="$TMP" APT_MIRRORS_FILE="$TMP/apt-mirrors.txt"
 INSTALL='install --no-audit --no-fund --no-update-notifier --no-package-lock'
 
 run() { # <directories> [token] [update]
@@ -58,11 +75,61 @@ assert_eq "absolute paths are taken as they are" "a|$INSTALL||true" "$LOG"
 mkdir -p "$TMP/ws/b/node_modules/.bin"
 printf '#!/bin/sh\n' > "$TMP/ws/b/node_modules/.bin/playwright"
 chmod +x "$TMP/ws/b/node_modules/.bin/playwright"
-: > "$NPX_LOG"
+# The runner's apt takes its mirrors from this list, azure first (/etc/apt/apt-mirrors.txt).
+MIRRORS="$(printf 'http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\nhttps://archive.ubuntu.com/ubuntu/\tpriority:2\nhttps://security.ubuntu.com/ubuntu/\tpriority:3')"
+deps() { # [slow downloads]
+  : > "$NPX_LOG"
+  printf '%s\n' "$MIRRORS" > "$APT_MIRRORS_FILE"
+  echo "${1:-0}" > "$TMP/slow"
+  OUT="$(NPM_DIRS=$'a\nb' bash .github/actions/npm-install/browser-deps.sh 2>&1)"
+  STATUS=$?
+  LOG="$(grep -v '^sudo|sed ' "$NPX_LOG")"
+}
+DOWNLOAD='apt-get install --download-only -y --no-install-recommends'
+FONTS='sudo|apt-get install -y --no-install-recommends fonts-ubuntu'
+
+deps
+assert_eq "the missing packages and fonts-ubuntu download under a 60 s watchdog, then install-deps and the font install from them" \
+  "$(printf '%s\n' 'sudo|apt-get update' 'b|--no-install playwright install-deps --dry-run chromium' \
+    "sudo|timeout 60 $DOWNLOAD fonts-a libfreetype6 fonts-ubuntu" \
+    'b|--no-install playwright install-deps chromium' "$FONTS")" "$LOG"
+assert_eq "a fast mirror stays" "$MIRRORS" "$(cat "$APT_MIRRORS_FILE")"
+
+deps 1
+assert_eq "a download over the watchdog leaves the azure mirror and downloads again for up to 300 s" \
+  "$(printf '%s\n' 'sudo|apt-get update' 'b|--no-install playwright install-deps --dry-run chromium' \
+    "sudo|timeout 60 $DOWNLOAD fonts-a libfreetype6 fonts-ubuntu" 'sudo|apt-get update' \
+    "sudo|timeout 300 $DOWNLOAD fonts-a libfreetype6 fonts-ubuntu" \
+    'b|--no-install playwright install-deps chromium' "$FONTS")" "$LOG"
+assert_eq "archive.ubuntu.com heads the mirror list then" \
+  "$(printf '%s\n' "$MIRRORS" | sed 1d)" "$(cat "$APT_MIRRORS_FILE")"
+assert_contains "and the switch is a warning" "$OUT" "::warning::"
+assert_eq "the install succeeds" 0 "$STATUS"
+
+deps 2
+assert_eq "a slow second mirror still installs - install-deps downloads the rest itself" \
+  "$(printf '%s\n' 'b|--no-install playwright install-deps chromium' "$FONTS")" "$(printf '%s\n' "$LOG" | tail -n 2)"
+assert_eq "with a second warning" 2 "$(printf '%s\n' "$OUT" | grep -c '::warning::')"
+assert_eq "and success" 0 "$STATUS"
+
+rm "$APT_MIRRORS_FILE"
+: > "$NPX_LOG"; echo 1 > "$TMP/slow"
 OUT="$(NPM_DIRS=$'a\nb' bash .github/actions/npm-install/browser-deps.sh 2>&1)"
-assert_eq "install-deps runs with the first Playwright CLI found, then fonts-ubuntu installs" \
-  "$(printf 'b|--no-install playwright install-deps chromium\nsudo|apt-get install -y --no-install-recommends fonts-ubuntu')" \
-  "$(cat "$NPX_LOG")"
+assert_contains "no mirror list to switch - the download is retried on the same mirror" "$(cat "$NPX_LOG")" \
+  "sudo|timeout 300 $DOWNLOAD"
+assert_contains "and the warning says so" "$OUT" "same mirror"
+
+touch "$TMP/dry-all"
+deps
+assert_contains "nothing missing - only fonts-ubuntu downloads ahead" "$LOG" "sudo|timeout 60 $DOWNLOAD fonts-ubuntu"
+assert_not_contains "silently" "$OUT" "::notice::"
+rm "$TMP/dry-all"
+
+touch "$TMP/dry-odd"
+deps
+assert_contains "an unrecognized dry run - only fonts-ubuntu downloads ahead" "$LOG" "sudo|timeout 60 $DOWNLOAD fonts-ubuntu"
+assert_contains "with a notice" "$OUT" "::notice::"
+rm "$TMP/dry-odd"
 
 : > "$NPX_LOG"
 OUT="$(NPM_DIRS='a' bash .github/actions/npm-install/browser-deps.sh 2>&1)"
