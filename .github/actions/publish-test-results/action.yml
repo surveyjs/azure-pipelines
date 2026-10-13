@@ -2,22 +2,22 @@ name: Publish test results
 description: >
   Port of the PublishBuildArtifacts(test-results) + PublishTestResults@2 pair of the Azure test
   templates. Reports the failed tests of the JUnit file as annotations (annotate_only: no checks
-  permission, so it works on fork PRs too) and, unlike Azure, keeps a green job quiet: the job
-  summary - the totals, the failed tests, the flaky ones in a table of their own, the link to the
-  screenshot diff page - and the results directory as an artifact come only from a failed job.
+  permission, so it works on fork PRs too) and uploads the report as JUnit_<artifact-name>, with the
+  title, the job status and the link to the screenshot diff page, for the two cards of the run that
+  Afterparty makes (run-report): Fails and Test Results. Unlike Azure, a job writes no job summary
+  of its own, and the results directory goes up as an artifact only when the job has failed.
   Playwright writes the failed attempts of a flaky test to the JUnit report (<flakyFailure> /
   <flakyError>) only with PLAYWRIGHT_JUNIT_INCLUDE_RETRIES=1, which the test workflows set; without
   it a flaky test looks passed. Call it with an `if` that keeps it running after a failed test step
   unless the run was cancelled - Azure ran these with always() / succeededOrFailed(). With
   playwright-json it also publishes the screenshot diff page - one HTML file with the expected /
   actual / diff images of every mismatch, flaky ones included, opened right in the browser (a
-  non-zipped artifact: signed-in users with access to the repository, 14 days); it is the only
-  upload of a green job, made when its flaky tests had a mismatch, and is listed with the run's
-  artifacts only. With html-report a failed job also uploads the Playwright HTML report as
+  non-zipped artifact: signed-in users with access to the repository, 14 days), linked from the
+  Fails card. With html-report a failed job also uploads the Playwright HTML report as
   <artifact-name>_Report, for `npx playwright show-report`.
 inputs:
   path:
-    description: Directory to upload, relative to the workspace
+    description: Directory to upload - relative to the workspace, or absolute
     required: true
   artifact-name:
     description: Artifact name - the Azure ArtifactName
@@ -39,8 +39,8 @@ runs:
   steps:
     # always(): the caller's `if` already decided that the action runs; every step runs then, after
     # a failed test step too. No ${{ }} in the description above - the runner evaluates it there as well.
-    # The uploads and the summary check job.status, not failure(): inside a composite action
-    # failure() sees only the action's own steps, never the failed test step before it.
+    # The uploads check job.status, not failure(): inside a composite action failure() sees only the
+    # action's own steps, never the failed test step before it.
     - name: Upload test results
       if: always() && job.status == 'failure'
       uses: actions/upload-artifact@v7
@@ -83,19 +83,33 @@ runs:
         archive: false
         overwrite: true
         retention-days: 14
-    # Before the JUnit report, so the link heads the job summary.
-    - name: Link the diff page in the job summary
-      if: always() && job.status == 'failure' && steps.diff-upload.outputs.artifact-url != ''
+    # The run cards of Afterparty (run-report) are made from these: every job, a green one too,
+    # uploads its report with a meta.json - the title, the job status, the diff page. One folder
+    # inside the artifact, named after it, keeps a download the same however many are fetched.
+    - name: Stage the report for the run cards
+      if: always() && inputs.junit-file != ''
       shell: bash --noprofile --norc {0}
       env:
+        DIR: ${{ runner.temp }}/run-report/${{ inputs.artifact-name }}/${{ inputs.artifact-name }}
+        NAME: ${{ inputs.artifact-name }}
         TITLE: ${{ inputs.title }}
-        FAILED: ${{ steps.diff-page.outputs.failed }}
-        FLAKY: ${{ steps.diff-page.outputs.flaky }}
-        URL: ${{ steps.diff-upload.outputs.artifact-url }}
-      run: |
-        TEXT="$FAILED screenshot mismatch(es) in failed tests"
-        [ "$FLAKY" = 0 ] || TEXT="$TEXT, $FLAKY in flaky tests"
-        printf '### %s — screenshot diffs\n\n[Open the diff page](%s) — %s.\n\n' "$TITLE" "$URL" "$TEXT" >> "$GITHUB_STEP_SUMMARY"
+        STATUS: ${{ job.status }}
+        JUNIT_FILE: ${{ inputs.path }}/${{ inputs.junit-file }}
+        DIFF_URL: ${{ steps.diff-upload.outputs.artifact-url }}
+        DIFF_FAILED: ${{ steps.diff-page.outputs.failed }}
+        DIFF_FLAKY: ${{ steps.diff-page.outputs.flaky }}
+      run: bash "$GITHUB_ACTION_PATH/stage-report.sh"
+    # A day is enough: the all card merges these into Test Results and deletes them.
+    - name: Upload the report for the run cards
+      if: always() && inputs.junit-file != ''
+      uses: actions/upload-artifact@v7
+      with:
+        name: JUnit_${{ inputs.artifact-name }}
+        path: ${{ runner.temp }}/run-report/${{ inputs.artifact-name }}
+        if-no-files-found: ignore
+        overwrite: true
+        retention-days: 1
+    # Annotations only - the cards of the run are in Afterparty.
     - name: Report the JUnit results
       if: always() && inputs.junit-file != ''
       uses: mikepenz/action-junit-report@v6
@@ -103,14 +117,7 @@ runs:
         report_paths: ${{ inputs.path }}/${{ inputs.junit-file }}
         check_name: ${{ inputs.title }}
         annotate_only: true
-        # Not skip_success_summary: with it the summary still gets a separator, and GitHub shows a
-        # card for every job with a non-empty summary.
-        job_summary: ${{ job.status == 'failure' }}
-        detailed_summary: true
-        # v6.1+: v5 dropped a passed flaky test before counting its retries, so the table was empty.
-        flaky_summary: true
-        # No "No test annotations available" row for a report without failed tests
-        verbose_summary: false
+        job_summary: false
         include_passed: false
         require_tests: false
         fail_on_failure: true

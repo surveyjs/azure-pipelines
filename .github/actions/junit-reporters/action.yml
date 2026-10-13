@@ -1,0 +1,30 @@
+name: JUnit reporters
+description: >
+  Installs the JUnit reporters the test packages lack - karma-junit-reporter for the Angular Karma
+  suites, jest-junit for survey-creator-react - into the runner's temp folder, outside the npm tree
+  of the repository (npm-install links the packages with file: and no lockfile, and an install
+  inside it would resolve that tree again). Next to them goes karma.junit.conf.js, a Karma config
+  that wraps the package's own. The test repositories stay as they are.
+outputs:
+  karma-config:
+    description: >
+      The wrapping Karma config, for `ng test --karma-config`; the test step sets KARMA_CONFIG (the
+      package's karma.conf.js) and JUNIT_FILE, both absolute
+    value: ${{ steps.install.outputs.karma-config }}
+  jest-reporter:
+    description: jest-junit, for `jest --reporters`; the test step sets JEST_JUNIT_OUTPUT_FILE
+    value: ${{ steps.install.outputs.jest-reporter }}
+runs:
+  using: composite
+  steps:
+    - name: Install the JUnit reporters
+      id: install
+      shell: bash --noprofile --norc {0}
+      run: |
+        DIR="$RUNNER_TEMP/junit-reporters"
+        # --legacy-peer-deps: karma is a peer of karma-junit-reporter, and npm would install a karma
+        # of its own here - 160 packages instead of 9; the reporter runs in the package's karma.
+        npm install --prefix "$DIR" --no-save --no-package-lock --no-audit --no-fund --legacy-peer-deps \
+          karma-junit-reporter@2.0.1 jest-junit@17.0.0 || exit 1
+        cp "$GITHUB_ACTION_PATH/karma.junit.conf.js" "$DIR/" || exit 1
+        printf 'karma-config=%s\njest-reporter=%s\n' "$DIR/karma.junit.conf.js" "$DIR/node_modules/jest-junit" >> "$GITHUB_OUTPUT"

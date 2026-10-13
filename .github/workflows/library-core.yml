@@ -29,9 +29,23 @@ jobs:
           ref: ${{ inputs.ref }}
           pr: ${{ inputs.pr }}
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+      # `npm run test` is `vitest run && npm run test:types`, so arguments after `--` would go to
+      # test:types: the step runs both itself (V3 has no test:types). The junit reporter feeds the
+      # run cards; explicit reporters drop the github-actions one Vitest adds by itself, and
+      # publish-test-results annotates the failed tests instead.
       - name: Tests Unit
         working-directory: packages/survey-core
-        run: npm run test
+        env:
+          JUNIT_FILE: ${{ runner.temp }}/junit/unit/junit.xml
+        run: npx vitest run --reporter=default --reporter=junit --outputFile.junit="$JUNIT_FILE" && npm run test:types --if-present
+      - name: Publish Unit results
+        if: ${{ !cancelled() }}
+        uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
+        with:
+          path: ${{ runner.temp }}/junit/unit
+          artifact-name: Library_Core_Unit
+          junit-file: junit.xml
+          title: Library Core Unit Tests
       - name: Tests CSS
         working-directory: packages/survey-core
         run: npm run test:postcss

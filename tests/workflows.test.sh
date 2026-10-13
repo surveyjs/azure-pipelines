@@ -125,4 +125,12 @@ assert_eq "the orchestrator library.yml is gone" "no" \
 assert_contains "Afterparty's result job runs always()" \
   "$(sed -n '/^  result:/,/^  [a-z]/p' .github/workflows/afterparty.yml 2>/dev/null)" 'if: ${{ always() }}'
 
+# The run cards (run-report) group the reports by title, the shard suffix left out, and order them
+# by the product the title starts with; a report goes up as JUnit_<artifact-name>, overwriting one
+# of the same name.
+assert_eq "every test report title starts with its product" "" \
+  "$(grep -hE '^ +title: ' .github/workflows/*.yml | grep -vE '^ +title: (Library|Creator|Analytics|PDF|Theme Adapter Demos) ')"
+assert_eq "every test report has an artifact name of its own" "" \
+  "$(grep -hE '^ +artifact-name: ' .github/workflows/*.yml | sed -E 's/^ +//' | sort | uniq -d)"
+
 finish

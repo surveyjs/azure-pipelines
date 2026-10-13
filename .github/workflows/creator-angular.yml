@@ -31,7 +31,7 @@ defaults:
     shell: bash --noprofile --norc {0}
 
 # The JUnit reports keep the failed attempts of flaky tests (<flakyFailure>) - publish-test-results
-# lists those tests in the summary of a failed job.
+# hands those tests over to the Fails card of the run (Afterparty).
 env:
   PLAYWRIGHT_JUNIT_INCLUDE_RETRIES: "1"
 
@@ -53,9 +53,25 @@ jobs:
           example: packages/survey-creator-angular/example/angular-ui
           browsers: "true"
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+      - name: Install the JUnit reporters
+        id: junit-reporters
+        uses: surveyjs/azure-pipelines/.github/actions/junit-reporters@gha-migration
+      # the package has no JUnit reporter: a Karma config of junit-reporters wraps its own
       - name: Test
         working-directory: packages/survey-creator-angular
-        run: npm run test:single
+        env:
+          KARMA_WRAPPER: ${{ steps.junit-reporters.outputs.karma-config }}
+          KARMA_CONFIG: ${{ github.workspace }}/packages/survey-creator-angular/karma.conf.js
+          JUNIT_FILE: ${{ runner.temp }}/junit/unit/junit.xml
+        run: npm run test:single -- --karma-config="$KARMA_WRAPPER"
+      - name: Publish Unit results
+        if: ${{ !cancelled() }}
+        uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
+        with:
+          path: ${{ runner.temp }}/junit/unit
+          artifact-name: Creator_Angular_Unit
+          junit-file: junit.xml
+          title: Creator Angular Unit Tests
       - name: Build Example
         working-directory: packages/survey-creator-angular
         run: npm run build:example:prod

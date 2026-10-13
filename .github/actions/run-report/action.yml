@@ -1,0 +1,65 @@
+name: Run report
+description: >
+  The test cards of the survey-library CI run, made in Afterparty from the JUnit_<artifact-name>
+  artifacts publish-test-results uploads in every test job - the jobs themselves write no job
+  summary. card fails - the suites with a failed or flaky test, the links to the screenshot diff
+  pages and the jobs that failed without a failed test; nothing at all on a clean run. card all -
+  every suite of the run, a line each, the shards of a suite together. The all card comes last: it
+  merges the JUnit_* artifacts into one, Test Results, and deletes them. A re-run job leaves its
+  report in a JUnit_* artifact of the new attempt and the others are in the merged one, so the cards
+  read both, the latest attempt of a report winning, and the merge of attempt N is
+  "Test Results (attempt N)" - the name of a live artifact cannot be taken again.
+inputs:
+  card:
+    description: fails or all
+    required: true
+runs:
+  using: composite
+  steps:
+    # Without a match download-artifact downloads nothing and passes - a run of SCR Update has no
+    # test reports.
+    - name: Download the reports of this attempt
+      uses: actions/download-artifact@v8
+      with:
+        pattern: JUnit_*
+        path: ${{ runner.temp }}/run-report/new
+    - name: Download the reports merged by earlier attempts
+      uses: actions/download-artifact@v8
+      with:
+        pattern: Test Results*
+        path: ${{ runner.temp }}/run-report/old
+    - name: Collect the reports
+      id: collect
+      shell: bash --noprofile --norc {0}
+      env:
+        NEW: ${{ runner.temp }}/run-report/new
+        OLD: ${{ runner.temp }}/run-report/old
+        OUT: ${{ runner.temp }}/run-report/suites
+        CARD: ${{ inputs.card }}
+      run: bash "$GITHUB_ACTION_PATH/collect.sh"
+    # The annotations come from the test jobs already; the result job decides the run.
+    - name: Write the card
+      if: steps.collect.outputs.paths != ''
+      uses: mikepenz/action-junit-report@v6
+      with:
+        report_paths: ${{ steps.collect.outputs.paths }}
+        check_name: ${{ steps.collect.outputs.names }}
+        annotate_only: true
+        skip_annotations: true
+        include_passed: false
+        require_tests: false
+        fail_on_failure: false
+        verbose_summary: false
+        detailed_summary: ${{ inputs.card == 'fails' }}
+        flaky_summary: ${{ inputs.card == 'fails' }}
+        failed_summary_logs: ${{ inputs.card == 'fails' }}
+        include_time_in_summary: ${{ inputs.card == 'all' }}
+    # Fails without a match, hence found.
+    - name: Merge the reports into one artifact
+      if: inputs.card == 'all' && steps.collect.outputs.found != '0'
+      uses: actions/upload-artifact/merge@v7
+      with:
+        name: ${{ steps.collect.outputs.merged }}
+        pattern: JUnit_*
+        delete-merged: true
+        retention-days: 14

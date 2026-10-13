@@ -1,5 +1,5 @@
 # Port of templates/library/js/test.yml (keep in sync while it lives), with its "A11Y & E2E" job
-# split in two: a job publishes one report, so the summary of a failed job is about one suite.
+# split in two: a job runs one suite, so a red job tells which.
 name: Library JS (Preact ShadowDOM BoxSizing) Test
 
 on:
@@ -19,7 +19,7 @@ defaults:
     shell: bash --noprofile --norc {0}
 
 # The JUnit reports keep the failed attempts of flaky tests (<flakyFailure>) - publish-test-results
-# lists those tests in the summary of a failed job.
+# hands those tests over to the Fails card of the run (Afterparty).
 env:
   PLAYWRIGHT_JUNIT_INCLUDE_RETRIES: "1"
 
@@ -51,7 +51,7 @@ jobs:
           path: packages/survey-js-ui/test-results
           artifact-name: Library_Preact_A11Y
           junit-file: a11y-junit-results.xml
-          title: Preact A11Y Tests
+          title: Library Preact A11Y Tests
 
   e2e:
     name: JS · E2E
@@ -76,7 +76,7 @@ jobs:
           path: packages/survey-js-ui/test-results
           artifact-name: Library_Preact_E2E
           junit-file: e2e-junit-results.xml
-          title: Preact E2E Tests
+          title: Library Preact E2E Tests
           html-report: packages/survey-js-ui/playwright-report
 
   scr:
@@ -102,6 +102,6 @@ jobs:
           path: packages/survey-js-ui/test-results
           artifact-name: Library_Preact_SCR
           junit-file: e2e-junit-results.xml
-          title: Preact SCR Tests
+          title: Library Preact SCR Tests
           playwright-json: results.json
           html-report: packages/survey-js-ui/playwright-report

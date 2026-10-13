@@ -45,9 +45,20 @@ jobs:
           library-ref: ${{ inputs.library-ref }}
           library-pr: ${{ inputs.library-pr }}
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+      # the config writes JUnit already, into the package; the run cards take it from runner.temp
       - name: Unit
         working-directory: packages/survey-creator-core
-        run: npm run test -- --shard=${{ matrix.shard }}/2
+        env:
+          JUNIT_FILE: ${{ runner.temp }}/junit/unit/junit.xml
+        run: npm run test -- --shard=${{ matrix.shard }}/2 --outputFile.junit="$JUNIT_FILE"
+      - name: Publish Unit results
+        if: ${{ !cancelled() }}
+        uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
+        with:
+          path: ${{ runner.temp }}/junit/unit
+          artifact-name: Creator_Core_Unit_${{ matrix.shard }}
+          junit-file: junit.xml
+          title: Creator Core Unit Tests (${{ matrix.shard }}/2)
       - name: PostCSS
         if: matrix.shard == 1
         working-directory: packages/survey-creator-core

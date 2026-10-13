@@ -41,5 +41,18 @@ jobs:
           library-ref: ${{ inputs.library-ref }}
           library-pr: ${{ inputs.library-pr }}
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+      # The config names no reporters, so Vitest would add its github-actions one, which writes a job
+      # summary on every run: explicit reporters drop it. junit feeds the run cards, and
+      # publish-test-results annotates the failed tests.
       - name: Test
-        run: npm run test
+        env:
+          JUNIT_FILE: ${{ runner.temp }}/junit/unit/junit.xml
+        run: npm run test -- --reporter=default --reporter=junit --outputFile.junit="$JUNIT_FILE"
+      - name: Publish results
+        if: ${{ !cancelled() }}
+        uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
+        with:
+          path: ${{ runner.temp }}/junit/unit
+          artifact-name: PDF_Test
+          junit-file: junit.xml
+          title: PDF Tests

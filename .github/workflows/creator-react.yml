@@ -32,7 +32,7 @@ defaults:
     shell: bash --noprofile --norc {0}
 
 # The JUnit reports keep the failed attempts of flaky tests (<flakyFailure>) - publish-test-results
-# lists those tests in the summary of a failed job.
+# hands those tests over to the Fails card of the run (Afterparty).
 env:
   PLAYWRIGHT_JUNIT_INCLUDE_RETRIES: "1"
 
@@ -57,9 +57,24 @@ jobs:
       - name: Build Example
         working-directory: packages/survey-creator-react/example
         run: npm run build
+      - name: Install the JUnit reporters
+        id: junit-reporters
+        uses: surveyjs/azure-pipelines/.github/actions/junit-reporters@gha-migration
+      # the package has no JUnit reporter: jest-junit comes from junit-reporters
       - name: Test
         working-directory: packages/survey-creator-react
-        run: npm run test
+        env:
+          JEST_REPORTER: ${{ steps.junit-reporters.outputs.jest-reporter }}
+          JEST_JUNIT_OUTPUT_FILE: ${{ runner.temp }}/junit/unit/junit.xml
+        run: npm run test -- --reporters=default --reporters="$JEST_REPORTER"
+      - name: Publish Unit results
+        if: ${{ !cancelled() }}
+        uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
+        with:
+          path: ${{ runner.temp }}/junit/unit
+          artifact-name: Creator_React_Unit
+          junit-file: junit.xml
+          title: Creator React Unit Tests
       # the a11y script pins --reporter dot, so junit is appended back here to get a results file
       - name: Test A11Y
         working-directory: packages/survey-creator-react

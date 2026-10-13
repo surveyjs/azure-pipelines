@@ -1,7 +1,6 @@
 # Port of templates/library/react/test.yml (keep in sync while it lives), without its "SCR Update"
 # job: that one is library-scr-update.yml, a group of its own in the survey-library CI run. Its
-# "A11Y & E2E" job is split in two: a job publishes one report, so the summary of a failed job is
-# about one suite.
+# "A11Y & E2E" job is split in two: a job runs one suite, so a red job tells which.
 name: Library React Test
 
 on:
@@ -21,7 +20,7 @@ defaults:
     shell: bash --noprofile --norc {0}
 
 # The JUnit reports keep the failed attempts of flaky tests (<flakyFailure>) - publish-test-results
-# lists those tests in the summary of a failed job.
+# hands those tests over to the Fails card of the run (Afterparty).
 env:
   PLAYWRIGHT_JUNIT_INCLUDE_RETRIES: "1"
 
@@ -38,9 +37,21 @@ jobs:
           pr: ${{ inputs.pr }}
           package: survey-react-ui
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+      # the junit reporter feeds the run cards; Vitest resolves a relative outputFile against the
+      # config, hence the absolute path
       - name: Test Markup
         working-directory: packages/survey-react-ui
-        run: npm run test
+        env:
+          JUNIT_FILE: ${{ runner.temp }}/junit/markup/junit.xml
+        run: npm run test -- --reporter=default --reporter=junit --outputFile.junit="$JUNIT_FILE"
+      - name: Publish Markup results
+        if: ${{ !cancelled() }}
+        uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
+        with:
+          path: ${{ runner.temp }}/junit/markup
+          artifact-name: Library_React_Markup
+          junit-file: junit.xml
+          title: Library React Markup Tests
 
   a11y:
     name: React · A11Y
@@ -69,7 +80,7 @@ jobs:
           path: packages/survey-react-ui/test-results
           artifact-name: Library_React_A11Y
           junit-file: a11y-junit-results.xml
-          title: React A11Y Tests
+          title: Library React A11Y Tests
 
   e2e:
     name: React · E2E
@@ -94,7 +105,7 @@ jobs:
           path: packages/survey-react-ui/test-results
           artifact-name: Library_React_E2E
           junit-file: e2e-junit-results.xml
-          title: React E2E Tests
+          title: Library React E2E Tests
           html-report: packages/survey-react-ui/playwright-report
 
   scr:
@@ -120,6 +131,6 @@ jobs:
           path: packages/survey-react-ui/test-results
           artifact-name: Library_React_SCR
           junit-file: e2e-junit-results.xml
-          title: React SCR Tests
+          title: Library React SCR Tests
           playwright-json: results.json
           html-report: packages/survey-react-ui/playwright-report

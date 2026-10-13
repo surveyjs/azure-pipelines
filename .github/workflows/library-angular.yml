@@ -1,5 +1,5 @@
 # Port of templates/library/angular/test.yml (keep in sync while it lives), with its "A11Y & E2E" job
-# split in two: a job publishes one report, so the summary of a failed job is about one suite.
+# split in two: a job runs one suite, so a red job tells which.
 name: Library Angular Test
 
 on:
@@ -19,7 +19,7 @@ defaults:
     shell: bash --noprofile --norc {0}
 
 # The JUnit reports keep the failed attempts of flaky tests (<flakyFailure>) - publish-test-results
-# lists those tests in the summary of a failed job.
+# hands those tests over to the Fails card of the run (Afterparty).
 env:
   PLAYWRIGHT_JUNIT_INCLUDE_RETRIES: "1"
 
@@ -55,7 +55,7 @@ jobs:
           path: packages/survey-angular-ui/test-results
           artifact-name: Library_Angular_A11Y
           junit-file: a11y-junit-results.xml
-          title: Angular A11Y Tests
+          title: Library Angular A11Y Tests
 
   e2e:
     name: Angular · E2E
@@ -84,7 +84,7 @@ jobs:
           path: packages/survey-angular-ui/test-results
           artifact-name: Library_Angular_E2E
           junit-file: e2e-junit-results.xml
-          title: Angular E2E Tests
+          title: Library Angular E2E Tests
           html-report: packages/survey-angular-ui/playwright-report
 
   markup-scr:
@@ -104,9 +104,25 @@ jobs:
       - name: Build Example
         working-directory: packages/survey-angular-ui
         run: npm run build:example:prod
+      - name: Install the JUnit reporters
+        id: junit-reporters
+        uses: surveyjs/azure-pipelines/.github/actions/junit-reporters@gha-migration
+      # the package has no JUnit reporter: a Karma config of junit-reporters wraps its own
       - name: Test Markup
         working-directory: packages/survey-angular-ui
-        run: npm run test
+        env:
+          KARMA_WRAPPER: ${{ steps.junit-reporters.outputs.karma-config }}
+          KARMA_CONFIG: ${{ github.workspace }}/packages/survey-angular-ui/karma.conf.js
+          JUNIT_FILE: ${{ runner.temp }}/junit/markup/junit.xml
+        run: npm run test -- --karma-config="$KARMA_WRAPPER"
+      - name: Publish Markup results
+        if: ${{ !cancelled() }}
+        uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
+        with:
+          path: ${{ runner.temp }}/junit/markup
+          artifact-name: Library_Angular_Markup
+          junit-file: junit.xml
+          title: Library Angular Markup Tests
       - name: Test SCR
         working-directory: packages/survey-angular-ui
         run: npm run scr:ci -- --workers=100%
@@ -117,6 +133,6 @@ jobs:
           path: packages/survey-angular-ui/test-results
           artifact-name: Library_Angular_SCR
           junit-file: e2e-junit-results.xml
-          title: Angular SCR Tests
+          title: Library Angular SCR Tests
           playwright-json: results.json
           html-report: packages/survey-angular-ui/playwright-report

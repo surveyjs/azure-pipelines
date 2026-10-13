@@ -31,7 +31,7 @@ defaults:
     shell: bash --noprofile --norc {0}
 
 # The JUnit reports keep the failed attempts of flaky tests (<flakyFailure>) - publish-test-results
-# lists those tests in the summary of a failed job.
+# hands those tests over to the Fails card of the run (Afterparty).
 env:
   PLAYWRIGHT_JUNIT_INCLUDE_RETRIES: "1"
 
@@ -51,8 +51,19 @@ jobs:
           library-ref: ${{ inputs.library-ref }}
           library-pr: ${{ inputs.library-pr }}
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+      # the config writes JUnit already, into the repository; the run cards take it from runner.temp
       - name: Test
-        run: npm run test
+        env:
+          JUNIT_FILE: ${{ runner.temp }}/junit/unit/junit.xml
+        run: npm run test -- --outputFile.junit="$JUNIT_FILE"
+      - name: Publish Unit results
+        if: ${{ !cancelled() }}
+        uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
+        with:
+          path: ${{ runner.temp }}/junit/unit
+          artifact-name: Analytics_Unit
+          junit-file: junit.xml
+          title: Analytics Unit Tests
 
   e2e:
     name: E2E
@@ -89,6 +100,6 @@ jobs:
           path: test-results
           artifact-name: Analytics_E2E
           junit-file: e2e-junit-results.xml
-          title: Publish E2E test results
+          title: Analytics E2E Tests
           playwright-json: results.json
           html-report: playwright-report
