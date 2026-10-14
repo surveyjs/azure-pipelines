@@ -4,7 +4,7 @@ description: >
   templates. Reports the failed tests of the JUnit file as annotations (annotate_only: no checks
   permission, so it works on fork PRs too) and uploads the report as JUnit_<artifact-name>, with the
   title, the job status and the link to the screenshot diff page, for the two cards of the run that
-  Afterparty makes (run-report): Fails and Test Results. Unlike Azure, a job writes no job summary
+  library.yml makes (run-report): Fails and Test Results. Unlike Azure, a job writes no job summary
   of its own, and the results directory goes up as an artifact only when the job has failed.
   Playwright writes the failed attempts of a flaky test to the JUnit report (<flakyFailure> /
   <flakyError>) only with PLAYWRIGHT_JUNIT_INCLUDE_RETRIES=1, which the test workflows set; without
@@ -85,7 +85,7 @@ runs:
         archive: false
         overwrite: true
         retention-days: 14
-    # The run cards of Afterparty (run-report) are made from these: every job, a green one too,
+    # The run cards of library.yml (run-report) are made from these: every job, a green one too,
     # uploads its report with a meta.json - the title, the job status, the diff page. One folder
     # inside the artifact, named after it, keeps a download the same however many are fetched.
     - name: Stage the report for the run cards
@@ -111,7 +111,7 @@ runs:
         if-no-files-found: ignore
         overwrite: true
         retention-days: 1
-    # Annotations only - the cards of the run are in Afterparty.
+    # Annotations only - the cards of the run are library.yml's fails and test-results jobs.
     - name: Report the JUnit results
       if: always() && inputs.junit-file != ''
       uses: mikepenz/action-junit-report@v6

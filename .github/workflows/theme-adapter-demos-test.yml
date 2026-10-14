@@ -40,13 +40,13 @@ defaults:
     shell: bash --noprofile --norc {0}
 
 # The JUnit reports keep the failed attempts of flaky tests (<flakyFailure>) - publish-test-results
-# hands those tests over to the Fails card of the run (Afterparty).
+# hands those tests over to the Fails card of the run (the fails job of library.yml).
 env:
   PLAYWRIGHT_JUNIT_INCLUDE_RETRIES: "1"
 
 jobs:
   scr:
-    name: "SCR: ${{ matrix.app }}${{ matrix.shards > 1 && format(' ({0}/{1})', matrix.shard, matrix.shards) || '' }}"
+    name: "Demos · SCR: ${{ matrix.app }}${{ matrix.shards > 1 && format(' ({0}/{1})', matrix.shard, matrix.shards) || '' }}"
     strategy:
       fail-fast: false
       matrix:

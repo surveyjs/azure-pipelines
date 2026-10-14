@@ -26,12 +26,12 @@ assert_eq "no needs pass" 0 "$STATUS"
 run 'not json'
 assert_eq "garbage fails instead of passing" 1 "$STATUS"
 
-# [scr_update]: the test groups are skipped by their own condition, SCR Update ran.
-run '{"lint":{"result":"success"},"options":{"result":"success"},"scr-update":{"result":"success"},"library":{"result":"skipped"},"creator":{"result":"skipped"},"analytics":{"result":"skipped"},"pdf":{"result":"skipped"},"theme-adapter-demos":{"result":"skipped"}}'
-assert_eq "[scr_update]: skipped test groups pass" 0 "$STATUS"
+# [scr_update]: the test jobs are skipped by their own condition, SCR Update ran.
+run '{"lint":{"result":"success"},"options":{"result":"success"},"scr-update":{"result":"success"},"library-core":{"result":"skipped"},"library-react":{"result":"skipped"},"creator-core":{"result":"skipped"},"creator-react":{"result":"skipped"},"analytics":{"result":"skipped"},"pdf":{"result":"skipped"},"theme-adapter-demos":{"result":"skipped"}}'
+assert_eq "[scr_update]: skipped test jobs pass" 0 "$STATUS"
 
-run '{"lint":{"result":"success"},"options":{"result":"success"},"scr-update":{"result":"skipped"},"library":{"result":"success"},"creator":{"result":"failure"}}'
-assert_eq "a failed group fails the check" 1 "$STATUS"
-assert_contains "the failed group is named" "$OUT" "::error::creator=failure"
+run '{"lint":{"result":"success"},"options":{"result":"success"},"scr-update":{"result":"skipped"},"library-react":{"result":"success"},"creator-react":{"result":"failure"}}'
+assert_eq "a failed test workflow fails the check" 1 "$STATUS"
+assert_contains "the failed test workflow is named" "$OUT" "::error::creator-react=failure"
 
 finish

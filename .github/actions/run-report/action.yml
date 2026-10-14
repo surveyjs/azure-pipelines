@@ -1,6 +1,6 @@
 name: Run report
 description: >
-  The test cards of the survey-library CI run, made in Afterparty from the JUnit_<artifact-name>
+  The test cards of the survey-library CI run, made in library.yml from the JUnit_<artifact-name>
   artifacts publish-test-results uploads in every test job - the jobs themselves write no job
   summary. card fails - nothing at all on a clean run, else a table of the failed and flaky tests of
   each suite that has some, the links to the screenshot diff pages, the jobs that failed without a

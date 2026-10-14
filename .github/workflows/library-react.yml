@@ -1,6 +1,6 @@
 # Port of templates/library/react/test.yml (keep in sync while it lives), without its "SCR Update"
-# job: that one is library-scr-update.yml, a group of its own in the survey-library CI run. Its
-# "A11Y & E2E" job is split in two: a job runs one suite, so a red job tells which.
+# job: that one is the scr-update job of library.yml. Its "A11Y & E2E" job is split in two: a job
+# runs one suite, so a red job tells which.
 name: Library React Test
 
 on:
@@ -20,13 +20,13 @@ defaults:
     shell: bash --noprofile --norc {0}
 
 # The JUnit reports keep the failed attempts of flaky tests (<flakyFailure>) - publish-test-results
-# hands those tests over to the Fails card of the run (Afterparty).
+# hands those tests over to the Fails card of the run (the fails job of library.yml).
 env:
   PLAYWRIGHT_JUNIT_INCLUDE_RETRIES: "1"
 
 jobs:
   markup:
-    name: React · Markup
+    name: Library · React · Markup
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -54,7 +54,7 @@ jobs:
           title: Library React Markup Tests
 
   a11y:
-    name: React · A11Y
+    name: Library · React · A11Y
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -83,7 +83,7 @@ jobs:
           title: Library React A11Y Tests
 
   e2e:
-    name: React · E2E
+    name: Library · React · E2E
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -109,7 +109,7 @@ jobs:
           html-report: packages/survey-react-ui/playwright-report
 
   scr:
-    name: React · SCR Test
+    name: Library · React · SCR Test
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:

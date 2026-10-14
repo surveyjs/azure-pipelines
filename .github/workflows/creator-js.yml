@@ -31,13 +31,13 @@ defaults:
     shell: bash --noprofile --norc {0}
 
 # The JUnit reports keep the failed attempts of flaky tests (<flakyFailure>) - publish-test-results
-# hands those tests over to the Fails card of the run (Afterparty).
+# hands those tests over to the Fails card of the run (the fails job of library.yml).
 env:
   PLAYWRIGHT_JUNIT_INCLUDE_RETRIES: "1"
 
 jobs:
   example-a11y:
-    name: JS · Example & A11Y
+    name: Creator · JS · Example & A11Y
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -72,7 +72,7 @@ jobs:
           title: Creator JS A11Y Tests
 
   e2e:
-    name: "JS · E2E (${{ matrix.shard }}/2)"
+    name: "Creator · JS · E2E (${{ matrix.shard }}/2)"
     strategy:
       fail-fast: false
       matrix:
@@ -106,7 +106,7 @@ jobs:
           html-report: packages/survey-creator-js/playwright-report
 
   scr:
-    name: "JS · SCR (${{ matrix.shard }}/2)"
+    name: "Creator · JS · SCR (${{ matrix.shard }}/2)"
     strategy:
       fail-fast: false
       matrix:

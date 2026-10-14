@@ -19,13 +19,13 @@ defaults:
     shell: bash --noprofile --norc {0}
 
 # The JUnit reports keep the failed attempts of flaky tests (<flakyFailure>) - publish-test-results
-# hands those tests over to the Fails card of the run (Afterparty).
+# hands those tests over to the Fails card of the run (the fails job of library.yml).
 env:
   PLAYWRIGHT_JUNIT_INCLUDE_RETRIES: "1"
 
 jobs:
   a11y:
-    name: JS · A11Y
+    name: Library · JS · A11Y
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -54,7 +54,7 @@ jobs:
           title: Library Preact A11Y Tests
 
   e2e:
-    name: JS · E2E
+    name: Library · JS · E2E
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -80,7 +80,7 @@ jobs:
           html-report: packages/survey-js-ui/playwright-report
 
   scr:
-    name: JS · SCR
+    name: Library · JS · SCR
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:

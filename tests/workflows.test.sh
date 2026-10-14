@@ -36,38 +36,44 @@ else
   printf '  skip  actionlint is not installed - inputs of internal calls are not checked\n'
 fi
 
-# SCR Update is a group of its own (library-scr-update.yml): library-react.yml only tests.
+# SCR Update is a job of library.yml: library-react.yml only tests.
 assert_eq "library-react.yml has no SCR Update job or input" "" \
   "$(grep -n '^  scr-update:\|^      scr-update:\|inputs\.scr-update' .github/workflows/library-react.yml)"
-GUARD="$(grep -c "if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository" \
-  .github/workflows/library-scr-update.yml 2>/dev/null)"
-assert_eq "SCR Update pushes only to a PR branch of this repository" 1 "${GUARD:-0}"
+assert_contains "SCR Update pushes only to a PR branch of this repository" \
+  "$(sed -n '/^  scr-update:/,/^  [a-z]/p' .github/workflows/library.yml 2>/dev/null | grep '^    if:')" \
+  "github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository"
 
-# The run's sidebar shows only the group (Library, Creator) and the leaf job's name - not the
-# React / Angular / ... level between them, which only the check name carries. So every leaf job of
-# library-* and creator-* names its framework: "React · E2E (1/2)" in the sidebar, check
-# "Creator / React / React · E2E (1/2)".
-UNNAMED="$(for F in .github/workflows/{library,creator}-{core,react,angular,vue,js}.yml; do
-  PART="$(basename "$F" .yml)"; PART="${PART#*-}"
+# The run's sidebar is one group, CI, with the leaf jobs in a flat list - the jobs of library.yml
+# that call their workflows are left out, only the check name carries them. So every leaf job names
+# its area and, in library-* and creator-*, its framework: "Creator · React · E2E (1/2)" in the
+# sidebar, check "CI / Creator React / Creator · React · E2E (1/2)".
+cap() { printf '%s%s' "$(printf '%s' "${1:0:1}" | tr '[:lower:]' '[:upper:]')" "${1:1}"; }
+UNNAMED="$(for F in .github/workflows/{library,creator}-{core,react,angular,vue,js}.yml \
+    .github/workflows/{analytics,pdf,theme-adapter-demos}-test.yml; do
+  PART="$(basename "$F" .yml)"
   case "$PART" in
-    core) FW=Core ;;
-    js) FW=JS ;;
-    *) FW="$(printf '%s' "${PART:0:1}" | tr '[:lower:]' '[:upper:]')${PART:1}" ;;
+    analytics-test) PREFIX=Analytics ;;
+    pdf-test) PREFIX=PDF ;;
+    theme-adapter-demos-test) PREFIX=Demos ;;
+    *)
+      FW="${PART#*-}"
+      case "$FW" in
+        core) FW=Core ;;
+        js) FW=JS ;;
+        *) FW="$(cap "$FW")" ;;
+      esac
+      PREFIX="$(cap "${PART%%-*}") · $FW" ;;
   esac
-  grep -n '^    name:' "$F" | grep -v "^[0-9]*:    name: \"\{0,1\}$FW · " | sed "s|^|$F:|"
+  grep -n '^    name:' "$F" | grep -v "^[0-9]*:    name: \"\{0,1\}$PREFIX · " | sed "s|^|$F:|"
 done)"
-assert_eq "every leaf job of library-* and creator-* names its framework" "" "$UNNAMED"
+assert_eq "every leaf job names its area (and framework)" "" "$UNNAMED"
 
-# The Library and Creator groups call every workflow of their area.
-for AREA in library creator; do
-  for PART in core react angular vue js; do
-    assert_contains "$AREA-test.yml calls $AREA-$PART.yml" \
-      "$(cat ".github/workflows/$AREA-test.yml" 2>/dev/null)" "/.github/workflows/$AREA-$PART.yml@"
-  done
+# library.yml calls every test workflow.
+for W in library-{core,react,angular,vue,js} creator-{core,react,angular,vue,js} \
+    analytics-test pdf-test theme-adapter-demos-test; do
+  assert_contains "library.yml calls $W.yml" \
+    "$(cat .github/workflows/library.yml 2>/dev/null)" "/.github/workflows/$W.yml@"
 done
-# creator-core has no screenshot job, the other four take the switch.
-BLOCKING="$(grep -c 'scr-blocking: ${{ inputs.scr-blocking }}' .github/workflows/creator-test.yml 2>/dev/null)"
-assert_eq "creator-test.yml passes scr-blocking to the four screenshot workflows" 4 "${BLOCKING:-0}"
 
 # The long suites run in Playwright / Vitest shards, one job per shard. A shard job must not cancel
 # its sibling on failure, must name its shard in the check, and must upload under a name of its own:
@@ -114,16 +120,43 @@ assert_eq "every shard job keeps its sibling, names its shard and uploads under 
 assert_eq "creator-core runs the presets once, inside npm run test" "" \
   "$(grep -n 'test:presets' .github/workflows/creator-core.yml)"
 
-# Afterparty carries the single required check. The orchestrator is gone: the graph lives in
-# survey-library's caller workflow, where its top-level jobs become the run's groups.
-assert_contains "afterparty.yml runs the result action" \
-  "$(cat .github/workflows/afterparty.yml 2>/dev/null)" "/.github/actions/result@"
-assert_eq "the orchestrator library.yml is gone" "no" \
-  "$([ -e .github/workflows/library.yml ] && echo yes || echo no)"
-# result must report on every run, a failed or cancelled one included, whatever GitHub's implicit
-# success() counts across the workflow_call boundary: a skipped required check counts as passed.
-assert_contains "Afterparty's result job runs always()" \
-  "$(sed -n '/^  result:/,/^  [a-z]/p' .github/workflows/afterparty.yml 2>/dev/null)" 'if: ${{ always() }}'
+# The whole graph is library.yml, which survey-library's only job, CI, calls: the group workflows
+# are gone.
+for F in library-test creator-test afterparty library-scr-update; do
+  assert_eq "the group workflow $F.yml is gone" "no" \
+    "$([ -e ".github/workflows/$F.yml" ] && echo yes || echo no)"
+done
+
+# job <id> - the job of library.yml, up to the next one.
+job() { sed -n "/^  $1:/,/^  [a-z]/p" .github/workflows/library.yml 2>/dev/null; }
+# needs <id> - the needs of a job of library.yml, one a line, sorted; a list in either YAML form.
+needs() {
+  job "$1" | awk '
+    /^    needs:/ { on = 1; sub(/^    needs:[[:space:]]*/, ""); gsub(/[][,]/, " ")
+      n = split($0, a, " "); for (i = 1; i <= n; i++) print a[i]; next }
+    on && /^      - / { sub(/^      - /, ""); print; next }
+    { on = 0 }' | LC_ALL=C sort
+}
+
+# result is the single required check, "CI / result". It must report on every run, a failed or
+# cancelled one included: a skipped required check counts as passed. It checks every job before it.
+assert_contains "library.yml's result job runs the result action" "$(job result)" "/.github/actions/result@"
+assert_contains "library.yml's result job runs always()" "$(job result | grep '^    if:')" 'always()'
+assert_eq "result needs every job before it" \
+  "$(awk '/^jobs:/ { on = 1; next } on && /^  [a-z0-9_-]+:[[:space:]]*$/ { sub(/^  /, ""); sub(/:.*/, ""); print }' \
+    .github/workflows/library.yml 2>/dev/null | grep -vxE 'result|fails|test-results' | LC_ALL=C sort)" \
+  "$(needs result)"
+# The run cards: fails waits for the same jobs - the reports of all the tests - and test-results
+# comes last, as it merges the reports into one artifact and deletes them.
+assert_contains "library.yml's fails job makes the fails card" "$(job fails)" "card: fails"
+assert_contains "library.yml's test-results job makes the all card" "$(job test-results)" "card: all"
+for J in fails test-results; do
+  assert_contains "library.yml's $J job runs run-report" "$(job "$J")" "/.github/actions/run-report@"
+  assert_contains "library.yml's $J job runs unless the run was cancelled" \
+    "$(job "$J" | grep '^    if:')" '!cancelled()'
+done
+assert_eq "fails waits for the jobs result checks" "$(needs result)" "$(needs fails)"
+assert_eq "test-results follows fails" "fails" "$(needs test-results)"
 
 # The run cards (run-report) group the reports by title, the shard suffix left out, and order them
 # by the product the title starts with; a report goes up as JUnit_<artifact-name>, overwriting one

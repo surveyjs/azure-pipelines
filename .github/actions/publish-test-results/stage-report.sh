@@ -3,7 +3,7 @@
 # STATUS - job.status after the tests; JUNIT_FILE - the JUnit report, or a glob for several (a test
 # script of a few runs writes a report each), none when the tests wrote none; DIFF_URL,
 # DIFF_FAILED, DIFF_FLAKY - the screenshot diff page, empty without one; GITHUB_RUN_ATTEMPT.
-# Stages the report of the job for the run cards Afterparty makes (run-report): a copy of every
+# Stages the report of the job for the run cards library.yml makes (run-report): a copy of every
 # JUnit file in DIR, and DIR/meta.json - name, title, status, attempt and diff ({url, failed,
 # flaky}) when the job has a diff page.
 set -uo pipefail

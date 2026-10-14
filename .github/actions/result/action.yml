@@ -1,7 +1,7 @@
 name: Library CI result
 description: >
-  The single required status check of the survey-library CI ("Afterparty / result"): fails when a
-  job of the caller workflow failed or was cancelled. A job skipped by its own condition
+  The single required status check of the survey-library CI ("CI / result"): fails when a
+  job of library.yml failed or was cancelled. A job skipped by its own condition
   (scr_update, Theme Adapter Demos outside a PR to master) is fine.
 inputs:
   needs:

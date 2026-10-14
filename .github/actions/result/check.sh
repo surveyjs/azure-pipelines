@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Usage (env): NEEDS - toJSON(needs) of the caller workflow's afterparty job.
+# Usage (env): NEEDS - toJSON(needs) of the result job of library.yml.
 # Fails when a needed job ended as failure or cancelled. A job skipped by its own condition
 # (scr_update, Theme Adapter Demos outside a PR to master) is fine. A failed options job is not: it
-# skips every test group, and without this check the run would go green having tested nothing.
+# skips every test job, and without this check the run would go green having tested nothing.
 set -uo pipefail
 
 if ! printf '%s' "$NEEDS" | jq -e 'type == "object"' >/dev/null 2>&1; then

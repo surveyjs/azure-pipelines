@@ -19,13 +19,13 @@ defaults:
     shell: bash --noprofile --norc {0}
 
 # The JUnit reports keep the failed attempts of flaky tests (<flakyFailure>) - publish-test-results
-# hands those tests over to the Fails card of the run (Afterparty).
+# hands those tests over to the Fails card of the run (the fails job of library.yml).
 env:
   PLAYWRIGHT_JUNIT_INCLUDE_RETRIES: "1"
 
 jobs:
   a11y:
-    name: Vue · A11Y
+    name: Library · Vue · A11Y
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -58,7 +58,7 @@ jobs:
           title: Library Vue3 A11Y Tests
 
   e2e:
-    name: Vue · E2E
+    name: Library · Vue · E2E
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -88,7 +88,7 @@ jobs:
           html-report: packages/survey-vue3-ui/playwright-report
 
   scr:
-    name: Vue · SCR
+    name: Library · Vue · SCR
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:

@@ -31,13 +31,13 @@ defaults:
     shell: bash --noprofile --norc {0}
 
 # The JUnit reports keep the failed attempts of flaky tests (<flakyFailure>) - publish-test-results
-# hands those tests over to the Fails card of the run (Afterparty).
+# hands those tests over to the Fails card of the run (the fails job of library.yml).
 env:
   PLAYWRIGHT_JUNIT_INCLUDE_RETRIES: "1"
 
 jobs:
   unit:
-    name: Unit
+    name: Analytics · Unit
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -73,7 +73,7 @@ jobs:
           title: Analytics Unit Tests
 
   e2e:
-    name: E2E
+    name: Analytics · E2E
     continue-on-error: ${{ !inputs.scr-blocking }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
