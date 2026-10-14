@@ -370,27 +370,13 @@ jobs:
 
 
   # Upload to Azure Blobs
-  - task: AzureCLI@2
-    displayName: 'DevBuilds Upload to Azure Blobs'
-    inputs:
+  - template: templates/utils/blob-sync.yml
+    parameters:
+      displayName: 'DevBuilds Upload to Azure Blobs'
       azureSubscription: '$(azureBlobSubscription)'
-      scriptType: pscore
-      scriptLocation: inlineScript
-      inlineScript: |
-        $ErrorActionPreference = 'Stop'
-
-        # CleanTargetBeforeCopy: remove existing blobs in the container first
-        az storage blob delete-batch `
-          --account-name surveyjsdocsstorage `
-          --source "$(azureBlobContainer)" `
-          --auth-mode login
-
-        az storage blob upload-batch `
-          --account-name surveyjsdocsstorage `
-          --destination "$(azureBlobContainer)" `
-          --source "$(Agent.TempDirectory)/DevBuilds/" `
-          --auth-mode login `
-          --overwrite true
+      container: '$(azureBlobContainer)'
+      source: '$(Agent.TempDirectory)/DevBuilds/'
+      purgeContentPath: '/$(azureBlobContainer)/*'
 
 
 

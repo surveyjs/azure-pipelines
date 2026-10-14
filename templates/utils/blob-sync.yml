@@ -1,0 +1,71 @@
+parameters:
+  - name: displayName
+    type: string
+    default: 'Sync to Azure Blobs'
+  - name: azureSubscription
+    type: string
+  - name: storageAccount
+    type: string
+    default: 'surveyjsdocsstorage'
+  - name: container
+    type: string
+  - name: destinationPath
+    type: string
+    default: ''
+  - name: source
+    type: string
+  - name: purgeResourceGroup
+    type: string
+    default: 'SurveyJS'
+  - name: purgeProfile
+    type: string
+    default: 'surveyjs-docs'
+  - name: purgeEndpoint
+    type: string
+    default: 'surveyjs-docs-cdn'
+  - name: purgeDomain
+    type: string
+    default: 'cdn.surveyjs.io'
+  - name: purgeContentPath
+    type: string
+    default: ''
+
+steps:
+  - task: AzureCLI@2
+    displayName: ${{ parameters.displayName }}
+    inputs:
+      azureSubscription: ${{ parameters.azureSubscription }}
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+
+        azcopy --version
+
+        export AZCOPY_AUTO_LOGIN_TYPE=AZCLI
+        DESTINATION="https://${{ parameters.storageAccount }}.blob.core.windows.net/${{ parameters.container }}"
+        if [ -n "${{ parameters.destinationPath }}" ]; then
+          DESTINATION="$DESTINATION/${{ parameters.destinationPath }}"
+        fi
+
+        azcopy sync "${{ parameters.source }}" "$DESTINATION" \
+          --recursive \
+          --delete-destination=true \
+          --compare-hash=MD5 \
+          --put-md5
+
+  - ${{ if ne(parameters.purgeContentPath, '') }}:
+    - task: AzureCLI@2
+      displayName: 'Purge Front Door cache: ${{ parameters.purgeContentPath }}'
+      inputs:
+        azureSubscription: ${{ parameters.azureSubscription }}
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -euo pipefail
+          az afd endpoint purge \
+            --resource-group "${{ parameters.purgeResourceGroup }}" \
+            --profile-name "${{ parameters.purgeProfile }}" \
+            --endpoint-name "${{ parameters.purgeEndpoint }}" \
+            --domains "${{ parameters.purgeDomain }}" \
+            --content-paths "${{ parameters.purgeContentPath }}"
