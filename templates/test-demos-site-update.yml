@@ -257,27 +257,14 @@ jobs:
 
 
 
-  - task: AzureCLI@2
-    displayName: 'DevBuilds Upload to Azure Blobs'
-    inputs:
+  - template: utils/blob-sync.yml
+    parameters:
+      displayName: 'DevBuilds Upload to Azure Blobs'
       azureSubscription: 'SurveyJS Azure V3'
-      scriptType: pscore
-      scriptLocation: inlineScript
-      inlineScript: |
-        $ErrorActionPreference = 'Stop'
-
-        az storage blob delete-batch `
-          --account-name surveyjsdocsstorage `
-          --source 'builds-v3-next' `
-          --auth-mode login
-
-        az storage blob upload-batch `
-          --account-name surveyjsdocsstorage `
-          --destination 'builds-v3-next' `
-          --destination-path 'DevBuilds' `
-          --source "$(devBuilds)/" `
-          --auth-mode login `
-          --overwrite true
+      container: 'builds-v3-next'
+      destinationPath: 'DevBuilds'
+      source: '$(devBuilds)/'
+      purgeContentPath: '/builds-v3-next/DevBuilds/*'
 
   - task: DeleteFiles@1
     inputs:
