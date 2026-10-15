@@ -42,7 +42,7 @@ jobs:
           library-pr: ${{ inputs.library-pr }}
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
       # The config names no reporters, so Vitest would add its github-actions one, which writes a job
-      # summary on every run: explicit reporters drop it. junit feeds the run cards, and
+      # summary on every run: explicit reporters drop it. junit feeds the test card, and
       # publish-test-results annotates the failed tests.
       - name: Test
         env:

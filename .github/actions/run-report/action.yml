@@ -1,79 +1,107 @@
 name: Run report
 description: >
-  The test cards of the survey-library CI run, made in library.yml from the JUnit_<artifact-name>
-  artifacts publish-test-results uploads in every test job - the jobs themselves write no job
-  summary. card fails - nothing at all on a clean run, else a table of the failed and flaky tests of
-  each suite that has some, the links to the screenshot diff pages, the jobs that failed without a
-  failed test, then the failed tests with their logs and the flaky ones. card all -
-  every suite of the run, a line each, the shards of a suite together. The all card comes last: it
-  merges the JUnit_* artifacts into one, Test Results, and deletes them. A re-run job leaves its
-  report in a JUnit_* artifact of the new attempt and the others are in the merged one, so the cards
-  read both, the latest attempt of a report winning, and the merge of attempt N is
-  "Test Results (attempt N)" - the name of a live artifact cannot be taken again.
-inputs:
-  card:
-    description: fails or all
-    required: true
+  The test card of the survey-library CI run, made by the result job of library.yml from the
+  JUnit_<artifact-name> artifacts publish-test-results uploads in every test job - the jobs
+  themselves write no job summary. First the failed and flaky tests - nothing at all on a clean
+  run: a table of the failed and flaky tests of each suite that has some, the links to the
+  screenshot diff pages, the jobs that failed without a failed test, then the failed tests with
+  their logs and the flaky ones. Then every suite of the run, a line each, the shards of a suite
+  together. Last it merges the JUnit_* artifacts into one, Test Results, and deletes them. A re-run
+  job leaves its report in a JUnit_* artifact of the new attempt and the others are in the merged
+  one, so the card reads both, the latest attempt of a report winning, and the merge of attempt N
+  is "Test Results (attempt N)" - the name of a live artifact cannot be taken again.
 runs:
   using: composite
   steps:
     # Without a match download-artifact downloads nothing and passes - a run of SCR Update has no
     # test reports.
     - name: Download the reports of this attempt
+      id: new
       uses: actions/download-artifact@v8
       with:
         pattern: JUnit_*
         path: ${{ runner.temp }}/run-report/new
     - name: Download the reports merged by earlier attempts
+      id: old
       uses: actions/download-artifact@v8
       with:
         pattern: Test Results*
         path: ${{ runner.temp }}/run-report/old
-    - name: Collect the reports
-      id: collect
+    # The two parts lay their suites out in folders of their own: their OUT/<NN> differ.
+    - name: Collect the failed and flaky tests
+      id: fails
       shell: bash --noprofile --norc {0}
       env:
         NEW: ${{ runner.temp }}/run-report/new
         OLD: ${{ runner.temp }}/run-report/old
-        OUT: ${{ runner.temp }}/run-report/suites
-        CARD: ${{ inputs.card }}
+        OUT: ${{ runner.temp }}/run-report/fails
+        PART: fails
       run: bash "$GITHUB_ACTION_PATH/collect.sh"
-    # The annotations come from the test jobs already; the result job decides the run. The all card
-    # is the summary of the action; the fails card takes only its failed and flaky tests, from the
-    # outputs, without the totals table.
-    - name: Write the card
-      if: steps.collect.outputs.paths != ''
-      id: report
+    # The annotations come from the test jobs already; the result job decides the run. The fails
+    # part takes only the failed and flaky tests of the action, from its outputs, without the totals
+    # table.
+    - name: Parse the failed and flaky tests
+      if: steps.fails.outputs.paths != ''
+      id: fails-report
       uses: mikepenz/action-junit-report@v6
       with:
-        report_paths: ${{ steps.collect.outputs.paths }}
-        check_name: ${{ steps.collect.outputs.names }}
+        report_paths: ${{ steps.fails.outputs.paths }}
+        check_name: ${{ steps.fails.outputs.names }}
         annotate_only: true
         skip_annotations: true
-        job_summary: ${{ inputs.card == 'all' }}
+        job_summary: false
         include_passed: false
         require_tests: false
         fail_on_failure: false
         verbose_summary: false
-        detailed_summary: ${{ inputs.card == 'fails' }}
-        flaky_summary: ${{ inputs.card == 'fails' }}
-        failed_summary_logs: ${{ inputs.card == 'fails' }}
-        include_time_in_summary: ${{ inputs.card == 'all' }}
+        detailed_summary: true
+        flaky_summary: true
+        failed_summary_logs: true
+        include_time_in_summary: false
     # Through the environment, never interpolated: the outputs carry test titles and logs.
-    - name: Add the failed and flaky tests
-      if: inputs.card == 'fails' && steps.collect.outputs.paths != ''
+    - name: Write the failed and flaky tests
+      if: steps.fails.outputs.paths != ''
       shell: bash --noprofile --norc {0}
       env:
-        DETAILED: ${{ steps.report.outputs.detailed_summary }}
-        FLAKY_TABLE: ${{ steps.report.outputs.flaky_summary }}
-        FLAKY: ${{ steps.collect.outputs.flaky }}
+        DETAILED: ${{ steps.fails-report.outputs.detailed_summary }}
+        FLAKY_TABLE: ${{ steps.fails-report.outputs.flaky_summary }}
+        FLAKY: ${{ steps.fails.outputs.flaky }}
       run: bash "$GITHUB_ACTION_PATH/details.sh"
-    # Fails without a match, hence found.
+    # A broken fails part costs neither the suites nor the merge; failed downloads leave no card.
+    - name: Collect every suite
+      if: always() && steps.new.outcome == 'success' && steps.old.outcome == 'success'
+      id: all
+      shell: bash --noprofile --norc {0}
+      env:
+        NEW: ${{ runner.temp }}/run-report/new
+        OLD: ${{ runner.temp }}/run-report/old
+        OUT: ${{ runner.temp }}/run-report/all
+        PART: all
+      run: bash "$GITHUB_ACTION_PATH/collect.sh"
+    # The table of every suite is the summary of the action.
+    - name: Write every suite
+      if: always() && steps.all.outputs.paths != ''
+      uses: mikepenz/action-junit-report@v6
+      with:
+        report_paths: ${{ steps.all.outputs.paths }}
+        check_name: ${{ steps.all.outputs.names }}
+        annotate_only: true
+        skip_annotations: true
+        job_summary: true
+        include_passed: false
+        require_tests: false
+        fail_on_failure: false
+        verbose_summary: false
+        detailed_summary: false
+        flaky_summary: false
+        failed_summary_logs: false
+        include_time_in_summary: true
+    # Fails without a match, hence found; empty when the suites were not collected.
     - name: Merge the reports into one artifact
-      if: inputs.card == 'all' && steps.collect.outputs.found != '0'
+      if: always() && steps.all.outputs.found != '' && steps.all.outputs.found != '0'
       uses: actions/upload-artifact/merge@v7
       with:
-        name: ${{ steps.collect.outputs.merged }}
+        name: ${{ steps.all.outputs.merged }}
         pattern: JUnit_*
         delete-merged: true
         retention-days: 14

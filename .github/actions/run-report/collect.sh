@@ -1,20 +1,22 @@
 #!/usr/bin/env bash
 # Usage (env): NEW - the JUnit_<artifact-name> artifacts of this attempt; OLD - the Test Results*
-# artifacts earlier attempts merged theirs into; CARD - fails or all; OUT - the folder to lay the
-# reports out in; GITHUB_RUN_ATTEMPT, GITHUB_OUTPUT, GITHUB_STEP_SUMMARY.
+# artifacts earlier attempts merged theirs into; PART - fails or all, the part of the test card;
+# OUT - the folder to lay the reports out in; GITHUB_RUN_ATTEMPT, GITHUB_OUTPUT,
+# GITHUB_STEP_SUMMARY.
 # A report is a folder <artifact-name>/ with meta.json and the JUnit files the tests wrote, if any
 # (publish-test-results/stage-report.sh). download-artifact puts a single artifact right into its
 # path and several into a folder each, so the reports are looked up at any depth. A job re-run in
 # this attempt left its report in NEW, the others are in OLD: the latest attempt of a name wins.
 # A suite is the reports of one title without the shard suffix " (n/m)"; the suites go Library,
-# Creator, Analytics, PDF, Theme Adapter Demos, by title within a product. The card's suites are
+# Creator, Analytics, PDF, Theme Adapter Demos, by title within a product. The part's suites are
 # laid out as OUT/<NN>/<name>.<JUnit file>, and the outputs paths and names list them a line each -
-# the report_paths and check_name of action-junit-report. The fails card holds the suites with a failed
-# or flaky test; it starts with a table of how many of each a suite has, the links to the
+# the report_paths and check_name of action-junit-report. The fails part holds the suites with a
+# failed or flaky test; it starts with a table of how many of each a suite has, the links to the
 # screenshot diff pages and the jobs that failed without a failed test in their report (the failed
-# and flaky tests themselves follow, details.sh), and the outputs failed and flaky count them. Also
-# sets found - the reports in NEW, which the merge takes - and merged, the name of the merged
-# artifact.
+# and flaky tests themselves follow, details.sh), and the outputs failed and flaky count them. The
+# all part holds every suite with a report; it writes only its heading, the table is
+# action-junit-report's. Also sets found - the reports in NEW, which the merge takes - and merged,
+# the name of the merged artifact.
 set -uo pipefail
 
 SEP=$'\x1f'
@@ -60,8 +62,8 @@ LC_ALL=C sort -t "$SEP" -k1,1 -k2,2nr -k3,3n "$TMP/metas" | awk -F "$SEP" '!seen
     printf '%s\n' "$RANK$SEP$SUITE$SEP$TITLE$SEP$NAME$SEP$D$SEP$HAS$SEP$FAILED$SEP$FLAKY$SEP$STATUS$SEP$URL$SEP$DIFF_FAILED$SEP$DIFF_FLAKY"
   done | LC_ALL=C sort -t "$SEP" -k1,1n -k2,2 -k3,3 > "$TMP/reports"
 
-# The card's suites: every suite with a report, or for fails every suite with a failed or flaky test
-if [ "$CARD" = fails ]; then
+# The part's suites: every suite with a report, or for fails every suite with a failed or flaky test
+if [ "$PART" = fails ]; then
   awk -F "$SEP" '$7 > 0 || $8 > 0 { print $2 }' "$TMP/reports"
 else
   awk -F "$SEP" '$6 == 1 { print $2 }' "$TMP/reports"
@@ -89,7 +91,7 @@ while IFS= read -r SUITE; do
   TOTAL_FAILED=$((TOTAL_FAILED + SUITE_FAILED)) TOTAL_FLAKY=$((TOTAL_FLAKY + SUITE_FLAKY))
 done < "$TMP/suites"
 
-if [ "$CARD" = fails ]; then
+if [ "$PART" = fails ]; then
   DIFFS="$(awk -F "$SEP" '$10 != "" {
       text = $11 " screenshot mismatch(es) in failed tests"
       if ($12 != 0) text = text ", " $12 " in flaky tests"
@@ -103,12 +105,14 @@ if [ "$CARD" = fails ]; then
     [ -z "$DIFFS" ] || printf '### Screenshot diffs\n\n%s\n\n' "$DIFFS"
     [ -z "$JOBS" ] || printf '### Failed jobs without a failed test\n\n%s\n\n' "$JOBS"
   } >> "$GITHUB_STEP_SUMMARY"
+elif [ "$N" != 0 ]; then
+  printf '### All suites\n\n' >> "$GITHUB_STEP_SUMMARY"
 fi
 
 MERGED="Test Results"
 [ "${GITHUB_RUN_ATTEMPT:-1}" = 1 ] || MERGED="$MERGED (attempt $GITHUB_RUN_ATTEMPT)"
 
-echo "$N suite(s) for the $CARD card, $FOUND report(s) of this attempt."
+echo "$N suite(s) for the $PART part, $FOUND report(s) of this attempt."
 {
   printf 'paths<<EOF_RUN_REPORT\n%sEOF_RUN_REPORT\n' "$PATHS"
   printf 'names<<EOF_RUN_REPORT\n%sEOF_RUN_REPORT\n' "$NAMES"

@@ -1,7 +1,8 @@
-# Tests of .github/actions/run-report/collect.sh - the suites of the Fails and Test Results cards -
-# on reports staged by .github/actions/publish-test-results/stage-report.sh. tests/fixtures/junit
-# holds real reports of Playwright 1.60 with PLAYWRIGHT_JUNIT_INCLUDE_RETRIES=1: a passed and a
-# flaky test (flaky.xml), a passed and a failed one (failed.xml).
+# Tests of .github/actions/run-report/collect.sh - the suites of the two parts of the test card, the
+# failed and flaky tests and every suite - on reports staged by
+# .github/actions/publish-test-results/stage-report.sh. tests/fixtures/junit holds real reports of
+# Playwright 1.60 with PLAYWRIGHT_JUNIT_INCLUDE_RETRIES=1: a passed and a flaky test (flaky.xml), a
+# passed and a failed one (failed.xml).
 source tests/lib.sh
 
 TMP="$(mktemp -d)"
@@ -17,9 +18,9 @@ stage() {
     bash .github/actions/publish-test-results/stage-report.sh
 }
 
-collect() { # <card> <new> <old>
+collect() { # <part> <new> <old>
   rm -rf "$TMP/out" && : > "$TMP/output" && : > "$TMP/summary"
-  LOG="$(NEW="$2" OLD="$3" CARD="$1" OUT="$TMP/out" GITHUB_OUTPUT="$TMP/output" \
+  LOG="$(NEW="$2" OLD="$3" PART="$1" OUT="$TMP/out" GITHUB_OUTPUT="$TMP/output" \
     GITHUB_STEP_SUMMARY="$TMP/summary" GITHUB_RUN_ATTEMPT="${ATTEMPT:-1}" \
     bash .github/actions/run-report/collect.sh 2>&1)"
   STATUS=$?
@@ -44,7 +45,7 @@ stage "$N" PDF_Test "PDF Tests" failure ""
 stage "$N" ThemeAdapterDemos_SCR_shadcn_1 "Theme Adapter Demos SCR shadcn (1/2)" success "$TMP/passed.xml"
 
 collect all "$N" "$TMP/old"
-assert_eq "the all card passes" 0 "$STATUS"
+assert_eq "the all part passes" 0 "$STATUS"
 assert_eq "every suite with a report, products in order, the shards of one suite together" \
   "$(printf '%s\n' "Library Core Unit Tests" "Library React E2E Tests" "Library React SCR Tests" \
     "Creator Angular E2E Tests" "Analytics E2E Tests" "Theme Adapter Demos SCR shadcn")" "$NAMES"
@@ -54,10 +55,10 @@ assert_eq "the suite folder holds all its shards" \
   "$(cd "$TMP/out/04" && echo *)"
 assert_eq "every report of this attempt is found" 9 "$FOUND"
 assert_eq "the merged artifact of the first attempt" "Test Results" "$MERGED"
-assert_eq "the all card writes no text of its own" "" "$SUMMARY"
+assert_eq "the all part writes only its heading, the table is action-junit-report's" "### All suites" "$SUMMARY"
 
 collect fails "$N" "$TMP/old"
-assert_eq "the fails card passes" 0 "$STATUS"
+assert_eq "the fails part passes" 0 "$STATUS"
 assert_eq "only the suites with a failed or flaky test" \
   "$(printf '%s\n' "Library React SCR Tests" "Creator Angular E2E Tests")" "$NAMES"
 assert_eq "a failing suite comes whole, every shard" 3 "$(ls "$TMP/out/02" | wc -l | tr -d ' ')"
@@ -68,11 +69,11 @@ assert_contains "a job that failed without a report is named" "$SUMMARY" \
 assert_contains "and one that failed with a clean report" "$SUMMARY" \
   "- **Analytics E2E Tests** — the job failed, but its report has no failed test: see the job log"
 assert_not_contains "a failed job with a failed test is in the tables only" "$SUMMARY" "Creator Angular E2E Tests (2/3)"
-assert_contains "the card opens with the failed and flaky tests of each suite, the shards summed" "$SUMMARY" \
+assert_contains "the part opens with the failed and flaky tests of each suite, the shards summed" "$SUMMARY" \
   "$(printf '%s\n' "### Failed and flaky tests" "" "| Suite | Failed | Flaky |" "| --- | ---: | ---: |" \
     "| Library React SCR Tests | 0 | 1 |" "| Creator Angular E2E Tests | 1 | 1 |")"
 assert_eq "the table comes first, the diff links after it" "### Failed and flaky tests" "$(head -1 "$TMP/summary")"
-assert_eq "the failed tests of the card are counted" 1 "$FAILED"
+assert_eq "the failed tests of the part are counted" 1 "$FAILED"
 assert_eq "and the flaky ones" 2 "$FLAKY"
 
 # A report on one line, the way some reporters write it: a test counts once, retries or not.
@@ -89,7 +90,7 @@ assert_eq "every file of the glob is staged" "failed.xml flaky.xml meta.json" \
   "$(cd "$TMP/new4/JUnit_Analytics_Unit/Analytics_Unit" && echo *)"
 collect fails "$TMP/new4" "$TMP/none"
 assert_contains "and counted" "$SUMMARY" "| Analytics Unit Tests | 1 | 1 |"
-assert_eq "and laid out for the card" "Analytics_Unit.failed.xml Analytics_Unit.flaky.xml" "$(cd "$TMP/out/01" && echo *)"
+assert_eq "and laid out for the part" "Analytics_Unit.failed.xml Analytics_Unit.flaky.xml" "$(cd "$TMP/out/01" && echo *)"
 
 # A re-run: earlier attempts left their reports merged, a single artifact right in the path and
 # several in a folder each; the re-run jobs left theirs in this attempt.
@@ -121,6 +122,8 @@ assert_eq "no reports pass" 0 "$STATUS"
 assert_eq "with no suites" "" "$NAMES$PATHS"
 assert_eq "no text" "" "$SUMMARY"
 assert_eq "and nothing to merge" 0 "$FOUND"
+collect all "$TMP/none" "$TMP/none"
+assert_eq "no heading of the all part either - a run of SCR Update" "" "$SUMMARY"
 
 # details.sh: the failed and flaky tests out of the outputs of action-junit-report
 details() { # <detailed_summary> <flaky_summary> <flaky>

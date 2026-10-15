@@ -40,8 +40,8 @@
   checkout-pr/               ← блок «Switch to PR $(PR)»: pull/N/merge → fallback head + ::warning::
   options/                   ← pr_title_parser.yml + commit_message_parser.yml
   publish-test-results/      ← PublishBuildArtifacts(test-results) + PublishTestResults
-  junit-reporters/           ← JUnit-репортеры тестовых раннеров для карточек прогона
-  run-report/                ← карточки прогона Fails и Test Results из отчётов publish-test-results
+  junit-reporters/           ← JUnit-репортеры тестовых раннеров для тестовой карточки прогона
+  run-report/                ← тестовая карточка прогона (джоб result) из отчётов publish-test-results
   result/                    ← единственный required check
   build-library/             ← templates/library/*/build.yml (inputs: package, extra dirs, artifact name)
   build-creator/             ← templates/creator/*/build.yml
@@ -50,7 +50,7 @@
   claude/                    ← templates/utils/claude.yml
 .github/workflows/
   library.yml                ← Azure library.yml: весь граф (раздел 3) — Lint, Options, SCR Update, вызовы тестовых
-                               workflows, result, Fails, Test Results; затем library-staging.yml и backport.yml
+                               workflows, result с тестовой карточкой; затем library-staging.yml и backport.yml
   library-{core,react,angular,vue,js}.yml   ← templates/library/*/test.yml (library-react — без «SCR Update»)
   creator-{core,react,angular,vue,js}.yml   ← templates/creator/*/test.yml (без «SCR Update»: в library он не запускается)
   analytics-test.yml (без «SCR Update»), pdf-test.yml, theme-adapter-demos-test.yml
@@ -58,7 +58,7 @@
   backport.yml               ← templates/utils/backport.yml
 ```
 - **Тестовые workflows** — по одному на каждый Azure `test.yml`. Их без изменений переиспользуют будущие переезды creator, analytics и pdf.
-- **Граф — `library.yml`** (`on: workflow_call`). Его вызывает единственный джоб `CI` в survey-library (см. ниже), как Azure-заглушка `extends: library.yml@azurepipelines`. Групповых workflows нет: тестовые workflows вызываются прямо из `library.yml`, а SCR Update, result и карточки — его собственные джобы.
+- **Граф — `library.yml`** (`on: workflow_call`). Его вызывает единственный джоб `CI` в survey-library (см. ниже), как Azure-заглушка `extends: library.yml@azurepipelines`. Групповых workflows нет: тестовые workflows вызываются прямо из `library.yml`, а SCR Update и result (с тестовой карточкой) — его собственные джобы.
 - **Имена джобов.** Панель прогона — одна группа CI с плоским списком конечных джобов, поэтому конечный джоб сам называет область и фреймворк:
   - `Library · React · Markup`, `Creator · Vue · E2E (1/2)`, `Analytics · Unit`, `PDF · Test`, `Demos · SCR: <app>`;
   - джобы `library.yml`, которые вызывают тестовые workflows, называются «Library React», «Creator Core», «Analytics»… — они видны только в имени check'а;
@@ -79,7 +79,7 @@
 
 - **Триггеры:** `pull_request` и `push` в master, V2, V3 копируются из UI-настроек Azure, плюс `workflow_dispatch`.
 - **`permissions`:** `contents: read`, `pull-requests: read`; вызываемые workflows их наследуют и своих не задают. Во всех вызовах `secrets: inherit`. `defaults.run.shell` задаёт `library.yml`.
-- **Метка `[azurepipelines skip]`:** `!contains(github.event.head_commit.message, '[azurepipelines skip]')` стоит в условиях Lint, Options, result, Fails и Test Results в `library.yml`. Остальные джобы пропускаются вслед за Options, так что прогон с меткой пропускается целиком. Метка **не** меняется на `[skip ci]`, иначе на релизном теге пропустился бы и `tagged-release.yml`.
+- **Метка `[azurepipelines skip]`:** `!contains(github.event.head_commit.message, '[azurepipelines skip]')` стоит в условиях Lint, Options и result в `library.yml`. Остальные джобы пропускаются вслед за Options, так что прогон с меткой пропускается целиком. Метка **не** меняется на `[skip ci]`, иначе на релизном теге пропустился бы и `tagged-release.yml`.
 - **Concurrency:**
   - для PR — группа `library-pr-<N>`, `cancel-in-progress: true`;
   - для push — уникальная группа на прогон (`github.run_id`), иначе отменится ожидающий прогон master вместе с его backport;
@@ -114,17 +114,15 @@
 | analytics (`analytics-test.yml`) → Analytics · … | options | `scr_update == ''`; `analytics-pr` из ANALYTICS |
 | pdf (`pdf-test.yml`) → PDF · … | options | `scr_update == ''`; `pdf-pr` из PDF |
 | theme-adapter-demos (`theme-adapter-demos-test.yml`) → Demos · … | options | `scr_update == ''` и `pull_request` в master; `demos-pr` из ADAPTERS, `creator-pr` из CREATOR, `LIBRARY_PR` пустой |
-| result → result | все джобы выше | `always()` и нет метки; action `result` получает `needs: ${{ toJSON(needs) }}` |
-| fails → Fails | те же, что у result | `!cancelled()` и нет метки; карточка упавших и flaky тестов (run-report), на чистом прогоне её нет |
-| test-results → Test Results | fails | `!cancelled()` и нет метки; карточка всех наборов, сливает отчёты `JUnit_*` в артефакт Test Results |
+| result → result | все джобы выше | `always()` и нет метки; action `result` получает `needs: ${{ toJSON(needs) }}`; затем тестовая карточка (run-report, шаг с `!cancelled()` и `continue-on-error`): упавшие и flaky тесты (на чистом прогоне их нет), потом все наборы; сливает отчёты `JUnit_*` в артефакт Test Results |
 | staging (`library-staging.yml`) | result | `is_stage` |
 | backport (`backport.yml`) | result | `github.ref_name == 'master'` |
 
-Staging и Backport идут параллельно и только при зелёном `result`, то есть когда прошли все тесты и Lint. Fails ждёт те же джобы, что result: карточкам нужны отчёты всех тестов (проверяет `tests/workflows.test.sh`).
+Staging и Backport идут параллельно и только при зелёном `result`, то есть когда прошли все тесты и Lint. Карточку строит сам result: ей нужны отчёты всех тестов, а result и так ждёт все джобы (проверяет `tests/workflows.test.sh`). Сбой карточки не красит required check.
 
 **Осознанные отличия от Azure:**
 - **Staging и Backport ждут всё.** В Azure Staging ждал только 5 стадий Library, Backport — Library, Creator, Analytics и PDF, а Lint не ждал никто. Теперь оба запускаются после всех тестов и Lint (решение 2026-10-12).
-- **SCR Update — отдельный джоб `library.yml`.** В Azure это джоб стадии Library React Test. С `[scr_update]` выполняются Lint, Options, SCR Update, result и карточки.
+- **SCR Update — отдельный джоб `library.yml`.** В Azure это джоб стадии Library React Test. С `[scr_update]` выполняются Lint, Options, SCR Update и result.
 - **Options выполняется и на push**, см. выше.
 
 **result** — единственный required check `CI / result`.
@@ -153,7 +151,7 @@ Staging и Backport идут параллельно и только при зе�
 **Артефакты:**
 - `actions/upload-artifact@v4` с прежними именами (`Library_React_E2E`, `SurveyJSLibraryBuild*` и т. д.), `overwrite: true`;
 - для `.report` у demos — `include-hidden-files: true`;
-- отчёты: `mikepenz/action-junit-report` с `annotate_only` — аннотации в самом джобе; job summary тестовые джобы не пишут, карточки прогона Fails и Test Results собирают джобы `fails` и `test-results` из `library.yml` (run-report).
+- отчёты: `mikepenz/action-junit-report` с `annotate_only` — аннотации в самом джобе; job summary тестовые джобы не пишут, тестовую карточку прогона собирает джоб `result` из `library.yml` (run-report).
 
 ## 4. Окружение, кэш, секреты, безопасность
 
@@ -246,7 +244,7 @@ Staging и Backport идут параллельно и только при зе�
 ## 7. Этапы
 
 **Подпроекты для планов реализации**, по порядку; каждый проверяется в тени отдельно:
-- **A** — общие actions (npm-install, checkout-pr, options, publish-test-results, build-*), тестовые workflows, `library.yml` с графом, `result` и карточками, тонкий вызывающий workflow;
+- **A** — общие actions (npm-install, checkout-pr, options, publish-test-results, build-*), тестовые workflows, `library.yml` с графом и `result` с тестовой карточкой, тонкий вызывающий workflow;
 - **B** — Staging в `library.yml`;
 - **C** — Backport в `library.yml` и action `claude` в docker;
 - **D** — ускорение (раздел 6);
@@ -301,11 +299,11 @@ Staging и Backport идут параллельно и только при зе�
 - `actionlint` по всем новым `.github/**` в azure-pipelines и по вызывающему workflow.
 - **Тестовые PR в тени:**
   1. обычный PR в master:
-     - в панели одна группа CI: Lint, Options, конечные джобы с префиксом области, result, Fails, Test Results;
-     - Fails и Test Results стартуют после всех тестов, Staging и Backport на PR пропущены;
+     - в панели одна группа CI: Lint, Options, конечные джобы с префиксом области, result;
+     - result стартует после всех тестов, в его сводке тестовая карточка: сначала упавшие и flaky тесты, потом `### All suites`; Staging и Backport на PR пропущены;
      - набор конечных джобов тот же, что в Azure;
   2. `[creator: N]` и `[adapters: N]`, в том числе конфликтующий companion: fallback на head с warning;
-  3. коммит `[scr_update]`: выполняются только Lint, Options, SCR Update, result и карточки; `result` зелёный;
+  3. коммит `[scr_update]`: выполняются только Lint, Options, SCR Update и result; `result` зелёный;
   4. невалидный тег: Options красный, тесты пропущены, `result` красный;
   5. PR в V2: Creator SCR Legacy;
   6. PR из форка;

@@ -3,8 +3,8 @@ description: >
   Port of the PublishBuildArtifacts(test-results) + PublishTestResults@2 pair of the Azure test
   templates. Reports the failed tests of the JUnit file as annotations (annotate_only: no checks
   permission, so it works on fork PRs too) and uploads the report as JUnit_<artifact-name>, with the
-  title, the job status and the link to the screenshot diff page, for the two cards of the run that
-  library.yml makes (run-report): Fails and Test Results. Unlike Azure, a job writes no job summary
+  title, the job status and the link to the screenshot diff page, for the test card of the run that
+  the result job of library.yml makes (run-report). Unlike Azure, a job writes no job summary
   of its own, and the results directory goes up as an artifact only when the job has failed.
   Playwright writes the failed attempts of a flaky test to the JUnit report (<flakyFailure> /
   <flakyError>) only with PLAYWRIGHT_JUNIT_INCLUDE_RETRIES=1, which the test workflows set; without
@@ -13,7 +13,7 @@ description: >
   playwright-json it also publishes the screenshot diff page - one HTML file with the expected /
   actual / diff images of every mismatch, flaky ones included, opened right in the browser (a
   non-zipped artifact: signed-in users with access to the repository, 14 days), linked from the
-  Fails card. With html-report a failed job also uploads the Playwright HTML report as
+  test card. With html-report a failed job also uploads the Playwright HTML report as
   <artifact-name>_Report, for `npx playwright show-report`.
 inputs:
   path:
@@ -85,10 +85,10 @@ runs:
         archive: false
         overwrite: true
         retention-days: 14
-    # The run cards of library.yml (run-report) are made from these: every job, a green one too,
+    # The test card of library.yml (run-report) is made from these: every job, a green one too,
     # uploads its report with a meta.json - the title, the job status, the diff page. One folder
     # inside the artifact, named after it, keeps a download the same however many are fetched.
-    - name: Stage the report for the run cards
+    - name: Stage the report for the test card
       if: always() && inputs.junit-file != ''
       shell: bash --noprofile --norc {0}
       env:
@@ -101,8 +101,8 @@ runs:
         DIFF_FAILED: ${{ steps.diff-page.outputs.failed }}
         DIFF_FLAKY: ${{ steps.diff-page.outputs.flaky }}
       run: bash "$GITHUB_ACTION_PATH/stage-report.sh"
-    # A day is enough: the all card merges these into Test Results and deletes them.
-    - name: Upload the report for the run cards
+    # A day is enough: the test card merges these into Test Results and deletes them.
+    - name: Upload the report for the test card
       if: always() && inputs.junit-file != ''
       uses: actions/upload-artifact@v7
       with:
@@ -111,7 +111,7 @@ runs:
         if-no-files-found: ignore
         overwrite: true
         retention-days: 1
-    # Annotations only - the cards of the run are library.yml's fails and test-results jobs.
+    # Annotations only - the test card of the run is made by the result job of library.yml.
     - name: Report the JUnit results
       if: always() && inputs.junit-file != ''
       uses: mikepenz/action-junit-report@v6

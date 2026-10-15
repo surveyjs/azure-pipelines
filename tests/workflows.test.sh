@@ -137,6 +137,13 @@ needs() {
     on && /^      - / { sub(/^      - /, ""); print; next }
     { on = 0 }' | LC_ALL=C sort
 }
+# step <job id> <uses> - the step of a job of library.yml that uses the action, up to the next step.
+step() {
+  job "$1" | awk -v uses="$2" '
+    /^      - / { if (index(block, uses)) printf "%s", block; block = "" }
+    { block = block $0 "\n" }
+    END { if (index(block, uses)) printf "%s", block }'
+}
 
 # result is the single required check, "CI / result". It must report on every run, a failed or
 # cancelled one included: a skipped required check counts as passed. It checks every job before it.
@@ -144,21 +151,17 @@ assert_contains "library.yml's result job runs the result action" "$(job result)
 assert_contains "library.yml's result job runs always()" "$(job result | grep '^    if:')" 'always()'
 assert_eq "result needs every job before it" \
   "$(awk '/^jobs:/ { on = 1; next } on && /^  [a-z0-9_-]+:[[:space:]]*$/ { sub(/^  /, ""); sub(/:.*/, ""); print }' \
-    .github/workflows/library.yml 2>/dev/null | grep -vxE 'result|fails|test-results' | LC_ALL=C sort)" \
+    .github/workflows/library.yml 2>/dev/null | grep -vx 'result' | LC_ALL=C sort)" \
   "$(needs result)"
-# The run cards: fails waits for the same jobs - the reports of all the tests - and test-results
-# comes last, as it merges the reports into one artifact and deletes them.
-assert_contains "library.yml's fails job makes the fails card" "$(job fails)" "card: fails"
-assert_contains "library.yml's test-results job makes the all card" "$(job test-results)" "card: all"
-for J in fails test-results; do
-  assert_contains "library.yml's $J job runs run-report" "$(job "$J")" "/.github/actions/run-report@"
-  assert_contains "library.yml's $J job runs unless the run was cancelled" \
-    "$(job "$J" | grep '^    if:')" '!cancelled()'
-done
-assert_eq "fails waits for the jobs result checks" "$(needs result)" "$(needs fails)"
-assert_eq "test-results follows fails" "fails" "$(needs test-results)"
+# result also makes the test card of the run (run-report) from the reports of all the tests: after
+# a red check too, never on a cancelled run, and a broken card does not turn the check red.
+CARD="$(step result /.github/actions/run-report@)"
+assert_contains "library.yml's result job makes the test card" "$CARD" "/.github/actions/run-report@"
+assert_contains "the card is made unless the run was cancelled" "$CARD" 'if: ${{ !cancelled() }}'
+assert_contains "a broken card leaves the check as it is" "$CARD" "continue-on-error: true"
+assert_eq "the card has no job of its own" "" "$(job fails)$(job test-results)"
 
-# The run cards (run-report) group the reports by title, the shard suffix left out, and order them
+# The test card (run-report) groups the reports by title, the shard suffix left out, and orders them
 # by the product the title starts with; a report goes up as JUnit_<artifact-name>, overwriting one
 # of the same name.
 assert_eq "every test report title starts with its product" "" \

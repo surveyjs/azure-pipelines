@@ -31,7 +31,7 @@ jobs:
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
       # `npm run test` is `vitest run && npm run test:types`, so arguments after `--` would go to
       # test:types: the step runs both itself (V3 has no test:types). The junit reporter feeds the
-      # run cards; explicit reporters drop the github-actions one Vitest adds by itself, and
+      # test card; explicit reporters drop the github-actions one Vitest adds by itself, and
       # publish-test-results annotates the failed tests instead.
       - name: Tests Unit
         working-directory: packages/survey-core

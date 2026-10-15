@@ -20,7 +20,7 @@ defaults:
     shell: bash --noprofile --norc {0}
 
 # The JUnit reports keep the failed attempts of flaky tests (<flakyFailure>) - publish-test-results
-# hands those tests over to the Fails card of the run (the fails job of library.yml).
+# hands those tests over to the test card of the run (the result job of library.yml).
 env:
   PLAYWRIGHT_JUNIT_INCLUDE_RETRIES: "1"
 
@@ -37,7 +37,7 @@ jobs:
           pr: ${{ inputs.pr }}
           package: survey-react-ui
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
-      # the junit reporter feeds the run cards; Vitest resolves a relative outputFile against the
+      # the junit reporter feeds the test card; Vitest resolves a relative outputFile against the
       # config, hence the absolute path
       - name: Test Markup
         working-directory: packages/survey-react-ui

@@ -45,7 +45,7 @@ jobs:
           library-ref: ${{ inputs.library-ref }}
           library-pr: ${{ inputs.library-pr }}
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
-      # the config writes JUnit already, into the package; the run cards take it from runner.temp
+      # the config writes JUnit already, into the package; the test card takes it from runner.temp
       - name: Unit
         working-directory: packages/survey-creator-core
         env:
