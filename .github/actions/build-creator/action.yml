@@ -10,7 +10,9 @@ inputs:
     description: survey-creator repository
     default: surveyjs/survey-creator
   creator-ref:
-    description: survey-creator ref; empty = the triggering commit (own repo) or the default branch
+    description: >
+      survey-creator ref; empty = the triggering commit (own repo) or the default branch,
+      which a branch the repository lacks falls back to as well
     default: ""
   creator-pr:
     description: Companion survey-creator PR number, or empty
@@ -19,7 +21,9 @@ inputs:
     description: survey-library repository
     default: surveyjs/survey-library
   library-ref:
-    description: survey-library ref; empty = the triggering commit (own repo) or the default branch
+    description: >
+      survey-library ref; empty = the triggering commit (own repo) or the default branch,
+      which a branch the repository lacks falls back to as well
     default: ""
   library-pr:
     description: Companion survey-library PR number, or empty
@@ -42,11 +46,19 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Resolve the survey-creator ref
+      id: creator-ref
+      uses: surveyjs/azure-pipelines/.github/actions/branch-or-default@gha-migration
+      with:
+        repository: ${{ inputs.creator-repository }}
+        ref: ${{ inputs.creator-ref }}
+        name: survey-creator
+        token: ${{ inputs.token }}
     - name: Check out survey-creator
       uses: actions/checkout@v5
       with:
         repository: ${{ inputs.creator-repository }}
-        ref: ${{ inputs.creator-ref }}
+        ref: ${{ steps.creator-ref.outputs.ref }}
         token: ${{ inputs.token || github.token }}
         persist-credentials: false
         fetch-depth: 1
@@ -56,11 +68,19 @@ runs:
         pr: ${{ inputs.creator-pr }}
         name: survey-creator
         token: ${{ inputs.token }}
+    - name: Resolve the survey-library ref
+      id: library-ref
+      uses: surveyjs/azure-pipelines/.github/actions/branch-or-default@gha-migration
+      with:
+        repository: ${{ inputs.library-repository }}
+        ref: ${{ inputs.library-ref }}
+        name: survey-library
+        token: ${{ inputs.token }}
     - name: Check out survey-library
       uses: actions/checkout@v5
       with:
         repository: ${{ inputs.library-repository }}
-        ref: ${{ inputs.library-ref }}
+        ref: ${{ steps.library-ref.outputs.ref }}
         path: survey-library
         token: ${{ inputs.token || github.token }}
         persist-credentials: false

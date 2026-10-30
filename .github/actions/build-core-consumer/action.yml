@@ -12,7 +12,9 @@ inputs:
     description: Product name for the log
     required: true
   ref:
-    description: Product ref; empty = the triggering commit (own repo) or the default branch
+    description: >
+      Product ref; empty = the triggering commit (own repo) or the default branch,
+      which a branch the repository lacks falls back to as well
     default: ""
   pr:
     description: Companion product PR number, or empty
@@ -21,7 +23,9 @@ inputs:
     description: survey-library repository
     default: surveyjs/survey-library
   library-ref:
-    description: survey-library ref; empty = the triggering commit (own repo) or the default branch
+    description: >
+      survey-library ref; empty = the triggering commit (own repo) or the default branch,
+      which a branch the repository lacks falls back to as well
     default: ""
   library-pr:
     description: Companion survey-library PR number, or empty
@@ -35,11 +39,19 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Resolve the ${{ inputs.name }} ref
+      id: product-ref
+      uses: surveyjs/azure-pipelines/.github/actions/branch-or-default@gha-migration
+      with:
+        repository: ${{ inputs.repository }}
+        ref: ${{ inputs.ref }}
+        name: ${{ inputs.name }}
+        token: ${{ inputs.token }}
     - name: Check out ${{ inputs.name }}
       uses: actions/checkout@v5
       with:
         repository: ${{ inputs.repository }}
-        ref: ${{ inputs.ref }}
+        ref: ${{ steps.product-ref.outputs.ref }}
         token: ${{ inputs.token || github.token }}
         persist-credentials: false
         fetch-depth: 1
@@ -49,11 +61,19 @@ runs:
         pr: ${{ inputs.pr }}
         name: ${{ inputs.name }}
         token: ${{ inputs.token }}
+    - name: Resolve the survey-library ref
+      id: library-ref
+      uses: surveyjs/azure-pipelines/.github/actions/branch-or-default@gha-migration
+      with:
+        repository: ${{ inputs.library-repository }}
+        ref: ${{ inputs.library-ref }}
+        name: survey-library
+        token: ${{ inputs.token }}
     - name: Check out survey-library
       uses: actions/checkout@v5
       with:
         repository: ${{ inputs.library-repository }}
-        ref: ${{ inputs.library-ref }}
+        ref: ${{ steps.library-ref.outputs.ref }}
         path: survey-library
         token: ${{ inputs.token || github.token }}
         persist-credentials: false
