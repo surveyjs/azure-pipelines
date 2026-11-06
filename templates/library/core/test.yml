@@ -39,7 +39,8 @@ jobs:
         workingDirectory: $(Build.SourcesDirectory)
         displayName: "Check for the converter"
 
-      - script: npm ci --no-audit --no-fund
+      # No lock file: package-lock.json is gitignored in survey-library (the flags of utils/npm.yml).
+      - script: npm install --no-audit --no-fund --no-update-notifier --no-package-lock
         workingDirectory: $(Build.SourcesDirectory)/packages/converter
         condition: and(succeeded(), eq(variables['HAS_CONVERTER'], 'true'))
         displayName: "Install the converter"
