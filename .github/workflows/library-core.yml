@@ -49,3 +49,54 @@ jobs:
       - name: Tests CSS
         working-directory: packages/survey-core
         run: npm run test:postcss
+
+  # packages/converter (form definitions from Form.io / JSON Schema to survey JSON). Its tests load
+  # the output into survey-core and lint it, so it builds after survey-core: its survey-core
+  # dependency is file:../survey-core/build. A branch without the package (V2, V3, master until the
+  # converter lands) passes the job with every step after the check skipped.
+  converter:
+    name: Library · Core · Converter
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Build survey-library
+        uses: surveyjs/azure-pipelines/.github/actions/build-library@gha-migration
+        with:
+          ref: ${{ inputs.ref }}
+          pr: ${{ inputs.pr }}
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+      - name: Check for the converter
+        id: converter
+        run: |
+          if [ -f packages/converter/package.json ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No packages/converter on this ref - nothing to test."
+          fi
+      - name: Install the converter
+        if: steps.converter.outputs.present == 'true'
+        uses: surveyjs/azure-pipelines/.github/actions/npm-install@gha-migration
+        with:
+          directories: packages/converter
+          cache: survey-library
+          token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+      # The unit tests and the committed-corpus regression gate (corpus/fidelity.spec.ts), which
+      # reads only the snapshots in the repository - no network.
+      - name: Tests
+        if: steps.converter.outputs.present == 'true'
+        working-directory: packages/converter
+        env:
+          JUNIT_FILE: ${{ runner.temp }}/junit/converter/junit.xml
+        run: npx vitest run --reporter=default --reporter=junit --outputFile.junit="$JUNIT_FILE"
+      - name: Publish results
+        if: ${{ !cancelled() && steps.converter.outputs.present == 'true' }}
+        uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
+        with:
+          path: ${{ runner.temp }}/junit/converter
+          artifact-name: Library_Converter_Unit
+          junit-file: junit.xml
+          title: Library Converter Tests
+      - name: Build
+        if: steps.converter.outputs.present == 'true'
+        working-directory: packages/converter
+        run: npm run build
