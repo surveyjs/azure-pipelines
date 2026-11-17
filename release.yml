@@ -258,27 +258,23 @@ jobs:
     workingDirectory: $(Build.SourcesDirectory)/survey-library
     displayName: 'Build survey-library'
 
-  # packages/converter (survey-converter) keeps the version of the other library packages: the same
-  # release script bumps it from the same version, and the release commit above takes it with them.
-  # It installs here rather than in npm.yml, which fails on a missing package.json: a branch without
-  # the package (V2, V3, master until the converter lands) skips it. Its survey-core dependency is
-  # file:../survey-core/build, built by the step above.
+  # packages/converter (survey-converter) keeps the version of the other library packages: it is set
+  # to the version survey-core was just bumped to (not bumped by $(runReleaseArgs) from its own
+  # version, which can lag - the converter missed the 3.2.5 release), and the 'Commit and tag
+  # releases' step below takes it with them. It installs here rather than in npm.yml, which fails on
+  # a missing package.json: a branch without the package (V2, V3) skips it. Its survey-core
+  # dependency is file:../survey-core/build, built by the step above.
   - bash: |
       set -e
       if [ ! -f packages/converter/package.json ]; then
         echo "No packages/converter on this branch - nothing to release."
         exit 0
       fi
+      CORE_VERSION=$(node -p "require('./packages/survey-core/package.json').version")
       cd packages/converter
       npm install --no-audit --no-fund --no-update-notifier --no-package-lock
-      npm run release -- $(runReleaseArgs) --skip.commit --skip.tag
+      npm run release -- --release-as "$CORE_VERSION" --skip.commit --skip.tag
       npm run build
-      CORE_VERSION=$(node -p "require('../survey-core/package.json').version")
-      CONVERTER_VERSION=$(node -p "require('./package.json').version")
-      if [ "$CONVERTER_VERSION" != "$CORE_VERSION" ]; then
-        echo "##vso[task.logissue type=error]survey-converter is $CONVERTER_VERSION, survey-core is $CORE_VERSION: set the converter's package.json version to survey-core's before the release."
-        exit 1
-      fi
     workingDirectory: $(Build.SourcesDirectory)/survey-library
     displayName: 'Build survey-converter'
 
