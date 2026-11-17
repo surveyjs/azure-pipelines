@@ -18,3 +18,49 @@ jobs:
       - script: npm run test:postcss
         workingDirectory: $(Build.SourcesDirectory)/packages/survey-core
         displayName: "Tests CSS"
+
+  # packages/converter (form definitions from Form.io / JSON Schema to survey JSON). Its tests load
+  # the output into survey-core and lint it, so it builds after survey-core: its survey-core
+  # dependency is file:../survey-core/build. A branch without the package (V2, V3, master until the
+  # converter lands) passes the job with every step after the check skipped.
+  - job: Converter
+    displayName: "Converter"
+    steps:
+      - template: build.yml
+        parameters:
+          checkout: ${{ parameters.checkout }}
+
+      - bash: |
+          if [ -f packages/converter/package.json ]; then
+            echo "##vso[task.setvariable variable=HAS_CONVERTER]true"
+          else
+            echo "No packages/converter on this ref - nothing to test."
+          fi
+        workingDirectory: $(Build.SourcesDirectory)
+        displayName: "Check for the converter"
+
+      # No lock file: package-lock.json is gitignored in survey-library (the flags of utils/npm.yml).
+      - script: npm install --no-audit --no-fund --no-update-notifier --no-package-lock
+        workingDirectory: $(Build.SourcesDirectory)/packages/converter
+        condition: and(succeeded(), eq(variables['HAS_CONVERTER'], 'true'))
+        displayName: "Install the converter"
+
+      # The unit tests and the committed-corpus regression gate (corpus/fidelity.spec.ts), which
+      # reads only the snapshots in the repository - no network.
+      - script: npx vitest run --reporter=default --reporter=junit --outputFile.junit=$(Agent.TempDirectory)/converter/junit.xml
+        workingDirectory: $(Build.SourcesDirectory)/packages/converter
+        condition: and(succeeded(), eq(variables['HAS_CONVERTER'], 'true'))
+        displayName: "Tests"
+
+      - task: PublishTestResults@2
+        condition: and(succeededOrFailed(), eq(variables['HAS_CONVERTER'], 'true'))
+        inputs:
+          testResultsFormat: JUnit
+          testResultsFiles: $(Agent.TempDirectory)/converter/junit.xml
+          testRunTitle: "Library Converter Tests"
+        displayName: "Publish test results"
+
+      - script: npm run build
+        workingDirectory: $(Build.SourcesDirectory)/packages/converter
+        condition: and(succeeded(), eq(variables['HAS_CONVERTER'], 'true'))
+        displayName: "Build"
