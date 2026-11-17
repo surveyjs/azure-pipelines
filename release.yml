@@ -21,6 +21,9 @@ parameters:
       - survey-angular-ui
       - survey-vue3-ui
       - survey-js-ui
+      # survey-converter is not published yet: uncomment it together with its block in 'Copy builds
+      # to DevBuilds'. The publish has no guard, so only on a branch that has packages/converter.
+      # - survey-converter
       - survey-creator-core
       - survey-creator-react
       - survey-creator-angular
@@ -255,6 +258,26 @@ jobs:
     workingDirectory: $(Build.SourcesDirectory)/survey-library
     displayName: 'Build survey-library'
 
+  # packages/converter (survey-converter) keeps the version of the other library packages: it is set
+  # to the version survey-core was just bumped to (not bumped by $(runReleaseArgs) from its own
+  # version, which can lag - the converter missed the 3.2.5 release), and the 'Commit and tag
+  # releases' step below takes it with them. It installs here rather than in npm.yml, which fails on
+  # a missing package.json: a branch without the package (V2, V3) skips it. Its survey-core
+  # dependency is file:../survey-core/build, built by the step above.
+  - bash: |
+      set -e
+      if [ ! -f packages/converter/package.json ]; then
+        echo "No packages/converter on this branch - nothing to release."
+        exit 0
+      fi
+      CORE_VERSION=$(node -p "require('./packages/survey-core/package.json').version")
+      cd packages/converter
+      npm install --no-audit --no-fund --no-update-notifier --no-package-lock
+      npm run release -- --release-as "$CORE_VERSION" --skip.commit --skip.tag
+      npm run build
+    workingDirectory: $(Build.SourcesDirectory)/survey-library
+    displayName: 'Build survey-converter'
+
   - script: |
       cd packages/survey-creator-core    && npm run release -- $(runReleaseArgs) --skip.commit --skip.tag && npm run build:all && cd -
       cd packages/survey-creator-react   && npm run release -- $(runReleaseArgs) --skip.commit --skip.tag && npm run build && cd -
@@ -336,6 +359,19 @@ jobs:
         New-Item -ItemType Directory -Force -Path $dest | Out-Null
         Copy-Item -Recurse -Force -Path "$(Build.SourcesDirectory)/survey-library/packages/$pkg/build/*" -Destination $dest
       }
+
+      # survey-converter is not published yet (npm or the DevBuilds blob upload): uncomment this block
+      # together with survey-converter in pkgList. It ships from its package folder (the "files" of its
+      # package.json) rather than a build folder, and takes the repository's LICENSE.
+      # $converter = "$(Build.SourcesDirectory)/survey-library/packages/converter"
+      # if (Test-Path "$converter/package.json") {
+      #   $dest = Join-Path $devBuilds 'survey-converter'
+      #   New-Item -ItemType Directory -Force -Path $dest | Out-Null
+      #   foreach ($item in @('package.json', 'README.md', 'dist', 'src')) {
+      #     Copy-Item -Recurse -Force -Path "$converter/$item" -Destination $dest
+      #   }
+      #   Copy-Item -Force -Path "$(Build.SourcesDirectory)/survey-library/LICENSE" -Destination $dest
+      # }
 
       $creatorPkgs = @('survey-creator-core','survey-creator-react','survey-creator-angular','survey-creator-vue','survey-creator-js')
       foreach ($pkg in $creatorPkgs) {
