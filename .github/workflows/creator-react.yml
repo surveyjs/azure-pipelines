@@ -1,6 +1,6 @@
 # Port of templates/creator/react/test.yml (keep in sync while it lives), without its "SCR Update"
 # job: the library pipeline never runs it (no SCR_UPDATE in the creator stages).
-# Unlike Azure, E2E and SCR run in two Playwright shards each - one job per shard.
+# Unlike Azure, E2E, SCR and SCR Legacy run in two Playwright shards each - one job per shard.
 name: Creator React Test
 
 on:
@@ -124,11 +124,15 @@ jobs:
           title: Creator React E2E Tests (${{ matrix.shard }}/2)
           html-report: packages/survey-creator-react/playwright-report
 
+  # SCR Legacy runs for V2 only (a PR into V2 or a push to it): a suite of the matrix, so the other
+  # runs show no skipped job of it. npm hands the args after -- to playwright, the last command of
+  # test:scr:legacy:ci.
   scr:
-    name: "Creator · React · SCR Test (${{ matrix.shard }}/2)"
+    name: "Creator · React · SCR ${{ matrix.suite == 'scr:legacy' && 'Legacy' || 'Test' }} (${{ matrix.shard }}/2)"
     strategy:
       fail-fast: false
       matrix:
+        suite: ${{ fromJSON((github.base_ref == 'V2' || github.ref_name == 'V2') && '["scr","scr:legacy"]' || '["scr"]') }}
         shard: [1, 2]
     continue-on-error: ${{ !inputs.scr-blocking }}
     runs-on: ubuntu-24.04
@@ -146,49 +150,16 @@ jobs:
           example: packages/survey-creator-react/example
           browsers: "true"
           token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
-      - name: Test SCR
+      - name: Test SCR${{ matrix.suite == 'scr:legacy' && ' Legacy' || '' }}
         working-directory: packages/survey-creator-react
-        run: npm run test:scr:ci -- --workers=100% --shard=${{ matrix.shard }}/2
+        run: npm run test:${{ matrix.suite }}:ci -- --workers=100% --shard=${{ matrix.shard }}/2
       - name: Publish results
         if: ${{ !cancelled() }}
         uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
         with:
           path: packages/survey-creator-react/test-results
-          artifact-name: Creator_React_SCR_${{ matrix.shard }}
+          artifact-name: Creator_React_SCR${{ matrix.suite == 'scr:legacy' && '_Legacy' || '' }}_${{ matrix.shard }}
           junit-file: e2e-junit-results.xml
-          title: Creator React SCR Tests (${{ matrix.shard }}/2)
-          playwright-json: results.json
-          html-report: packages/survey-creator-react/playwright-report
-
-  scr-legacy:
-    name: Creator · React · SCR Legacy
-    if: github.base_ref == 'V2' || github.ref_name == 'V2'
-    continue-on-error: ${{ !inputs.scr-blocking }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    steps:
-      - name: Build survey-creator
-        uses: surveyjs/azure-pipelines/.github/actions/build-creator@gha-migration
-        with:
-          creator-ref: ${{ inputs.creator-ref }}
-          creator-pr: ${{ inputs.creator-pr }}
-          library-ref: ${{ inputs.library-ref }}
-          library-pr: ${{ inputs.library-pr }}
-          library-ui: survey-react-ui
-          creator-ui: survey-creator-react
-          example: packages/survey-creator-react/example
-          browsers: "true"
-          token: ${{ secrets.SURVEYJS_BOT_TOKEN }}
-      - name: Test SCR Legacy
-        working-directory: packages/survey-creator-react
-        run: npm run test:scr:legacy:ci -- --workers=100%
-      - name: Publish results
-        if: ${{ !cancelled() }}
-        uses: surveyjs/azure-pipelines/.github/actions/publish-test-results@gha-migration
-        with:
-          path: packages/survey-creator-react/test-results
-          artifact-name: Creator_React_SCR_Legacy
-          junit-file: e2e-junit-results.xml
-          title: Creator React SCR Legacy Tests
+          title: Creator React SCR${{ matrix.suite == 'scr:legacy' && ' Legacy' || '' }} Tests (${{ matrix.shard }}/2)
           playwright-json: results.json
           html-report: packages/survey-creator-react/playwright-report

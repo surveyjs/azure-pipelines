@@ -116,6 +116,12 @@ assert_eq "the long suites are sharded" \
   "$(printf '%s\n' "$SHARDS" | grep '^sharded ' | LC_ALL=C sort)"
 assert_eq "every shard job keeps its sibling, names its shard and uploads under its own name" "" \
   "$(printf '%s\n' "$SHARDS" | grep '^issue ')"
+# SCR Legacy runs for V2 only: a suite of the scr matrix of creator-react.yml, not a job of its own
+# that every other run shows as skipped.
+assert_eq "creator-react.yml has no SCR Legacy job of its own" "" \
+  "$(grep -n '^  scr-legacy:' .github/workflows/creator-react.yml)"
+assert_contains "the scr matrix of creator-react.yml adds SCR Legacy for V2" \
+  "$(sed -n '/^  scr:/,/^  [a-z]/p' .github/workflows/creator-react.yml)" "'[\"scr\",\"scr:legacy\"]'"
 # vitest run already runs the presets project; npm run test:presets ran it a second time.
 assert_eq "creator-core runs the presets once, inside npm run test" "" \
   "$(grep -n 'test:presets' .github/workflows/creator-core.yml)"
