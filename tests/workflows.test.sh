@@ -42,6 +42,13 @@ assert_eq "library-react.yml has no SCR Update job or input" "" \
 assert_contains "SCR Update pushes only to a PR branch of this repository" \
   "$(sed -n '/^  scr-update:/,/^  [a-z]/p' .github/workflows/library.yml 2>/dev/null | grep '^    if:')" \
   "github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository"
+# The push starts a new run of the PR, and the caller's concurrency cancels this one: the push is
+# the last step, after the artifact upload, or that upload is lost.
+SCR_UPDATE_JOB="$(sed -n '/^  scr-update:/,/^  [a-z]/p' .github/workflows/library.yml 2>/dev/null)"
+assert_not_contains "SCR Update pushes - no SHADOW-OFF left in it" "$SCR_UPDATE_JOB" "SHADOW-OFF"
+assert_contains "SCR Update pushes in its last step" \
+  "$(printf '%s\n' "$SCR_UPDATE_JOB" | awk '/^      - name:/ { s = "" } { s = s $0 "\n" } END { printf "%s", s }')" \
+  'git push --no-verify origin "HEAD:$HEAD_REF"'
 
 # The run's sidebar is one group, CI, with the leaf jobs in a flat list - the jobs of library.yml
 # that call their workflows are left out, only the check name carries them. So every leaf job names

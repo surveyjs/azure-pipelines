@@ -56,7 +56,8 @@ jobs:
 
   # Port of the "SCR Update" job of templates/library/react/test.yml (keep in sync while it lives).
   # With [scr_update] in the commit message the test jobs are skipped, and this is the only thing
-  # that runs.
+  # that runs. It pushes the updated screenshots to the PR branch, which starts a new run of the PR
+  # and so cancels this one (the caller's concurrency).
   scr-update:
     name: SCR Update
     needs: options
@@ -77,7 +78,6 @@ jobs:
       - name: Commit updated screenshots
         env:
           HEAD_REF: ${{ github.head_ref }}
-          TOKEN: ${{ secrets.SURVEYJS_BOT_TOKEN }}
         run: |
           set -euo pipefail
           git config user.email "surveyjs.org@gmail.com"
@@ -85,19 +85,14 @@ jobs:
           git add screenshots
           TOTAL="$(git diff --cached --name-only | wc -l | tr -d ' ')"
           git commit --allow-empty -m "updated $TOTAL screenshots" --no-verify
-          # The PAT goes to git through the environment only - never into .git/config. The push
-          # must be the PAT's: a push with the workflow token would not start a new CI run.
-          AUTH="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)"
-          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.https://github.com/.extraheader" GIT_CONFIG_VALUE_0="$AUTH"
           git fetch origin "$HEAD_REF"
           git rebase --onto "origin/$HEAD_REF" HEAD~1
-          # The new baselines, for review and - in the shadow period - to take them from here.
+          # The new baselines, for review.
           mkdir -p "$RUNNER_TEMP/scr-update"
           git diff --name-only --diff-filter=AM HEAD~1 HEAD -- screenshots | while IFS= read -r F; do
             mkdir -p "$RUNNER_TEMP/scr-update/$(dirname "$F")"
             cp "$F" "$RUNNER_TEMP/scr-update/$F"
           done
-          # SHADOW-OFF: git push --no-verify origin "HEAD:$HEAD_REF"
       - name: Publish updated screenshots
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
@@ -107,6 +102,18 @@ jobs:
           if-no-files-found: ignore
           overwrite: true
           retention-days: 14
+      # The last step: the push cancels this run, so nothing after it would run.
+      - name: Push updated screenshots
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          TOKEN: ${{ secrets.SURVEYJS_BOT_TOKEN }}
+        run: |
+          set -euo pipefail
+          # The PAT goes to git through the environment only - never into .git/config. The push
+          # must be the PAT's: a push with the workflow token would not start a new CI run.
+          AUTH="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)"
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.https://github.com/.extraheader" GIT_CONFIG_VALUE_0="$AUTH"
+          git push --no-verify origin "HEAD:$HEAD_REF"
 
   # The Library*Test stages. The names of these calling jobs show in the check names only
   # ("CI / Library React / Library · React · Markup"), never in the sidebar.
